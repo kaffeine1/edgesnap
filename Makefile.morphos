@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# MorphOS lane (PPC). Build via ../morphos-cross (pkgsrc gcc container):
+#   scripts/build-morphos.sh
+# -noixemul is mandatory for native Amiga API calls (headers enforce it).
+
+# Hard assignment: the container environment presets CC=cc.
+CC = ppc-morphos-gcc
+CFLAGS ?= -Wall -Wextra -O2 -noixemul -Icore
+TARGET ?= build/morphos/EdgeSnapSpike
+SRC := spike/edgesnap_spike.c core/zones.c
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC) core/zones.h
+	mkdir -p "$(dir $(TARGET))"
+	$(CC) $(CFLAGS) -o "$@" $(SRC)
+
+clean:
+	rm -f "$(TARGET)"

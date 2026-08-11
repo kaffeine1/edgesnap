@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# AmigaOS 4.x lane (PPC). Build via ../os4-cross (walkero gcc11 container):
+#   scripts/build-os4.sh
+# Own code is C89-style, but no -std= is forced: the SDK headers decide.
+
+# Hard assignment: container environments may preset CC.
+CC = ppc-amigaos-gcc
+CFLAGS ?= -Wall -Wextra -O2 -Icore
+TARGET ?= build/os4/EdgeSnapSpike
+SRC := spike/edgesnap_spike.c core/zones.c
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC) core/zones.h
+	mkdir -p "$(dir $(TARGET))"
+	$(CC) $(CFLAGS) -o "$@" $(SRC)
+
+clean:
+	rm -f "$(TARGET)"

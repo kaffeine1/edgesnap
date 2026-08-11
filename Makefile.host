@@ -1,0 +1,23 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# Host lane: build and run the pure-C89 core tests on macOS/Linux.
+# The core must stay strict C89 with zero Amiga dependencies.
+
+CC ?= cc
+CFLAGS ?= -std=c89 -pedantic -Wall -Wextra -Werror -O2 -Icore
+TARGET ?= build/host/zones_test
+
+.PHONY: all test clean
+
+all: $(TARGET)
+
+$(TARGET): core/zones.c core/zones_test.c core/zones.h
+	mkdir -p "$(dir $(TARGET))"
+	$(CC) $(CFLAGS) -o "$@" core/zones.c core/zones_test.c
+
+test: $(TARGET)
+	./$(TARGET)
+
+clean:
+	rm -f "$(TARGET)"
