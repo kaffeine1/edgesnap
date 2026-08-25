@@ -6,7 +6,32 @@ the screen, with a divider to resize the tiled pair afterwards.
 
 Written in C89. No system patches: a commodity input handler plus public
 Intuition calls only. See [docs/DESIGN.md](docs/DESIGN.md) for the full
-design and roadmap.
+design and roadmap. The long-term target is an upstream-quality
+`edgesnap.library` that can be adopted by both operating systems; the
+commodity is the first client and reference implementation of that library,
+not the product boundary.
+
+## Product direction
+
+EdgeSnap is being developed as shared window-management infrastructure for
+MorphOS and AmigaOS 4.x, not as another hotkey-only window utility.
+
+The product target is:
+
+- a small, documented public library with a conservative, versioned API;
+- one portable C89 engine for geometry, state, policies, and snap decisions;
+- native MorphOS and AmigaOS 4 backends that respect each system's ABI and
+  library conventions;
+- a commodity/UI client providing drag-to-edge interaction, live preview,
+  hotkeys, preferences, and Exchange integration;
+- third-party clients able to request snapping, query state, exclude windows,
+  and integrate the engine without copying its internals.
+
+Every implementation choice should move the project toward a library that
+could plausibly be reviewed and adopted by the maintainers of both systems.
+The project must not claim official adoption before that review happens; it
+must earn it through API quality, compatibility, documentation, and reliable
+target-system behavior.
 
 ## Status: Phase 0 (feasibility spike)
 

@@ -1,7 +1,29 @@
 # EdgeSnap design
 
 Windows/macOS-style edge snapping for AmigaOS 4.x and MorphOS, in C89,
-with no system patches. Brainstormed 2026-08-10.
+with no system patches. The design target is an upstream-quality shared
+library that can be proposed for adoption by both operating systems. This is
+a project goal, not a claim that either system has already adopted it.
+
+## Architectural mission
+
+`edgesnap.library` is the product boundary. The commodity and any future
+preferences GUI are clients of the library and reference frontends. They must
+not contain a second, private snapping engine.
+
+The library must make the useful behavior available to other software while
+remaining safe to run as a normal third-party component:
+
+- no `SetFunction()` patches or replacement of system vectors;
+- no assumptions that an application cooperates through IDCMP;
+- no Intuition calls from input.device context;
+- no undocumented dependence on one OS's private window-manager behavior;
+- no public API commitment until ownership, errors, versioning, and ABI are
+  written down and tested on both targets.
+
+The word **adoptable** means "small, documented, native, conservative, and
+reviewable by OS maintainers". It does not mean that EdgeSnap may modify or
+silently replace Workbench, Ambient, Intuition, or the system window manager.
 
 ## Deliverable shape
 
@@ -10,7 +32,8 @@ is a shared library in `LIBS:` plus a commodity:
 
 - **`edgesnap.library`** - the engine (input handler, engine task, snap
   registry) and the public API for third parties (programmatic snap,
-  per-window opt-out, state queries).
+  per-window opt-out, state queries). Its public surface must remain small and
+  versioned; platform-specific implementation details stay private.
 - **Commodity controller** - Exchange presence, hotkeys, prefs loading; a
   thin executable that opens the library and starts the engine.
 - **Prefs** - `ENVARC:` file + tooltypes first; native GUIs later
@@ -95,13 +118,27 @@ LONG  ESnap_SetOptions(struct TagItem *tags);
 LONG  ESnap_Enable(BOOL on);
 ```
 
-Tag-based `_TagList` cores with per-platform varargs glue.
+This is a direction sketch, not a frozen ABI. Before the first public library
+release, document for every entry point:
+
+- library/API version and capability discovery;
+- caller ownership and lifetime of windows, tags, options, and returned data;
+- error values and the distinction between unsupported, rejected, and stale
+  windows;
+- reentrancy and task/context restrictions;
+- behavior when an application changes geometry independently;
+- binary compatibility rules for future structure and tag extensions.
+
+Prefer `_TagList` cores with per-platform varargs glue. Do not expose internal
+engine structs or make callers depend on private OS implementation details.
 
 ## Packaging
 
 Shared C89 core (host-testable, zero Amiga includes) + per-OS library
 skeleton: OS4 uses the interface system (`struct Interface`), MorphOS the
-classic LVO jump table with ABI gates. Both SDKs ship library examples.
+classic LVO jump table with ABI gates. Both SDKs ship library examples. The
+same semantic API must be exposed on both systems even where the ABI glue is
+different.
 
 ```
 core/       pure C89: zones, state machine, registry (host-tested)
@@ -141,16 +178,24 @@ commodity/  Exchange controller
 
 - **Phase 0 - spike** (this repo, `spike/`): validate drag detection and
   foreign ChangeWindowBox on both OSes. Feasibility gate.
-- **Phase 1 - hotkey snapping**: registry + restore, configurable keys.
-  Immediate value, zero heuristics.
-- **Phase 2 - drag-to-edge** with preview (opacity + XOR fallback).
-- **Phase 3 - gutter/divider** resize.
-- **Phase 4 - public library** with stable API, native prefs GUIs,
-  locale catalogs, release on OS4Depot / MorphOS-Files / Aminet.
+- **Phase 1 - library kernel**: shared state machine, snap registry, restore,
+  capability/error model, and the first host-tested public-header contract.
+- **Phase 2 - reference commodity**: hotkey snapping and preferences through
+  the library, with no duplicated snap logic.
+- **Phase 3 - drag-to-edge**: live preview with opacity where available and
+  an outline fallback everywhere else.
+- **Phase 4 - native integration**: platform library skeletons, ABI checks,
+  documentation, locale catalogs, and target-system compatibility testing.
+- **Phase 5 - upstream proposal**: polished examples, migration/API notes,
+  maintainer review package, and releases through the appropriate OS4Depot,
+  MorphOS, and Aminet channels. Official adoption remains a maintainer
+  decision, not a project assumption.
 
 ## Open decisions
 
-1. Library name (`edgesnap.library` vs `snapzone.library`).
-2. Ship Phase 1 (hotkeys only) as a first public release?
+1. Confirm the final library name (`edgesnap.library` is the current
+   working name).
+2. Define opaque/public window references versus direct `struct Window *`
+   parameters before freezing the ABI.
 3. Divider resizes the snapped pair (recommended) or single window only?
 4. License and hosting (MIT on GitHub is the de facto scene standard).
