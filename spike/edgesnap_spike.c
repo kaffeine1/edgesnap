@@ -59,6 +59,7 @@
 #include <intuition/intuition.h>
 #include <intuition/intuitionbase.h>
 #include <intuition/screens.h> /* DrawInfo pens for the preview frame */
+#include <graphics/view.h>     /* OBP_Precision/PRECISION_GUI          */
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
@@ -456,6 +457,12 @@ struct Preview {
     struct Window *bars[4];
     int visible;
     ESRect rect;
+    /* accent pen obtained per preview session; the colormap pointer is
+     * only used between show and hide (a drag lasts seconds, and the
+     * screen cannot close while windows live on it). */
+    struct ColorMap *pen_cm;
+    LONG pen;
+    int pen_obtained;
 };
 
 static struct Preview g_preview;
@@ -485,10 +492,14 @@ static void spike_preview_hide(void)
             g_preview.bars[i] = NULL;
         }
     }
+    if (g_preview.pen_obtained) {
+        ReleasePen(g_preview.pen_cm, (ULONG)g_preview.pen);
+        g_preview.pen_obtained = 0;
+    }
     g_preview.visible = 0;
 }
 
-static struct Window *spike_preview_bar(struct Screen *scr, int pen,
+static struct Window *spike_preview_bar(struct Screen *scr, LONG pen,
                                         int x, int y, int w, int h)
 {
     struct Window *win;
@@ -504,7 +515,7 @@ static struct Window *spike_preview_bar(struct Screen *scr, int pen,
                          WA_Activate, FALSE,
                          TAG_DONE);
     if (win != NULL) {
-        SetAPen(win->RPort, pen);
+        SetAPen(win->RPort, (ULONG)pen);
         RectFill(win->RPort, 0, 0, win->Width - 1, win->Height - 1);
     }
     return win;
@@ -514,7 +525,7 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
 {
     struct Screen *scr;
     struct DrawInfo *dri;
-    int pen = 3;
+    LONG pen = 3;
     int t = ES_FRAME_PX;
     int i, ok;
     ESRect bar[4];
@@ -534,19 +545,41 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
      */
     scr = LockPubScreen(NULL);
     if (scr == NULL) {
+        printf("edgesnap: preview: no default public screen\n");
         return;
     }
     if (scr != dragscr) {
+        printf("edgesnap: preview: drag is not on the default public "
+               "screen, no preview\n");
         UnlockPubScreen(NULL, scr);
         return;
     }
 
-    dri = GetScreenDrawInfo(scr);
-    if (dri != NULL) {
-        if (dri->dri_NumPens > FILLPEN) {
-            pen = dri->dri_Pens[FILLPEN];
+    /*
+     * Frame color: an explicit azure accent via ObtainBestPen - exact on
+     * the 32-bit screens both OSes run. The old FILLPEN choice was
+     * invisible on OS4: its theme resolves FILLPEN to a gray nearly
+     * identical to the Workbench background (field finding 2026-08-26).
+     */
+    g_preview.pen_cm = scr->ViewPort.ColorMap;
+    pen = ObtainBestPen(g_preview.pen_cm,
+                        0x22222222UL, 0x88888888UL, 0xFFFFFFFFUL,
+                        OBP_Precision, PRECISION_GUI,
+                        TAG_DONE);
+    if (pen != -1) {
+        g_preview.pen_obtained = 1;
+        g_preview.pen = pen;
+    } else {
+        pen = 3;
+        dri = GetScreenDrawInfo(scr);
+        if (dri != NULL) {
+            if (dri->dri_NumPens > FILLPEN) {
+                pen = dri->dri_Pens[FILLPEN];
+            }
+            FreeScreenDrawInfo(scr, dri);
         }
-        FreeScreenDrawInfo(scr, dri);
+        printf("edgesnap: preview: ObtainBestPen failed, fallback "
+               "pen %ld\n", (long)pen);
     }
 
     if (r->w < 2 * t || r->h < 2 * t) {
@@ -582,6 +615,7 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
     g_preview.rect = *r;
     UnlockPubScreen(NULL, scr);
     if (!ok) {
+        printf("edgesnap: preview: OpenWindow failed, no frame\n");
         spike_preview_hide();
     }
 }
