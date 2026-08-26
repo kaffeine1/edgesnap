@@ -35,8 +35,10 @@ target-system behavior.
 
 ## Status
 
-- **Phase 0 (spike): validated on AmigaOS 4** (QEMU): drag detection is
-  reliable and snapped geometry sticks. MorphOS runtime test pending.
+- **Phase 0 (spike): validated on BOTH targets** - AmigaOS 4 (QEMU,
+  2026-08-11) and real MorphOS hardware (2026-08-26): drag detection,
+  snapping and the outline preview all work, including the
+  MorphOS-specific CxCustom gate.
 - **Phase 1 (library kernel): in progress.** The validated spike behavior
   now lives as a portable, host-tested kernel: `core/engine.c` (drag/snap
   state machine), `core/registry.c` (stale-safe snap registry + restore),
@@ -60,6 +62,8 @@ What the spike does today:
   corner: an outline frame previews where the window will land (four thin
   borderless windows - no compositing needed); release: the window snaps
   to half / quarter / usable-maximum;
+- dock awareness, macOS-style: AmiDock / Ambient panel strips are
+  detected and reserved, so snapped windows never cover the dock;
 - hotkeys (no drag heuristics involved):
   `ctrl alt cursor left/right/up` = snap left / right / maximize,
   `ctrl alt cursor down` = restore pre-snap geometry;

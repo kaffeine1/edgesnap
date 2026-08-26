@@ -80,6 +80,10 @@
 #define ES_OPT_MarginTop    (ES_TAGBASE + 5)  /* LONG, default 0      */
 #define ES_OPT_MarginRight  (ES_TAGBASE + 6)  /* LONG, default 0      */
 #define ES_OPT_MarginBottom (ES_TAGBASE + 7)  /* LONG, default 0      */
+#define ES_OPT_PanelDetect  (ES_TAGBASE + 8)  /* BOOL, default TRUE:
+                    auto-reserve dock/panel strips (AmiDock, Ambient
+                    panels) out of the usable area; margins above are
+                    applied on top of what detection finds */
 
 /* ------------------------------------------------------- functions */
 

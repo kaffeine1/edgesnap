@@ -70,9 +70,18 @@ interfaces). Heuristic instead:
 ## Snap engine
 
 - Geometry: side edges = halves, corners = quarters, top = maximize (all
-  configurable). Usable area = screen minus `BarHeight` minus per-side
-  configurable margins (for AmiDock / Ambient panels; there is no work
-  area API on Amiga systems).
+  configurable). Usable area = screen minus `BarHeight` minus dock/panel
+  strips minus per-side configurable margins (there is no work-area API
+  on Amiga systems).
+- Dock awareness (macOS-style, added 2026-08-26): edge strips reserved by
+  panel-like windows are auto-subtracted from the usable area. Detection
+  is a documented heuristic split per the architecture: the glue filters
+  (borderless, no drag bar/size gadget, no backdrop, not ours), the
+  host-tested core policy classifies (edge-flush within 2px, thickness
+  <= dimension/4, length >= 25% of the edge; deepest panel per edge
+  wins). **Validation tasks**: confirm real AmiDock (OS4) and Ambient
+  panel (MorphOS) windows match these filters; observe auto-hiding docks
+  (the area should breathe with them); tune thresholds on real setups.
 - One `ChangeWindowBox()` (atomic move+resize, V36+, async). Honor
   Min/Max window limits; clamped rects stay anchored to the zone's outer
   edge. Non-resizable windows: move only, or skip (configurable).
@@ -174,6 +183,10 @@ commodity/  Exchange controller
 - 2026-08-11, OS4 QEMU (pegasos2/sm501): **phase 0 validated** - the drag
   heuristic fires reliably and the snapped geometry sticks after release
   (no race with Intuition's drop handling observed).
+- 2026-08-26, real MorphOS hardware: **phase 0 validated on the second
+  target** - drag detection, snapping AND the outline preview all work.
+  The MorphOS-specific EmulLibEntry gate for the CxCustom action is
+  thereby proven correct.
 - Zone preview implemented as an outline frame (four thin borderless
   non-activating windows, DrawInfo FILLPEN): no compositing available on
   the QEMU sm501, and the translucent-window tags differ between the two

@@ -71,6 +71,7 @@
 #endif
 
 #include "zones.h"
+#include "panels.h"
 
 /* ---------------------------------------------------------------- tuning */
 
@@ -197,6 +198,12 @@ struct WinSnap {
     int mouse_x, mouse_y;  /* pointer position on that screen           */
 };
 
+/* Preview windows must not be mistaken for dock panels; defined after
+ * the preview module below. */
+static int spike_is_preview_win(struct Window *w);
+
+#define ES_PANEL_SCAN_MAX 16
+
 /* Called under LockIBase only. */
 static void spike_fill_snapshot(struct Window *win, struct Screen *scr,
                                 struct WinSnap *out)
@@ -218,10 +225,54 @@ static void spike_fill_snapshot(struct Window *win, struct Screen *scr,
         out->max_h = 0;
     }
     out->flags = win->Flags;
-    out->usable.x = 0;
-    out->usable.y = scr->BarHeight + 1;
-    out->usable.w = scr->Width;
-    out->usable.h = scr->Height - out->usable.y;
+
+    /*
+     * Usable area = screen minus title bar minus dock/panel strips
+     * (AmiDock, Ambient panels), macOS-style. Candidates: borderless
+     * windows that cannot be dragged or sized, minus the snap target
+     * itself and our own preview bars; core policy decides which of
+     * them actually reserve an edge.
+     */
+    {
+        ESRect scrrect;
+        ESRect panels[ES_PANEL_SCAN_MAX];
+        ESInsets ins;
+        struct Window *w;
+        int n = 0;
+        int top;
+
+        scrrect.x = 0;
+        scrrect.y = 0;
+        scrrect.w = scr->Width;
+        scrrect.h = scr->Height;
+        for (w = scr->FirstWindow; w != NULL && n < ES_PANEL_SCAN_MAX;
+             w = w->NextWindow) {
+            if (w == win || spike_is_preview_win(w)) {
+                continue;
+            }
+            if ((w->Flags & WFLG_BORDERLESS) == 0 ||
+                (w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET |
+                             WFLG_BACKDROP)) != 0) {
+                continue;
+            }
+            panels[n].x = w->LeftEdge;
+            panels[n].y = w->TopEdge;
+            panels[n].w = w->Width;
+            panels[n].h = w->Height;
+            n++;
+        }
+        es_panel_insets(&scrrect, panels, n, &ins);
+
+        top = scr->BarHeight + 1;
+        if (ins.t > top) {
+            top = ins.t;
+        }
+        out->usable.x = ins.l;
+        out->usable.y = top;
+        out->usable.w = scr->Width - ins.l - ins.r;
+        out->usable.h = scr->Height - top - ins.b;
+    }
+
     out->mouse_x = scr->MouseX;
     out->mouse_y = scr->MouseY;
 }
@@ -402,6 +453,18 @@ struct Preview {
 };
 
 static struct Preview g_preview;
+
+static int spike_is_preview_win(struct Window *w)
+{
+    int i;
+
+    for (i = 0; i < 4; i++) {
+        if (g_preview.bars[i] == w) {
+            return 1;
+        }
+    }
+    return 0;
+}
 
 static void spike_preview_hide(void)
 {

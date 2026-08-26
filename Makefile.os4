@@ -9,7 +9,7 @@
 CC = ppc-amigaos-gcc
 CFLAGS ?= -Wall -Wextra -O2 -Icore -Iinclude
 TARGET ?= build/os4/EdgeSnapSpike
-SRC := spike/edgesnap_spike.c core/zones.c
+SRC := spike/edgesnap_spike.c core/zones.c core/panels.c
 
 .PHONY: all clean
 
