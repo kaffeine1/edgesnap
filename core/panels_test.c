@@ -41,7 +41,8 @@ static void test_bottom_dock(void)
     /* AmiDock-style bar: bottom center, 600x80 */
     p[0] = rect(340, 880, 600, 80);
     es_panel_insets(&SCREEN, p, 1, &ins);
-    CHECK(ins.b == 80 && ins.l == 0 && ins.r == 0 && ins.t == 0);
+    CHECK(ins.b == 80 + ES_PANEL_MARGIN_PX);
+    CHECK(ins.l == 0 && ins.r == 0 && ins.t == 0);
 }
 
 static void test_side_docks(void)
@@ -52,7 +53,9 @@ static void test_side_docks(void)
     p[0] = rect(0, 200, 72, 600);      /* left panel   */
     p[1] = rect(1280 - 64, 100, 64, 700); /* right panel  */
     es_panel_insets(&SCREEN, p, 2, &ins);
-    CHECK(ins.l == 72 && ins.r == 64 && ins.t == 0 && ins.b == 0);
+    CHECK(ins.l == 72 + ES_PANEL_MARGIN_PX);
+    CHECK(ins.r == 64 + ES_PANEL_MARGIN_PX);
+    CHECK(ins.t == 0 && ins.b == 0);
 }
 
 static void test_top_panel_and_deepest_wins(void)
@@ -63,7 +66,7 @@ static void test_top_panel_and_deepest_wins(void)
     p[0] = rect(0, 0, 1280, 28);   /* full-width top bar    */
     p[1] = rect(300, 0, 700, 44);  /* deeper top dock       */
     es_panel_insets(&SCREEN, p, 2, &ins);
-    CHECK(ins.t == 44);
+    CHECK(ins.t == 44 + ES_PANEL_MARGIN_PX);
 }
 
 static void test_floating_centered_dock(void)
@@ -75,8 +78,20 @@ static void test_floating_centered_dock(void)
      * above the screen edge. Reserves up to the edge, gap included. */
     p[0] = rect(490, 900, 300, 48);
     es_panel_insets(&SCREEN, p, 1, &ins);
-    CHECK(ins.b == 60);
+    CHECK(ins.b == 60 + ES_PANEL_MARGIN_PX);
     CHECK(ins.l == 0 && ins.r == 0 && ins.t == 0);
+}
+
+static void test_raised_dock_outer_band(void)
+{
+    ESRect p[1];
+    ESInsets ins;
+
+    /* dock raised well off the bottom edge but still in the outer
+     * quarter of the screen: always reserved, gap included */
+    p[0] = rect(490, 700, 300, 48);
+    es_panel_insets(&SCREEN, p, 1, &ins);
+    CHECK(ins.b == 260 + ES_PANEL_MARGIN_PX);
 }
 
 static void test_corner_widget_ignored(void)
@@ -123,7 +138,7 @@ static void test_thin_preview_bar_shape(void)
      * thin and long. Verify the policy is at least consistent. */
     p[0] = rect(0, 12, 4, 468);
     es_panel_insets(&SCREEN, p, 1, &ins);
-    CHECK(ins.l == 4);
+    CHECK(ins.l == 4 + ES_PANEL_MARGIN_PX);
 }
 
 int main(void)
@@ -132,6 +147,7 @@ int main(void)
     test_side_docks();
     test_top_panel_and_deepest_wins();
     test_floating_centered_dock();
+    test_raised_dock_outer_band();
     test_corner_widget_ignored();
     test_mid_screen_window_ignored();
     test_thick_window_ignored();

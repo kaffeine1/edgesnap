@@ -11,18 +11,19 @@
  * the surviving window boxes here; this module decides which of them
  * are edge panels and how much of each screen edge they reserve.
  *
- * Heuristic (documented, deliberately conservative):
- *   - a panel hugs one screen edge within ES_PANEL_FLUSH_TOL px - the
- *     tolerance is generous because real docks FLOAT a few pixels off
- *     the edge, macOS-style (MorphOS field finding, 2026-08-26);
+ * Heuristic (documented, field-tuned on real MorphOS, 2026-08-26):
+ *   - a panel lives in the OUTER BAND of the screen: its gap from the
+ *     nearest edge (in its thin dimension) is at most screen dimension
+ *     / ES_PANEL_MAX_GAP_DIV. Real docks float, and users raise them:
+ *     a dock anywhere in the outer band is always reserved;
  *   - it is thin: thickness <= screen dimension / ES_PANEL_MAX_THICK_DIV;
  *   - it is long enough to be a bar, not a corner widget:
- *     length >= ES_PANEL_MIN_LEN_PCT % of its edge (compact centered
- *     docks are short: threshold tuned down from 25).
- * A floating panel reserves up to the screen edge (gap included), like
- * the macOS Dock. Multiple panels on one edge reserve the deepest
- * inset. Matching real AmiDock/Ambient panel windows is an explicit
- * validation task recorded in docs/DESIGN.md.
+ *     length >= ES_PANEL_MIN_LEN_PCT % of its edge.
+ * A panel reserves from the screen edge up to its far side, gap
+ * included, PLUS ES_PANEL_MARGIN_PX of breathing room so snapped
+ * windows never sit glued to the dock. Multiple panels on one edge
+ * reserve the deepest inset. Matching real AmiDock/Ambient panel
+ * windows is an explicit validation task recorded in docs/DESIGN.md.
  */
 
 #ifndef EDGESNAP_PANELS_H
@@ -30,9 +31,10 @@
 
 #include "zones.h"
 
-#define ES_PANEL_FLUSH_TOL     16
+#define ES_PANEL_MAX_GAP_DIV    4
 #define ES_PANEL_MAX_THICK_DIV  4
 #define ES_PANEL_MIN_LEN_PCT   15
+#define ES_PANEL_MARGIN_PX      8
 
 /* es_panel_classify() results. */
 enum {

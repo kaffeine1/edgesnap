@@ -73,15 +73,22 @@ interfaces). Heuristic instead:
   configurable). Usable area = screen minus `BarHeight` minus dock/panel
   strips minus per-side configurable margins (there is no work-area API
   on Amiga systems).
-- Dock awareness (macOS-style, added 2026-08-26): edge strips reserved by
-  panel-like windows are auto-subtracted from the usable area. Detection
-  is a documented heuristic split per the architecture: the glue filters
-  (borderless, no drag bar/size gadget, no backdrop, not ours), the
-  host-tested core policy classifies (edge-flush within 2px, thickness
-  <= dimension/4, length >= 25% of the edge; deepest panel per edge
-  wins). **Validation tasks**: confirm real AmiDock (OS4) and Ambient
-  panel (MorphOS) windows match these filters; observe auto-hiding docks
-  (the area should breathe with them); tune thresholds on real setups.
+- Dock awareness (macOS-style, added 2026-08-26, field-tuned on real
+  MorphOS the same day): edge strips reserved by panel-like windows are
+  auto-subtracted from the usable area. Detection is split per the
+  architecture: the glue filters (no drag bar/size gadget/backdrop, not
+  ours - borderless deliberately NOT required), the host-tested core
+  policy classifies. A panel is a thin (<= dimension/4), long-enough
+  (>= 15% of the edge) strip living in the OUTER BAND of the screen
+  (gap from its nearest edge <= dimension/4): docks float and users
+  raise them, so anywhere in the outer band counts, and the reservation
+  runs from the screen edge to the panel's far side, gap included,
+  plus ES_PANEL_MARGIN_PX (8) of breathing room so snapped windows
+  never sit glued to the dock. Deepest panel per edge wins.
+  **Validated**: floating and raised bottom-center dock on real MorphOS.
+  **Open validation tasks**: real AmiDock shapes on OS4; auto-hiding
+  docks (the area should breathe with them). Diagnostic: the spike's
+  ctrl alt d window dump prints every window with its policy verdict.
 - One `ChangeWindowBox()` (atomic move+resize, V36+, async). Honor
   Min/Max window limits; clamped rects stay anchored to the zone's outer
   edge. Non-resizable windows: move only, or skip (configurable).
