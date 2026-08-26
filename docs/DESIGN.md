@@ -228,18 +228,44 @@ commodity/  Exchange controller
   state where a fresh CxBroker() hung pre-banner; a clean reboot cleared
   it. The banner now prints its build date/time so the running binary
   is never ambiguous again.
-- **Open issue - restart hang (OS4, seen twice, not reproducible from a
-  clean boot)**: after a session of repeated start/stop cycles, every
-  new instance hung before its banner - including a binary that had
-  just worked, which rules the project's own code changes out. Ruled
-  out by experiment from a clean boot: plain Ctrl-C then restart works,
-  and a duplicate instance is refused properly (CxBroker CBERR_DUP,
-  "already running", clean exit). Suspicion remains on the shutdown
-  path leaving commodities wedged in some interleaving (an event in
-  flight through the CxCustom action while the tree is deleted). Before
-  a public release this needs a deliberate stress test: many
-  start/stop cycles, quitting during a drag, and quitting from Exchange
-  rather than Ctrl-C.
+- **Restart hang - root cause found and fixed (2026-08-26)**. The
+  commodity set `g_shared.engine_task` at startup and NEVER cleared it.
+  Our CxCustom action runs in input.device context, so an event already
+  in flight through it while the tree was being deleted would
+  `Signal()` a task that was dying - and on OS4 the code containing the
+  action is unloaded when the process exits, so a late call could jump
+  into freed memory. Corrupted Exec/commodities state is exactly what
+  the symptom looked like from outside: the mouse kept working, but
+  every later `CxBroker()` hung, so no commodity could start again
+  until a reboot.
+
+  The fix is a **shutdown protocol**, and the library inherits it:
+  1. deactivate the broker, so no new event enters our tree;
+  2. disarm the action and drop the task pointer WHILE STILL ALIVE, so
+     an in-flight call becomes a no-op and can never signal a dying
+     task (the action reads the pointer once into a local, and bails
+     out early on a volatile `armed` flag);
+  3. `Delay(2)` - let an in-flight call return before our code can be
+     unloaded;
+  4. only then delete the objects, drain and delete the port, free the
+     signal and close the libraries.
+
+  Verified in-VM on OS4 with the fixed build: 8 plain start/stop cycles,
+  then a kill **during a drag with the preview frame on screen** (fired
+  by a delayed `Break` from a script, see below) - clean "shutting
+  down", no leftover frame, and the next instance started immediately.
+  A duplicate instance is still refused properly. Honest caveat: the
+  original wedge was never reproduced on demand, so this is a defect
+  fixed by inspection and stress-tested, not a defect caught in the act.
+
+- **Field lesson - you cannot Ctrl-C during a drag.** The OS4 console
+  freezes while its own window is being dragged, so a Ctrl-C typed then
+  is simply lost: the program keeps running and snaps on release. To
+  test (or to quit) mid-drag, the signal must come from outside the
+  console: `Break <cli> C` from a script, or Exchange. Useful shape for
+  automated tests:
+  `Echo >RAM:k "Wait 9"` + `Echo >>RAM:k "Break <cli> C"` +
+  `Run >NIL: Execute RAM:k`, then start the drag.
 
 ## Roadmap
 

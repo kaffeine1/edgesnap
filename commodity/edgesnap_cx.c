@@ -114,7 +114,14 @@ static const char *es_stack_cookie = "$STACK:65536";
  * task. Counters (not flags) so fast press+release pairs are not lost.
  */
 struct SpikeShared {
-    struct Task *engine_task;
+    /*
+     * Written by us, read by the input handler. engine_task is cleared
+     * BEFORE the commodity tree is torn down (see the shutdown
+     * protocol in main): an action already in flight must never signal
+     * a task that is about to die.
+     */
+    struct Task * volatile engine_task;
+    volatile ULONG armed;   /* 0 = the action must do nothing at all */
     ULONG engine_sigmask;
     volatile ULONG presses;
     volatile ULONG releases;
@@ -131,8 +138,12 @@ static struct SpikeShared g_shared;
 static void spike_cx_action(CxMsg *msg, CxObj *obj)
 {
     struct InputEvent *ie;
+    struct Task *engine;
 
     (void)obj;
+    if (!g_shared.armed) {
+        return; /* shutting down: touch nothing */
+    }
     if (CxMsgType(msg) != CXM_IEVENT) {
         return;
     }
@@ -150,8 +161,10 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
     } else {
         return;
     }
-    if (g_shared.engine_task != NULL) {
-        Signal(g_shared.engine_task, g_shared.engine_sigmask);
+    /* one read: our task may be clearing this pointer right now */
+    engine = g_shared.engine_task;
+    if (engine != NULL && g_shared.armed) {
+        Signal(engine, g_shared.engine_sigmask);
     }
 }
 
@@ -1213,6 +1226,7 @@ int main(int argc, char **argv)
 
     g_shared.engine_task = FindTask(NULL);
     g_shared.engine_sigmask = 1UL << engine_sig;
+    g_shared.armed = 1;
     es_engine_init(&g_engine, &g_cfg.engine);
     es_registry_init(&g_registry);
 
@@ -1292,8 +1306,31 @@ int main(int argc, char **argv)
     printf("edgesnap: shutting down\n");
 
 out:
+    /*
+     * Shutdown protocol - the order is the whole point. Our CxCustom
+     * action runs in input.device context and may be executing at this
+     * very moment:
+     *
+     *   1. deactivate the broker, so no new event enters our tree;
+     *   2. disarm the action and drop the task pointer WHILE WE ARE
+     *      STILL ALIVE, so a call already in flight becomes a no-op
+     *      and can never Signal a dying task;
+     *   3. give that in-flight call time to return, because on OS4 the
+     *      code containing it is unloaded when we exit;
+     *   4. only then delete the objects and free everything.
+     *
+     * Skipping step 2 leaves a Signal() aimed at freed memory - the
+     * classic way to wedge commodities for every later client, which
+     * is what the restart hang looked like from the outside.
+     * edgesnap.library inherits this protocol.
+     */
     if (broker != NULL) {
         ActivateCxObj(broker, 0L);
+    }
+    g_shared.armed = 0;
+    g_shared.engine_task = NULL;
+    if (broker != NULL) {
+        Delay(2L); /* ~40 ms: let any in-flight action return */
         DeleteCxObjAll(broker);
     }
     spike_preview_hide();
