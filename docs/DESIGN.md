@@ -194,11 +194,30 @@ commodity/  Exchange controller
   target** - drag detection, snapping AND the outline preview all work.
   The MorphOS-specific EmulLibEntry gate for the CxCustom action is
   thereby proven correct.
-- Zone preview implemented as an outline frame (four thin borderless
-  non-activating windows, DrawInfo FILLPEN): no compositing available on
-  the QEMU sm501, and the translucent-window tags differ between the two
-  OSes anyway. Translucent fill stays a compositing-only upgrade for real
-  hardware.
+- Zone preview implemented as an outline frame. MorphOS: four thin
+  borderless non-activating windows (validated on real hardware). OS4:
+  the window approach failed in the field and the frame is drawn as XOR
+  (COMPLEMENT) rectangles straight on the screen's RastPort - the same
+  technique Intuition uses for its own drag feedback - with the public
+  screen kept locked between draw and erase. Validated closed-loop on
+  OS4 QEMU (monitor-driven drags + screendumps). Translucent fill stays
+  a compositing-only upgrade for real hardware.
+- **Two OS4 field lessons (2026-08-26, closed-loop debugging session)**
+  that are binding for the library phase:
+  1. *The engine must never block on I/O.* The OS4 console handler
+     freezes writers while their window is being dragged: a printf to
+     the shell the spike was launched from blocked the engine task
+     mid-drag (stale zones, no preview, and the original FILLPEN
+     "invisible frame" report was largely this). Engine-path logging now
+     goes through an in-memory buffer flushed only when no drag is in
+     flight.
+  2. *Opening windows during an OS4 ghost-drag is unreliable* -
+     OpenWindow can stall until release. Hence the XOR frame on OS4; a
+     capability probe can pick the nicer window/alpha frame where safe.
+  Debugging note: a half-dead previous instance left commodities in a
+  state where a fresh CxBroker() hung pre-banner; a clean reboot cleared
+  it. The banner now prints its build date/time so the running binary
+  is never ambiguous again.
 
 ## Roadmap
 

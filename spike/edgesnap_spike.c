@@ -46,6 +46,7 @@
 #endif
 #endif
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -184,6 +185,56 @@ static struct EmulLibEntry spike_cx_trap = {
 #else
 #define ES_CX_ACTION ((APTR)spike_cx_action)
 #endif
+
+/* --------------------------------------------------- non-blocking log */
+
+/*
+ * Field lesson (OS4, 2026-08-26): the engine once printf'd straight to
+ * its shell console. Dragging THAT shell window freezes console output
+ * on OS4, so the first zone print blocked the engine for the rest of
+ * the drag: zones went stale and the preview never opened. Engine-path
+ * messages land here and reach the console only when no drag is in
+ * flight. The library phase inherits the rule: the engine never blocks
+ * on I/O.
+ */
+
+#define ES_LOG_LINES 64
+#define ES_LOG_CHARS 160
+
+static char g_log_buf[ES_LOG_LINES][ES_LOG_CHARS];
+static int g_log_count;
+static int g_log_dropped;
+
+static void spike_log(const char *fmt, ...)
+{
+    va_list ap;
+
+    if (g_log_count >= ES_LOG_LINES) {
+        g_log_dropped++;
+        return;
+    }
+    va_start(ap, fmt);
+    vsprintf(g_log_buf[g_log_count], fmt, ap); /* short, fixed formats */
+    va_end(ap);
+    g_log_count++;
+}
+
+static void spike_log_flush(void)
+{
+    int i;
+
+    for (i = 0; i < g_log_count; i++) {
+        fputs(g_log_buf[i], stdout);
+    }
+    if (g_log_dropped > 0) {
+        printf("edgesnap: (%d log lines dropped)\n", g_log_dropped);
+    }
+    if (g_log_count > 0 || g_log_dropped > 0) {
+        fflush(stdout);
+    }
+    g_log_count = 0;
+    g_log_dropped = 0;
+}
 
 /* -------------------------------------------------- window snapshotting */
 
@@ -390,13 +441,14 @@ static void spike_apply_zone(struct Window *target, int zone)
     ESRect r;
 
     if (!spike_snapshot_window(target, &ws)) {
-        printf("edgesnap: window %p vanished, not snapping\n",
-               (void *)target);
+        spike_log("edgesnap: window %p vanished, not snapping\n",
+                  (void *)target);
         return;
     }
     if (!spike_window_snappable(&ws)) {
-        printf("edgesnap: window %p not snappable "
-               "(no size gadget, or backdrop/borderless)\n", (void *)target);
+        spike_log("edgesnap: window %p not snappable "
+                  "(no size gadget, or backdrop/borderless)\n",
+                  (void *)target);
         return;
     }
 
@@ -404,8 +456,8 @@ static void spike_apply_zone(struct Window *target, int zone)
                      ws.max_w, ws.max_h, &r);
     spike_restore_remember(target, &ws.box);
 
-    printf("edgesnap: snap %p -> %s (%d,%d %dx%d)\n", (void *)target,
-           es_zone_name(zone), r.x, r.y, r.w, r.h);
+    spike_log("edgesnap: snap %p -> %s (%d,%d %dx%d)\n", (void *)target,
+              es_zone_name(zone), r.x, r.y, r.w, r.h);
     ChangeWindowBox(target, r.x, r.y, r.w, r.h);
 }
 
@@ -416,18 +468,18 @@ static void spike_restore_window(struct Window *target)
 
     slot = spike_restore_find(target);
     if (slot == NULL) {
-        printf("edgesnap: no saved geometry for window %p\n",
-               (void *)target);
+        spike_log("edgesnap: no saved geometry for window %p\n",
+                  (void *)target);
         return;
     }
     if (!spike_snapshot_window(target, &ws)) {
-        printf("edgesnap: window %p vanished, dropping saved geometry\n",
-               (void *)target);
+        spike_log("edgesnap: window %p vanished, dropping saved geometry\n",
+                  (void *)target);
         slot->used = 0;
         return;
     }
-    printf("edgesnap: restore %p -> (%d,%d %dx%d)\n", (void *)target,
-           slot->box.x, slot->box.y, slot->box.w, slot->box.h);
+    spike_log("edgesnap: restore %p -> (%d,%d %dx%d)\n", (void *)target,
+              slot->box.x, slot->box.y, slot->box.w, slot->box.h);
     ChangeWindowBox(target, slot->box.x, slot->box.y,
                     slot->box.w, slot->box.h);
     slot->used = 0;
@@ -467,6 +519,83 @@ struct Preview {
 
 static struct Preview g_preview;
 
+#ifdef __amigaos4__
+/*
+ * OS4 field finding (2026-08-26): while Intuition ghost-drags a window,
+ * opening our preview windows is unreliable (OpenWindow can block on
+ * the drag's internal locks until release - frame never seen). So on
+ * OS4 the frame is drawn the way Intuition draws its own drag feedback:
+ * XOR (COMPLEMENT) rectangles straight on the screen's RastPort. No
+ * layers, no locks, and drawing the same frame twice erases it. The
+ * public screen stays locked between draw and erase so it cannot close
+ * under us. Cosmetic caveat, accepted for the spike: content repainted
+ * beneath a drawn frame (the moving ghost itself) can leave brief
+ * artifacts on erase.
+ */
+static struct PreviewXor {
+    int drawn;
+    ESRect rect;
+    struct Screen *scr;   /* pubscreen-locked while drawn */
+} g_pxor;
+
+static void spike_pxor_frame(struct Screen *scr, const ESRect *r)
+{
+    struct RastPort rp;
+    int t = ES_FRAME_PX;
+
+    rp = scr->RastPort; /* private copy: leave the screen rastport alone */
+    SetDrMd(&rp, COMPLEMENT);
+    if (r->w < 2 * t || r->h < 2 * t) {
+        t = 1;
+    }
+    RectFill(&rp, r->x, r->y, r->x + r->w - 1, r->y + t - 1);
+    RectFill(&rp, r->x, r->y + r->h - t, r->x + r->w - 1, r->y + r->h - 1);
+    if (r->h > 2 * t) {
+        RectFill(&rp, r->x, r->y + t, r->x + t - 1, r->y + r->h - t - 1);
+        RectFill(&rp, r->x + r->w - t, r->y + t, r->x + r->w - 1,
+                 r->y + r->h - t - 1);
+    }
+}
+
+static void spike_pxor_hide(void)
+{
+    if (!g_pxor.drawn) {
+        return;
+    }
+    spike_pxor_frame(g_pxor.scr, &g_pxor.rect); /* XOR again = erase */
+    UnlockPubScreen(NULL, g_pxor.scr);
+    g_pxor.drawn = 0;
+    g_pxor.scr = NULL;
+}
+
+static void spike_pxor_show(struct Screen *dragscr, const ESRect *r)
+{
+    struct Screen *scr;
+
+    if (g_pxor.drawn &&
+        g_pxor.rect.x == r->x && g_pxor.rect.y == r->y &&
+        g_pxor.rect.w == r->w && g_pxor.rect.h == r->h) {
+        return;
+    }
+    spike_pxor_hide();
+    scr = LockPubScreen(NULL);
+    if (scr == NULL) {
+        spike_log("edgesnap: preview: no default public screen\n");
+        return;
+    }
+    if (scr != dragscr) {
+        spike_log("edgesnap: preview: drag is not on the default public "
+                  "screen, no preview\n");
+        UnlockPubScreen(NULL, scr);
+        return;
+    }
+    spike_pxor_frame(scr, r);
+    g_pxor.drawn = 1;
+    g_pxor.rect = *r;
+    g_pxor.scr = scr; /* keep the pubscreen lock until hide */
+}
+#endif /* __amigaos4__ */
+
 static int spike_is_preview_win(struct Window *w)
 {
     int i;
@@ -481,6 +610,9 @@ static int spike_is_preview_win(struct Window *w)
 
 static void spike_preview_hide(void)
 {
+#ifdef __amigaos4__
+    spike_pxor_hide();
+#else
     int i;
 
     if (!g_preview.visible) {
@@ -497,8 +629,10 @@ static void spike_preview_hide(void)
         g_preview.pen_obtained = 0;
     }
     g_preview.visible = 0;
+#endif
 }
 
+#ifndef __amigaos4__
 static struct Window *spike_preview_bar(struct Screen *scr, LONG pen,
                                         int x, int y, int w, int h)
 {
@@ -520,9 +654,13 @@ static struct Window *spike_preview_bar(struct Screen *scr, LONG pen,
     }
     return win;
 }
+#endif /* !__amigaos4__ */
 
 static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
 {
+#ifdef __amigaos4__
+    spike_pxor_show(dragscr, r);
+#else
     struct Screen *scr;
     struct DrawInfo *dri;
     LONG pen = 3;
@@ -545,12 +683,12 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
      */
     scr = LockPubScreen(NULL);
     if (scr == NULL) {
-        printf("edgesnap: preview: no default public screen\n");
+        spike_log("edgesnap: preview: no default public screen\n");
         return;
     }
     if (scr != dragscr) {
-        printf("edgesnap: preview: drag is not on the default public "
-               "screen, no preview\n");
+        spike_log("edgesnap: preview: drag is not on the default public "
+                  "screen, no preview\n");
         UnlockPubScreen(NULL, scr);
         return;
     }
@@ -578,8 +716,8 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
             }
             FreeScreenDrawInfo(scr, dri);
         }
-        printf("edgesnap: preview: ObtainBestPen failed, fallback "
-               "pen %ld\n", (long)pen);
+        spike_log("edgesnap: preview: ObtainBestPen failed, fallback "
+                  "pen %ld\n", (long)pen);
     }
 
     if (r->w < 2 * t || r->h < 2 * t) {
@@ -615,9 +753,10 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
     g_preview.rect = *r;
     UnlockPubScreen(NULL, scr);
     if (!ok) {
-        printf("edgesnap: preview: OpenWindow failed, no frame\n");
+        spike_log("edgesnap: preview: OpenWindow failed, no frame\n");
         spike_preview_hide();
     }
+#endif
 }
 
 /* ---------------------------------------------------- drag state machine */
@@ -685,8 +824,8 @@ static void spike_engine_step(void)
                 if (win_moved && ptr_moved &&
                     (ws.flags & WFLG_DRAGBAR) != 0) {
                     g_drag.dragging = 1;
-                    printf("edgesnap: drag detected on window %p\n",
-                           (void *)win);
+                    spike_log("edgesnap: drag detected on window %p\n",
+                              (void *)win);
                 }
             }
             if (g_drag.dragging) {
@@ -695,7 +834,7 @@ static void spike_engine_step(void)
                                              ws.usable.h / ES_CORNER_DIV);
                 if (z != g_drag.zone) {
                     g_drag.zone = z;
-                    printf("edgesnap: zone -> %s\n", es_zone_name(z));
+                    spike_log("edgesnap: zone -> %s\n", es_zone_name(z));
                     if (z != ES_ZONE_NONE && spike_window_snappable(&ws)) {
                         ESRect target;
                         es_fit_zone_rect(z, &ws.usable, ws.min_w, ws.min_h,
@@ -716,6 +855,11 @@ static void spike_engine_step(void)
             spike_apply_zone(g_drag.candidate, g_drag.zone);
         }
         spike_drag_reset();
+    }
+
+    /* console output only when no drag is in flight (see spike_log) */
+    if (!g_drag.button_down) {
+        spike_log_flush();
     }
 }
 
@@ -811,6 +955,7 @@ static void spike_dump_windows(void)
     }
     UnlockIBase(ilock);
 
+    spike_log_flush();
     if (scr == NULL) {
         printf("edgesnap: dump: no active screen\n");
         return;
@@ -878,8 +1023,9 @@ static void spike_handle_hotkey(LONG id)
         return;
     }
     win = spike_active_window(&ws);
+    spike_log_flush();
     if (win == NULL) {
-        printf("edgesnap: no active window\n");
+        spike_log("edgesnap: no active window\n");
         return;
     }
     switch (id) {
@@ -1021,7 +1167,8 @@ int main(void)
 
     ActivateCxObj(broker, 1L);
 
-    printf("edgesnap spike 0.1 running (commodity \"EdgeSnap\").\n");
+    printf("edgesnap spike 0.1 (build " __DATE__ " " __TIME__ ") "
+           "running (commodity \"EdgeSnap\").\n");
     printf("  drag a window's title bar until the pointer touches a\n");
     printf("  screen edge or corner, then release.\n");
     printf("  hotkeys: ctrl alt cursor left/right/up = snap, down = "
@@ -1071,6 +1218,7 @@ int main(void)
     }
 
     rc = RETURN_OK;
+    spike_log_flush();
     printf("edgesnap: shutting down\n");
 
 out:
