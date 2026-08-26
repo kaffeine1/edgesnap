@@ -2,42 +2,30 @@
  * Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
  * SPDX-License-Identifier: MIT
  *
- * edgesnap_spike.c - Phase 0 feasibility spike for EdgeSnap.
+ * edgesnap_cx.c - the EdgeSnap reference commodity (phase 2).
  *
- * A single-file commodity for AmigaOS 4.x and MorphOS that verifies the two
- * assumptions the whole project rests on:
+ * One source for AmigaOS 4.x and MorphOS. ALL drag/snap decisions live
+ * in the shared library kernel (core/engine.c state machine,
+ * core/registry.c stale-safe restore): this file is glue, and must
+ * never grow a second snapping engine (docs/LLM_GUIDANCE.md). It:
  *
- *   1. A commodities CxCustom object (running in the input.device context,
- *      priority 56, ahead of Intuition at 50) can observe raw mouse events,
- *      and a heuristic in the main task can tell "the user is dragging a
- *      window" apart from ordinary mouse activity by correlating pointer
- *      movement with the active window's LeftEdge/TopEdge under LockIBase().
+ *   - watches raw mouse events from a commodities CxCustom object
+ *     (input.device context: counters + Signal() only);
+ *   - feeds the kernel instantaneous window facts sampled under
+ *     LockIBase (usable area is dock/panel aware via core/panels.c);
+ *   - executes the kernel's emitted actions: zone preview (MorphOS:
+ *     borderless frame windows; OS4: XOR rectangles on the screen
+ *     rastport - OpenWindow during an OS4 ghost-drag is unreliable),
+ *     and snaps via ChangeWindowBox with re-validation of possibly
+ *     stale window refs;
+ *   - provides hotkeys through the same snap path the future
+ *     ESnap_SnapWindow() will use, Exchange integration, and a
+ *     window-dump diagnostic (ctrl alt d).
  *
- *   2. ChangeWindowBox() on a foreign window right after drag release
- *      actually sticks (or reveals a race with Intuition's own drop
- *      handling - that is a spike finding either way).
- *
- * What it does:
- *   - drag a window's title bar so the POINTER touches a screen edge, then
- *     release: the window snaps to half / quarter / maximized.
- *   - hotkeys work without any drag heuristics (phase 1 preview):
- *       ctrl alt cursor_left   snap active window to the left half
- *       ctrl alt cursor_right  snap active window to the right half
- *       ctrl alt cursor_up     maximize active window (usable area)
- *       ctrl alt cursor_down   restore active window to its pre-snap box
- *   - prints what it observes to stdout: run it from a Shell.
- *
- * Architecture note (the rule that shapes everything): the CxCustom action
- * runs inside input.device - it only bumps counters and Signal()s the main
- * task. Every Intuition call (LockIBase, ChangeWindowBox) happens here in
- * the main task. Under LockIBase we only READ structures; the lock is
- * released before any Intuition call.
- *
- * Known spike-level races, accepted for now and re-checked on real systems:
- *   - a window can close between our snapshot and ChangeWindowBox();
- *   - Intuition may still be finishing its own drag when we snap on
- *     release (if the drop position wins over our box, the library phase
- *     will need a deferred commit via timer.device).
+ * Field-proven rules encoded here (see docs/DESIGN.md spike findings):
+ * the engine task never blocks on console I/O (buffered log, flushed
+ * only when no drag is in flight), and everything Intuition-facing
+ * runs in this task, never in the input handler.
  */
 
 #ifdef __amigaos4__
@@ -74,13 +62,12 @@
 
 #include "zones.h"
 #include "panels.h"
+#include "engine.h"
+#include "registry.h"
 
 /* ---------------------------------------------------------------- tuning */
 
-#define ES_EDGE_PX        12   /* pointer this close to an edge = zone     */
-#define ES_CORNER_DIV      4   /* corner length = usable_height / this     */
-#define ES_DRAG_MIN_PX     4   /* pointer must move this much to count     */
-#define ES_RESTORE_SLOTS  16
+/* Drag/zone tuning lives in the kernel (ESEngineConfig defaults). */
 #define ES_FRAME_PX        4   /* preview frame thickness                  */
 
 /* --------------------------------------------------------- library bases */
@@ -377,52 +364,12 @@ static struct Window *spike_active_window(struct WinSnap *out)
     return win;
 }
 
-/* ------------------------------------------------------- restore memory */
-
-struct RestoreSlot {
-    struct Window *win;
-    ESRect box;
-    int used;
-};
-
-static struct RestoreSlot g_restore[ES_RESTORE_SLOTS];
-
-static struct RestoreSlot *spike_restore_find(struct Window *win)
-{
-    int i;
-
-    for (i = 0; i < ES_RESTORE_SLOTS; i++) {
-        if (g_restore[i].used && g_restore[i].win == win) {
-            return &g_restore[i];
-        }
-    }
-    return NULL;
-}
-
-static void spike_restore_remember(struct Window *win, const ESRect *box)
-{
-    struct RestoreSlot *slot;
-    int i;
-
-    if (spike_restore_find(win) != NULL) {
-        return; /* keep the original pre-snap geometry */
-    }
-    slot = NULL;
-    for (i = 0; i < ES_RESTORE_SLOTS; i++) {
-        if (!g_restore[i].used) {
-            slot = &g_restore[i];
-            break;
-        }
-    }
-    if (slot == NULL) {
-        slot = &g_restore[0]; /* spike: just recycle */
-    }
-    slot->win = win;
-    slot->box = *box;
-    slot->used = 1;
-}
-
 /* ------------------------------------------------------------- snapping */
+
+/* Phase 2: the shared library kernel holds all snap state. */
+static ESEngine g_engine;
+static ESRegistry g_registry;
+static struct Screen *g_facts_scr; /* screen of the last facts fed */
 
 static int spike_window_snappable(const struct WinSnap *ws)
 {
@@ -435,12 +382,24 @@ static int spike_window_snappable(const struct WinSnap *ws)
     return 1;
 }
 
-static void spike_apply_zone(struct Window *target, int zone)
+/*
+ * The one snap execution path, used by the engine's do_snap action AND
+ * the hotkeys - the same road the library's ESnap_SnapWindow() will
+ * pave. want == NULL computes the target from fresh facts; the engine
+ * passes its previewed rectangle so what you saw is what you get.
+ * Window refs may be stale: everything is re-validated here first.
+ */
+static void spike_do_snap(struct Window *target, int zone,
+                          const ESRect *want)
 {
     struct WinSnap ws;
     ESRect r;
 
+    if (target == NULL) {
+        return;
+    }
     if (!spike_snapshot_window(target, &ws)) {
+        es_registry_forget(&g_registry, target);
         spike_log("edgesnap: window %p vanished, not snapping\n",
                   (void *)target);
         return;
@@ -451,11 +410,19 @@ static void spike_apply_zone(struct Window *target, int zone)
                   (void *)target);
         return;
     }
-
-    es_fit_zone_rect(zone, &ws.usable, ws.min_w, ws.min_h,
-                     ws.max_w, ws.max_h, &r);
-    spike_restore_remember(target, &ws.box);
-
+    if (want != NULL) {
+        r = *want;
+    } else {
+        es_fit_zone_rect(zone, &ws.usable, ws.min_w, ws.min_h,
+                         ws.max_w, ws.max_h, &r);
+    }
+    if (es_registry_remember(&g_registry, target, &ws.box, &r,
+                             zone) != ES_OK) {
+        /* contract: restore must never silently become impossible */
+        spike_log("edgesnap: snap registry full, not snapping %p\n",
+                  (void *)target);
+        return;
+    }
     spike_log("edgesnap: snap %p -> %s (%d,%d %dx%d)\n", (void *)target,
               es_zone_name(zone), r.x, r.y, r.w, r.h);
     ChangeWindowBox(target, r.x, r.y, r.w, r.h);
@@ -463,26 +430,30 @@ static void spike_apply_zone(struct Window *target, int zone)
 
 static void spike_restore_window(struct Window *target)
 {
-    struct RestoreSlot *slot;
     struct WinSnap ws;
+    ESRect out;
+    int rc;
 
-    slot = spike_restore_find(target);
-    if (slot == NULL) {
+    if (!spike_snapshot_window(target, &ws)) {
+        es_registry_forget(&g_registry, target);
+        spike_log("edgesnap: window %p vanished, dropping saved "
+                  "geometry\n", (void *)target);
+        return;
+    }
+    rc = es_registry_restore(&g_registry, target, &ws.box, &out);
+    if (rc == ES_ERR_NOT_SNAPPED) {
         spike_log("edgesnap: no saved geometry for window %p\n",
                   (void *)target);
         return;
     }
-    if (!spike_snapshot_window(target, &ws)) {
-        spike_log("edgesnap: window %p vanished, dropping saved geometry\n",
-                  (void *)target);
-        slot->used = 0;
+    if (rc == ES_ERR_CHANGED) {
+        spike_log("edgesnap: window %p was re-arranged since the snap, "
+                  "saved geometry dropped\n", (void *)target);
         return;
     }
     spike_log("edgesnap: restore %p -> (%d,%d %dx%d)\n", (void *)target,
-              slot->box.x, slot->box.y, slot->box.w, slot->box.h);
-    ChangeWindowBox(target, slot->box.x, slot->box.y,
-                    slot->box.w, slot->box.h);
-    slot->used = 0;
+              out.x, out.y, out.w, out.h);
+    ChangeWindowBox(target, out.x, out.y, out.w, out.h);
 }
 
 /* -------------------------------------------------------- zone preview */
@@ -759,37 +730,36 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
 #endif
 }
 
-/* ---------------------------------------------------- drag state machine */
-
-struct DragState {
-    int button_down;
-    int dragging;
-    struct Window *candidate;
-    ESRect base_box;
-    int base_mx, base_my;
-    int zone;
-};
-
-static struct DragState g_drag;
+/* ------------------------------------------------ kernel glue (phase 2) */
 
 static ULONG g_seen_presses;
 static ULONG g_seen_releases;
 static ULONG g_seen_moves;
 
-static void spike_drag_reset(void)
+/* Execute what the kernel decided. Order matters on release: hide the
+ * frame first, then snap. */
+static void spike_run_actions(const ESEngineActions *a)
 {
-    g_drag.button_down = 0;
-    g_drag.dragging = 0;
-    g_drag.candidate = NULL;
-    g_drag.zone = ES_ZONE_NONE;
-    spike_preview_hide();
+    if (a->hide_preview) {
+        spike_preview_hide();
+    }
+    if (a->zone_changed) {
+        spike_log("edgesnap: zone -> %s\n", es_zone_name(a->zone));
+    }
+    if (a->show_preview && g_facts_scr != NULL) {
+        spike_preview_show(g_facts_scr, &a->preview_rect);
+    }
+    if (a->do_snap) {
+        /* snap_ref may be stale: spike_do_snap re-validates (contract) */
+        spike_do_snap((struct Window *)a->snap_ref, a->snap_zone,
+                      &a->snap_rect);
+    }
 }
 
 static void spike_engine_step(void)
 {
     int new_press, new_move, new_release;
-    struct WinSnap ws;
-    struct Window *win;
+    ESEngineActions a;
 
     new_press = (g_shared.presses != g_seen_presses);
     new_move = (g_shared.moves != g_seen_moves);
@@ -799,66 +769,53 @@ static void spike_engine_step(void)
     g_seen_releases = g_shared.releases;
 
     if (new_press) {
-        spike_drag_reset();
-        g_drag.button_down = 1;
+        es_engine_press(&g_engine, &a);
+        spike_run_actions(&a);
     }
 
-    if (new_move && g_drag.button_down && !new_release) {
+    if (new_move && g_engine.button_down && !new_release) {
+        struct WinSnap ws;
+        struct Window *win;
+
         win = spike_active_window(&ws);
-        if (win == NULL) {
-            g_drag.candidate = NULL;
-        } else if (g_drag.candidate != win) {
-            /* first sight of this window during the press: baseline it */
-            g_drag.candidate = win;
-            g_drag.base_box = ws.box;
-            g_drag.base_mx = ws.mouse_x;
-            g_drag.base_my = ws.mouse_y;
-            g_drag.dragging = 0;
+        if (win != NULL) {
+            ESWinFacts f;
+
+            f.ref = win;
+            f.box = ws.box;
+            f.usable = ws.usable;
+            f.mouse_x = ws.mouse_x;
+            f.mouse_y = ws.mouse_y;
+            f.min_w = ws.min_w;
+            f.min_h = ws.min_h;
+            f.max_w = ws.max_w;
+            f.max_h = ws.max_h;
+            f.flags = 0;
+            if (spike_window_snappable(&ws)) {
+                f.flags |= ES_WF_SNAPPABLE;
+            }
+            if (ws.flags & WFLG_DRAGBAR) {
+                f.flags |= ES_WF_DRAGBAR;
+            }
+            g_facts_scr = ws.scr;
+            es_engine_motion(&g_engine, &f, &a);
+            if (a.drag_started) {
+                spike_log("edgesnap: drag detected on window %p\n",
+                          (void *)win);
+            }
         } else {
-            if (!g_drag.dragging) {
-                int win_moved = (ws.box.x != g_drag.base_box.x ||
-                                 ws.box.y != g_drag.base_box.y);
-                int ptr_moved =
-                    (abs(ws.mouse_x - g_drag.base_mx) +
-                     abs(ws.mouse_y - g_drag.base_my)) >= ES_DRAG_MIN_PX;
-                if (win_moved && ptr_moved &&
-                    (ws.flags & WFLG_DRAGBAR) != 0) {
-                    g_drag.dragging = 1;
-                    spike_log("edgesnap: drag detected on window %p\n",
-                              (void *)win);
-                }
-            }
-            if (g_drag.dragging) {
-                int z = es_zone_from_pointer(&ws.usable, ws.mouse_x,
-                                             ws.mouse_y, ES_EDGE_PX,
-                                             ws.usable.h / ES_CORNER_DIV);
-                if (z != g_drag.zone) {
-                    g_drag.zone = z;
-                    spike_log("edgesnap: zone -> %s\n", es_zone_name(z));
-                    if (z != ES_ZONE_NONE && spike_window_snappable(&ws)) {
-                        ESRect target;
-                        es_fit_zone_rect(z, &ws.usable, ws.min_w, ws.min_h,
-                                         ws.max_w, ws.max_h, &target);
-                        spike_preview_show(ws.scr, &target);
-                    } else {
-                        spike_preview_hide();
-                    }
-                }
-            }
+            es_engine_motion(&g_engine, 0, &a);
         }
+        spike_run_actions(&a);
     }
 
     if (new_release) {
-        spike_preview_hide(); /* frame gone before the snap lands */
-        if (g_drag.dragging && g_drag.zone != ES_ZONE_NONE &&
-            g_drag.candidate != NULL) {
-            spike_apply_zone(g_drag.candidate, g_drag.zone);
-        }
-        spike_drag_reset();
+        es_engine_release(&g_engine, &a);
+        spike_run_actions(&a);
     }
 
     /* console output only when no drag is in flight (see spike_log) */
-    if (!g_drag.button_down) {
+    if (!g_engine.button_down) {
         spike_log_flush();
     }
 }
@@ -1030,13 +987,13 @@ static void spike_handle_hotkey(LONG id)
     }
     switch (id) {
     case HK_SNAP_LEFT:
-        spike_apply_zone(win, ES_ZONE_LEFT);
+        spike_do_snap(win, ES_ZONE_LEFT, NULL);
         break;
     case HK_SNAP_RIGHT:
-        spike_apply_zone(win, ES_ZONE_RIGHT);
+        spike_do_snap(win, ES_ZONE_RIGHT, NULL);
         break;
     case HK_SNAP_MAX:
-        spike_apply_zone(win, ES_ZONE_MAX);
+        spike_do_snap(win, ES_ZONE_MAX, NULL);
         break;
     case HK_RESTORE:
         spike_restore_window(win);
@@ -1132,7 +1089,7 @@ int main(void)
     memset(&nb, 0, sizeof(nb));
     nb.nb_Version = NB_VERSION;
     nb.nb_Name = (STRPTR)"EdgeSnap";
-    nb.nb_Title = (STRPTR)"EdgeSnap spike 0.1";
+    nb.nb_Title = (STRPTR)"EdgeSnap 0.2";
     nb.nb_Descr = (STRPTR)"Drag windows to screen edges to tile them";
     nb.nb_Unique = NBU_UNIQUE | NBU_NOTIFY;
     nb.nb_Pri = 0;
@@ -1163,11 +1120,12 @@ int main(void)
 
     g_shared.engine_task = FindTask(NULL);
     g_shared.engine_sigmask = 1UL << engine_sig;
-    spike_drag_reset();
+    es_engine_init(&g_engine, NULL);
+    es_registry_init(&g_registry);
 
     ActivateCxObj(broker, 1L);
 
-    printf("edgesnap spike 0.1 (build " __DATE__ " " __TIME__ ") "
+    printf("EdgeSnap 0.2 (build " __DATE__ " " __TIME__ ") "
            "running (commodity \"EdgeSnap\").\n");
     printf("  drag a window's title bar until the pointer touches a\n");
     printf("  screen edge or corner, then release.\n");
@@ -1198,7 +1156,13 @@ int main(void)
                         break;
                     case CXCMD_DISABLE:
                         ActivateCxObj(broker, 0L);
-                        spike_drag_reset();
+                        {
+                            ESEngineActions a;
+
+                            es_engine_reset(&g_engine, &a);
+                            spike_run_actions(&a);
+                        }
+                        spike_log_flush();
                         break;
                     case CXCMD_ENABLE:
                         ActivateCxObj(broker, 1L);

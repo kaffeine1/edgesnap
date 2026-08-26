@@ -39,17 +39,24 @@ target-system behavior.
   2026-08-11) and real MorphOS hardware (2026-08-26): drag detection,
   snapping and the outline preview all work, including the
   MorphOS-specific CxCustom gate.
-- **Phase 1 (library kernel): in progress.** The validated spike behavior
-  now lives as a portable, host-tested kernel: `core/engine.c` (drag/snap
-  state machine), `core/registry.c` (stale-safe snap registry + restore),
+- **Phase 1 (library kernel): done.** The validated spike behavior lives
+  as a portable, host-tested kernel: `core/engine.c` (drag/snap state
+  machine), `core/registry.c` (stale-safe snap registry + restore),
   `include/edgesnap_types.h` (zones, errors, capabilities). The draft
-  public contract is `include/edgesnap.h`. Next: port the commodity onto
-  the kernel (phase 2).
+  public contract is `include/edgesnap.h`.
+- **Phase 2 (reference commodity): ported.** `commodity/edgesnap_cx.c`
+  now runs entirely on the kernel - the frontend feeds window facts and
+  executes emitted actions, with zero snap logic of its own (one snap
+  path shared by drag and hotkeys, the road ESnap_SnapWindow() will
+  pave). Verified in-VM on OS4; the MorphOS binary builds from the same
+  source. Preferences (ENVARC: + tooltypes) are the remaining phase 2
+  item.
 
-## The Phase 0 spike
+## The reference commodity
 
-`spike/edgesnap_spike.c` is a single-file commodity that must validate the
-two load-bearing assumptions on real systems before any library work:
+`commodity/edgesnap_cx.c` is the single-source commodity for both OSes,
+born as the phase 0 spike that validated the two load-bearing
+assumptions on real systems:
 
 1. drag detection by correlating pointer movement with the active window's
    position under `LockIBase()` (no IDCMP access to foreign windows, no
@@ -79,12 +86,14 @@ Suggested order for studying the code:
 2. [core/zones.h](core/zones.h) / [core/zones.c](core/zones.c) - the pure
    C89 zone geometry, with [core/zones_test.c](core/zones_test.c) as its
    executable specification.
-3. [spike/edgesnap_spike.c](spike/edgesnap_spike.c) top to bottom - the
-   sections mirror the architecture: library bases and the OS4/MorphOS
-   type differences; the shared handler/task state and the CxCustom
-   action (with the MorphOS 68k-ABI gate); window snapshotting under
-   LockIBase; the restore table; snapping; the outline preview; the drag
-   state machine; the commodity plumbing in main().
+3. [commodity/edgesnap_cx.c](commodity/edgesnap_cx.c) top to bottom -
+   the sections mirror the architecture: library bases and the
+   OS4/MorphOS type differences; the shared handler/task state and the
+   CxCustom action (with the MorphOS 68k-ABI gate); the non-blocking
+   log; window snapshotting under LockIBase (dock-aware usable area);
+   the one shared snap path over the kernel registry; the preview
+   backends (window frame / OS4 XOR); the kernel glue that feeds
+   ESEngine and executes its actions; the commodity plumbing in main().
 
 Key invariants to keep in mind while reading: the CxCustom action runs in
 input.device context and only bumps counters + Signal()s; every Intuition
@@ -97,7 +106,8 @@ struct Window * is never used without re-validation via the screen lists.
   zone geometry, the drag/snap engine, the snap registry
 - `include/` - public headers: portable constants (edgesnap_types.h) and
   the draft platform API contract (edgesnap.h)
-- `spike/` - the Phase 0 commodity (OS4 + MorphOS from one source)
+- `commodity/` - the reference commodity (OS4 + MorphOS from one
+  source): pure glue between the OS and the kernel
 - `Makefile.host` / `Makefile.os4` / `Makefile.morphos` - one lane each
 - `scripts/` - container build wrappers
 
@@ -117,7 +127,7 @@ scripts/build-os4.sh
 scripts/build-morphos.sh
 ```
 
-Outputs: `build/os4/EdgeSnapSpike`, `build/morphos/EdgeSnapSpike`.
+Outputs: `build/os4/EdgeSnap`, `build/morphos/EdgeSnap`.
 
 ## Testing on the target systems
 
@@ -134,9 +144,9 @@ Then in an OS4 Shell (the ISO carries no Amiga protection bits, so the
 `Protect +e` is required):
 
 ```text
-Copy ES_#?:EdgeSnapSpike RAM:
-Protect RAM:EdgeSnapSpike +e
-RAM:EdgeSnapSpike
+Copy ES_#?:EdgeSnap RAM:
+Protect RAM:EdgeSnap +e
+RAM:EdgeSnap
 ```
 
 Real hardware: http.server + wget as usual, same `Protect +e` after.

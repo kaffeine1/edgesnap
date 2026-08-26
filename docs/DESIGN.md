@@ -233,6 +233,11 @@ commodity/  Exchange controller
   ported onto the kernel in phase 2.*
 - **Phase 2 - reference commodity**: hotkey snapping and preferences through
   the library, with no duplicated snap logic.
+  *Status 2026-08-26: the commodity is ported onto the kernel
+  (commodity/edgesnap_cx.c): it feeds ESEngine window facts sampled
+  under LockIBase and executes the emitted actions; drag and hotkeys
+  share one snap path over the kernel registry. Verified in-VM on OS4.
+  Remaining: user preferences (ENVARC: + tooltypes).*
 - **Phase 3 - drag-to-edge**: live preview with opacity where available and
   an outline fallback everywhere else.
 - **Phase 4 - native integration**: platform library skeletons, ABI checks,

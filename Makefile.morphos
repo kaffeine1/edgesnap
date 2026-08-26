@@ -8,8 +8,8 @@
 # Hard assignment: the container environment presets CC=cc.
 CC = ppc-morphos-gcc
 CFLAGS ?= -Wall -Wextra -O2 -noixemul -Icore -Iinclude
-TARGET ?= build/morphos/EdgeSnapSpike
-SRC := spike/edgesnap_spike.c core/zones.c core/panels.c
+TARGET ?= build/morphos/EdgeSnap
+SRC := commodity/edgesnap_cx.c core/zones.c core/panels.c core/engine.c core/registry.c
 
 .PHONY: all clean
 

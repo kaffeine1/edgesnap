@@ -15,39 +15,40 @@ LABEL="ES_$(date +%y%m%d_%H%M%S)"
 STAGE="$ROOT/build/iso/stage"
 OUT="$ROOT/build/iso/$LABEL.iso"
 
-if [ ! -f "$ROOT/build/os4/EdgeSnapSpike" ]; then
-    echo "ERROR: build/os4/EdgeSnapSpike missing - run scripts/build-os4.sh first" >&2
+if [ ! -f "$ROOT/build/os4/EdgeSnap" ]; then
+    echo "ERROR: build/os4/EdgeSnap missing - run scripts/build-os4.sh first" >&2
     exit 1
 fi
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
-cp "$ROOT/build/os4/EdgeSnapSpike" "$STAGE/EdgeSnapSpike"
-if [ -f "$ROOT/build/morphos/EdgeSnapSpike" ]; then
-    cp "$ROOT/build/morphos/EdgeSnapSpike" "$STAGE/EdgeSnapSpike-MorphOS"
+cp "$ROOT/build/os4/EdgeSnap" "$STAGE/EdgeSnap"
+if [ -f "$ROOT/build/morphos/EdgeSnap" ]; then
+    cp "$ROOT/build/morphos/EdgeSnap" "$STAGE/EdgeSnap-MorphOS"
 fi
 
 cat > "$STAGE/README.txt" <<'EOF'
-EdgeSnap spike - phase 0 test build
+EdgeSnap 0.2 - reference commodity test build (phase 2: all snap
+logic lives in the shared library kernel).
 
-Install (OS4 shell; use EdgeSnapSpike-MorphOS on MorphOS):
+Install (OS4 shell; use EdgeSnap-MorphOS on MorphOS, from disk):
 
-  Copy <thisvolume>:EdgeSnapSpike RAM:
-  Protect RAM:EdgeSnapSpike +e
-  RAM:EdgeSnapSpike
+  Copy <thisvolume>:EdgeSnap RAM:
+  Protect RAM:EdgeSnap +e
+  RAM:EdgeSnap
 
-The ISO carries no Amiga protection bits, so the Protect +e is required.
+The ISO carries no Amiga protection bits, hence the Protect +e.
 
 Try:
-  - drag a window's title bar until the POINTER touches a screen
-    edge or corner, then release -> snaps to half / quarter / max
+  - drag a window's title bar until the POINTER touches an edge or
+    corner: a frame previews the zone; release to snap. Docks are
+    detected and never covered.
   - ctrl alt cursor left/right/up = snap active window, down = restore
-  - quit: Ctrl-C in the shell, or remove "EdgeSnap" from Exchange
+  - ctrl alt d = window dump (dock diagnosis)
+  - quit: Ctrl-C in the shell, or remove EdgeSnap from Exchange.
 
-The program prints every decision to the shell - that output is the
-test result. Things to watch: does drag detection fire? does the
-snapped geometry stick after release, or does Intuition's own drop
-handling overwrite it?
+The startup banner prints the build date/time - check it matches.
+Diagnostics print when no drag is in flight.
 EOF
 
 hdiutil makehybrid -quiet -iso -joliet \
