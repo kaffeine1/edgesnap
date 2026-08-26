@@ -36,8 +36,18 @@ is a shared library in `LIBS:` plus a commodity:
   versioned; platform-specific implementation details stay private.
 - **Commodity controller** - Exchange presence, hotkeys, prefs loading; a
   thin executable that opens the library and starts the engine.
-- **Prefs** - `ENVARC:` file + tooltypes first; native GUIs later
-  (ReAction on OS4, MUI on MorphOS).
+- **Prefs** - `ENV(ARC):EdgeSnap.prefs` + Shell arguments first, native
+  GUIs later (ReAction on OS4, MUI on MorphOS). One KEY=VALUE parser in
+  the portable core (`core/config.c`) serves every source, because on
+  Amiga they share a shape: env-file lines, tooltypes and Shell
+  arguments. Vocabulary: ZONES, EDGEPX, CORNERDIV, DRAGMINPX, PREVIEW,
+  PANELDETECT, PANELMARGIN, MARGIN{LEFT,TOP,RIGHT,BOTTOM}, BYPASSQUAL.
+  Rules that are contract, not convenience: an unknown key
+  (ES_ERR_UNSUPPORTED) is told apart from a bad value (ES_ERR_BAD_ARGS);
+  a rejected line leaves the setting untouched and never aborts the
+  load, so a truncated prefs file cannot leave the user without
+  snapping; a typo inside a list value (ZONES=left,rihgt) fails the
+  whole value instead of silently disabling half the zones.
 
 ## Architectural rule #1: input handler != logic
 
@@ -218,6 +228,18 @@ commodity/  Exchange controller
   state where a fresh CxBroker() hung pre-banner; a clean reboot cleared
   it. The banner now prints its build date/time so the running binary
   is never ambiguous again.
+- **Open issue - restart hang (OS4, seen twice, not reproducible from a
+  clean boot)**: after a session of repeated start/stop cycles, every
+  new instance hung before its banner - including a binary that had
+  just worked, which rules the project's own code changes out. Ruled
+  out by experiment from a clean boot: plain Ctrl-C then restart works,
+  and a duplicate instance is refused properly (CxBroker CBERR_DUP,
+  "already running", clean exit). Suspicion remains on the shutdown
+  path leaving commodities wedged in some interleaving (an event in
+  flight through the CxCustom action while the tree is deleted). Before
+  a public release this needs a deliberate stress test: many
+  start/stop cycles, quitting during a drag, and quitting from Exchange
+  rather than Ctrl-C.
 
 ## Roadmap
 
@@ -233,11 +255,17 @@ commodity/  Exchange controller
   ported onto the kernel in phase 2.*
 - **Phase 2 - reference commodity**: hotkey snapping and preferences through
   the library, with no duplicated snap logic.
-  *Status 2026-08-26: the commodity is ported onto the kernel
+  *Status 2026-08-26: DONE. The commodity is ported onto the kernel
   (commodity/edgesnap_cx.c): it feeds ESEngine window facts sampled
   under LockIBase and executes the emitted actions; drag and hotkeys
-  share one snap path over the kernel registry. Verified in-VM on OS4.
-  Remaining: user preferences (ENVARC: + tooltypes).*
+  share one snap path over the kernel registry. Preferences land through
+  core/config.c from ENV(ARC):EdgeSnap.prefs and Shell arguments
+  (arguments override the file), and the startup banner echoes what is
+  actually in force. Verified in-VM on OS4: argument overrides, file
+  loading, and a configurable dock margin reaching the geometry
+  (insets b=88 -> b=100 with PANELMARGIN=20). Remaining for a release:
+  Workbench tooltypes (needs icon.library + WBStartup handling) and the
+  native prefs GUIs, both scheduled with packaging.*
 - **Phase 3 - drag-to-edge**: live preview with opacity where available and
   an outline fallback everywhere else.
 - **Phase 4 - native integration**: platform library skeletons, ABI checks,

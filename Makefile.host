@@ -8,7 +8,7 @@ CC ?= cc
 CFLAGS ?= -std=c89 -pedantic -Wall -Wextra -Werror -O2 -Icore -Iinclude
 BUILD ?= build/host
 
-TESTS := $(BUILD)/zones_test $(BUILD)/engine_test $(BUILD)/registry_test $(BUILD)/panels_test
+TESTS := $(BUILD)/zones_test $(BUILD)/engine_test $(BUILD)/registry_test $(BUILD)/panels_test $(BUILD)/config_test
 
 .PHONY: all test clean
 
@@ -30,11 +30,16 @@ $(BUILD)/panels_test: core/panels.c core/panels_test.c core/panels.h core/zones.
 	mkdir -p "$(BUILD)"
 	$(CC) $(CFLAGS) -o "$@" core/panels.c core/panels_test.c
 
+$(BUILD)/config_test: core/config.c core/config_test.c core/config.h core/engine.h core/panels.h core/zones.h include/edgesnap_types.h
+	mkdir -p "$(BUILD)"
+	$(CC) $(CFLAGS) -o "$@" core/config.c core/engine.c core/zones.c core/config_test.c
+
 test: $(TESTS)
 	./$(BUILD)/zones_test
 	./$(BUILD)/engine_test
 	./$(BUILD)/registry_test
 	./$(BUILD)/panels_test
+	./$(BUILD)/config_test
 
 clean:
 	rm -f $(TESTS)

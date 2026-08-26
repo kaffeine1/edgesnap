@@ -54,10 +54,12 @@ int es_panel_classify(const ESRect *screen, const ESRect *box);
 
 /*
  * screen: full screen rectangle. boxes/count: candidate window boxes,
- * pre-filtered by the caller as described above. out: reserved inset
- * per edge (0 when free).
+ * pre-filtered by the caller as described above. margin_px: breathing
+ * room added to every non-zero inset (ES_PANEL_MARGIN_PX is the
+ * default; preferences can change it). out: reserved inset per edge
+ * (0 when free).
  */
 void es_panel_insets(const ESRect *screen, const ESRect *boxes, int count,
-                     ESInsets *out);
+                     int margin_px, ESInsets *out);
 
 #endif /* EDGESNAP_PANELS_H */

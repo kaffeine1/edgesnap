@@ -28,6 +28,7 @@
  * Amiga) at one instant. All geometry is in screen coordinates. */
 #define ES_WF_SNAPPABLE 0x0001u /* policy allows snapping this window   */
 #define ES_WF_DRAGBAR   0x0002u /* window has a system drag bar         */
+#define ES_WF_BYPASS    0x0004u /* user holds the bypass qualifier      */
 
 typedef struct ESWinFacts {
     void *ref;             /* identity token, never dereferenced        */
@@ -43,6 +44,7 @@ typedef struct ESEngineConfig {
     int edge_px;      /* pointer this close to an edge = zone           */
     int corner_div;   /* corner length = usable height / corner_div     */
     int drag_min_px;  /* pointer travel needed to call it a drag        */
+    unsigned zones_mask; /* ES_ZONEBIT() set of zones that react        */
 } ESEngineConfig;
 
 void es_engine_config_defaults(ESEngineConfig *cfg);

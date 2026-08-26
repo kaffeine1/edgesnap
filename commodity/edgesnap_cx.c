@@ -50,6 +50,7 @@
 #include <intuition/screens.h> /* DrawInfo pens for the preview frame */
 #include <graphics/view.h>     /* OBP_Precision/PRECISION_GUI          */
 
+#include <proto/dos.h>
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/graphics.h>
@@ -64,6 +65,7 @@
 #include "panels.h"
 #include "engine.h"
 #include "registry.h"
+#include "config.h"
 
 /* ---------------------------------------------------------------- tuning */
 
@@ -117,6 +119,7 @@ struct SpikeShared {
     volatile ULONG presses;
     volatile ULONG releases;
     volatile ULONG moves;
+    volatile ULONG quals;   /* latest qualifier bits seen with the mouse */
 };
 
 static struct SpikeShared g_shared;
@@ -137,6 +140,7 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
     if (ie == NULL || ie->ie_Class != IECLASS_RAWMOUSE) {
         return;
     }
+    g_shared.quals = ie->ie_Qualifier;
     if (ie->ie_Code == IECODE_LBUTTON) {
         g_shared.presses++;
     } else if (ie->ie_Code == (IECODE_LBUTTON | IECODE_UP_PREFIX)) {
@@ -223,6 +227,80 @@ static void spike_log_flush(void)
     g_log_dropped = 0;
 }
 
+/* ---------------------------------------------------------- preferences */
+
+/*
+ * Preferences live in the portable core (core/config.c): one KEY=VALUE
+ * parser serves both sources, because on Amiga they have the same
+ * shape - lines of an ENV(ARC): file and, later, Workbench tooltypes.
+ * This glue only reads bytes and reports what the parser rejected; a
+ * bad line never aborts the load, so a truncated prefs file cannot
+ * leave the user without snapping.
+ */
+
+#define ES_PREFS_ENV    "ENV:EdgeSnap.prefs"
+#define ES_PREFS_ENVARC "ENVARC:EdgeSnap.prefs"
+
+static ESConfig g_cfg;
+
+static void spike_config_line(const char *line, const char *src)
+{
+    int rc = es_config_line(&g_cfg, line);
+
+    if (rc == ES_ERR_UNSUPPORTED) {
+        printf("edgesnap: %s: unknown setting: %s\n", src, line);
+    } else if (rc != ES_OK) {
+        printf("edgesnap: %s: bad value: %s\n", src, line);
+    }
+}
+
+static int spike_config_load_file(const char *path)
+{
+    BPTR fh;
+    char line[160];
+
+    fh = Open((STRPTR)path, MODE_OLDFILE);
+    if (!fh) {
+        return 0;
+    }
+    while (FGets(fh, (STRPTR)line, (unsigned long)sizeof(line)) != 0) {
+        spike_config_line(line, path);
+    }
+    Close(fh);
+    return 1;
+}
+
+/* ENV: holds the live settings, ENVARC: the archived ones: prefer the
+ * live copy, like every other Amiga preferences client. */
+static void spike_config_load(int argc, char **argv)
+{
+    int i;
+
+    es_config_defaults(&g_cfg);
+    if (!spike_config_load_file(ES_PREFS_ENV)) {
+        spike_config_load_file(ES_PREFS_ENVARC);
+    }
+    /* Shell arguments override the file: KEY=VALUE, same vocabulary. */
+    for (i = 1; i < argc; i++) {
+        spike_config_line(argv[i], "argument");
+    }
+}
+
+/* Amiga qualifier bits for the configured bypass key. */
+static ULONG spike_bypass_mask(void)
+{
+    switch (g_cfg.bypass_qual) {
+    case ES_QUAL_ALT:
+        return IEQUALIFIER_LALT | IEQUALIFIER_RALT;
+    case ES_QUAL_CTRL:
+        return IEQUALIFIER_CONTROL;
+    case ES_QUAL_SHIFT:
+        return IEQUALIFIER_LSHIFT | IEQUALIFIER_RSHIFT;
+    default:
+        return 0;
+    }
+}
+
 /* -------------------------------------------------- window snapshotting */
 
 /* Copy of everything we need from a Window/Screen, taken under LockIBase. */
@@ -265,7 +343,8 @@ static void spike_usable_area(struct Screen *scr, struct Window *skip,
     scrrect.y = 0;
     scrrect.w = scr->Width;
     scrrect.h = scr->Height;
-    for (w = scr->FirstWindow; w != NULL && n < ES_PANEL_SCAN_MAX;
+    for (w = scr->FirstWindow;
+         g_cfg.panel_detect && w != NULL && n < ES_PANEL_SCAN_MAX;
          w = w->NextWindow) {
         if (w == skip || spike_is_preview_win(w)) {
             continue;
@@ -280,7 +359,13 @@ static void spike_usable_area(struct Screen *scr, struct Window *skip,
         panels[n].h = w->Height;
         n++;
     }
-    es_panel_insets(&scrrect, panels, n, out_ins);
+    es_panel_insets(&scrrect, panels, n, g_cfg.panel_margin, out_ins);
+
+    /* user margins stack on top of what detection reserved */
+    out_ins->l += g_cfg.margin.l;
+    out_ins->r += g_cfg.margin.r;
+    out_ins->t += g_cfg.margin.t;
+    out_ins->b += g_cfg.margin.b;
 
     top = scr->BarHeight + 1;
     if (out_ins->t > top) {
@@ -746,7 +831,7 @@ static void spike_run_actions(const ESEngineActions *a)
     if (a->zone_changed) {
         spike_log("edgesnap: zone -> %s\n", es_zone_name(a->zone));
     }
-    if (a->show_preview && g_facts_scr != NULL) {
+    if (a->show_preview && g_cfg.preview && g_facts_scr != NULL) {
         spike_preview_show(g_facts_scr, &a->preview_rect);
     }
     if (a->do_snap) {
@@ -796,6 +881,13 @@ static void spike_engine_step(void)
             }
             if (ws.flags & WFLG_DRAGBAR) {
                 f.flags |= ES_WF_DRAGBAR;
+            }
+            {
+                ULONG bypass = spike_bypass_mask();
+
+                if (bypass != 0 && (g_shared.quals & bypass) != 0) {
+                    f.flags |= ES_WF_BYPASS;
+                }
             }
             g_facts_scr = ws.scr;
             es_engine_motion(&g_engine, &f, &a);
@@ -1057,7 +1149,7 @@ static int spike_open_libs(void)
     return 1;
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     struct MsgPort *port = NULL;
     CxObj *broker = NULL;
@@ -1070,6 +1162,7 @@ int main(void)
     int rc = RETURN_FAIL;
 
     (void)es_stack_cookie;
+    spike_config_load(argc, argv);
 
     if (!spike_open_libs()) {
         printf("edgesnap: need intuition/graphics.library 36 and "
@@ -1120,7 +1213,7 @@ int main(void)
 
     g_shared.engine_task = FindTask(NULL);
     g_shared.engine_sigmask = 1UL << engine_sig;
-    es_engine_init(&g_engine, NULL);
+    es_engine_init(&g_engine, &g_cfg.engine);
     es_registry_init(&g_registry);
 
     ActivateCxObj(broker, 1L);
@@ -1133,6 +1226,19 @@ int main(void)
            "restore,\n");
     printf("           ctrl alt d = window dump (dock diagnosis).\n");
     printf("  quit: Ctrl-C here, or remove it from Exchange.\n");
+    printf("edgesnap: prefs: zones %04x, edge %d px, corner 1/%d, "
+           "drag %d px,\n", (unsigned)g_cfg.engine.zones_mask,
+           g_cfg.engine.edge_px, g_cfg.engine.corner_div,
+           g_cfg.engine.drag_min_px);
+    printf("edgesnap:        preview %s, panel detect %s (margin %d), "
+           "bypass %s,\n", g_cfg.preview ? "on" : "off",
+           g_cfg.panel_detect ? "on" : "off", g_cfg.panel_margin,
+           g_cfg.bypass_qual == ES_QUAL_ALT ? "alt" :
+           g_cfg.bypass_qual == ES_QUAL_CTRL ? "ctrl" :
+           g_cfg.bypass_qual == ES_QUAL_SHIFT ? "shift" : "none");
+    printf("edgesnap:        margins l%d t%d r%d b%d "
+           "(file: " ES_PREFS_ENV ")\n", g_cfg.margin.l, g_cfg.margin.t,
+           g_cfg.margin.r, g_cfg.margin.b);
     spike_dump_windows();
 
     port_mask = 1UL << port->mp_SigBit;

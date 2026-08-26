@@ -30,6 +30,10 @@
 #define ES_ZONE_BOTTOM_RIGHT 6
 #define ES_ZONE_MAX          7
 
+/* Zone sets (which zones react to a drag) travel as a bit mask. */
+#define ES_ZONEBIT(z)        (1u << (z))
+#define ES_ZONEMASK_ALL      0x00FEu   /* every zone but ES_ZONE_NONE */
+
 /* ------------------------------------------------------------ errors */
 
 /*

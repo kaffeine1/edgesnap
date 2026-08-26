@@ -21,6 +21,7 @@ void es_engine_config_defaults(ESEngineConfig *cfg)
     cfg->edge_px = 12;
     cfg->corner_div = 4;
     cfg->drag_min_px = 4;
+    cfg->zones_mask = ES_ZONEMASK_ALL;
 }
 
 static void es_actions_clear(ESEngineActions *out)
@@ -109,6 +110,15 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
         int z = es_zone_from_pointer(&facts->usable, facts->mouse_x,
                                      facts->mouse_y, e->cfg.edge_px,
                                      facts->usable.h / e->cfg.corner_div);
+
+        /* Holding the bypass qualifier, or landing in a zone the user
+         * switched off, means "just move the window". */
+        if ((facts->flags & ES_WF_BYPASS) != 0) {
+            z = ES_ZONE_NONE;
+        } else if (z != ES_ZONE_NONE &&
+                   (e->cfg.zones_mask & ES_ZONEBIT(z)) == 0) {
+            z = ES_ZONE_NONE;
+        }
         if (z != e->zone) {
             e->zone = z;
             out->zone_changed = 1;

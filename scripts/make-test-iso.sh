@@ -27,6 +27,31 @@ if [ -f "$ROOT/build/morphos/EdgeSnap" ]; then
     cp "$ROOT/build/morphos/EdgeSnap" "$STAGE/EdgeSnap-MorphOS"
 fi
 
+cat > "$STAGE/EdgeSnap.prefs" <<'EOF'
+# EdgeSnap preferences - copy to ENVARC:EdgeSnap.prefs (and ENV: for
+# the running session). Every setting is optional; the same KEY=VALUE
+# vocabulary works as a Shell argument, e.g.
+#   EdgeSnap ZONES=halves EDGEPX=24
+#
+# ZONES       which zones react: all | none | halves | corners |
+#             left,right,topleft,topright,bottomleft,bottomright,maximize
+# EDGEPX      how close to an edge the POINTER must be (default 12)
+# CORNERDIV   corner length = usable height / this (default 4)
+# DRAGMINPX   pointer travel before a drag counts (default 4)
+# PREVIEW     show the zone preview frame: yes | no
+# PANELDETECT reserve dock/panel strips: yes | no
+# PANELMARGIN breathing room around a detected dock (default 8)
+# MARGINLEFT/TOP/RIGHT/BOTTOM  extra margins of your own (default 0)
+# BYPASSQUAL  hold to drag past the zones: none | alt | ctrl | shift
+
+ZONES=all
+EDGEPX=12
+PREVIEW=yes
+PANELDETECT=yes
+PANELMARGIN=8
+BYPASSQUAL=alt
+EOF
+
 cat > "$STAGE/README.txt" <<'EOF'
 EdgeSnap 0.2 - reference commodity test build (phase 2: all snap
 logic lives in the shared library kernel).
@@ -45,6 +70,11 @@ Try:
     detected and never covered.
   - ctrl alt cursor left/right/up = snap active window, down = restore
   - ctrl alt d = window dump (dock diagnosis)
+  - preferences: EdgeSnap.prefs on this volume documents every
+    setting. Copy it to ENVARC:EdgeSnap.prefs (and ENV:) or pass the
+    same KEY=VALUE pairs as Shell arguments:
+      RAM:EdgeSnap ZONES=halves EDGEPX=24 BYPASSQUAL=alt
+    The startup banner echoes the settings actually in force.
   - quit: Ctrl-C in the shell, or remove EdgeSnap from Exchange.
 
 The startup banner prints the build date/time - check it matches.

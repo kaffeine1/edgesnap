@@ -49,8 +49,11 @@ target-system behavior.
   executes emitted actions, with zero snap logic of its own (one snap
   path shared by drag and hotkeys, the road ESnap_SnapWindow() will
   pave). Verified in-VM on OS4; the MorphOS binary builds from the same
-  source. Preferences (ENVARC: + tooltypes) are the remaining phase 2
-  item.
+  source. **Preferences** are in: `ENV(ARC):EdgeSnap.prefs` plus Shell
+  arguments, parsed by the portable `core/config.c` (zones, edge/corner
+  sensitivity, preview, dock detection and margin, own margins, bypass
+  qualifier). Workbench tooltypes and the native prefs GUIs come with
+  packaging.
 
 ## The reference commodity
 
@@ -71,6 +74,9 @@ What the spike does today:
   to half / quarter / usable-maximum;
 - dock awareness, macOS-style: AmiDock / Ambient panel strips are
   detected and reserved, so snapped windows never cover the dock;
+- preferences from `ENV(ARC):EdgeSnap.prefs` or the command line, same
+  vocabulary either way (`EdgeSnap ZONES=halves EDGEPX=24 BYPASSQUAL=alt`);
+  the startup banner echoes the settings in force;
 - hotkeys (no drag heuristics involved):
   `ctrl alt cursor left/right/up` = snap left / right / maximize,
   `ctrl alt cursor down` = restore pre-snap geometry;

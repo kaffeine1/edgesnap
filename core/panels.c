@@ -59,7 +59,7 @@ static int es_max(int a, int b)
 }
 
 void es_panel_insets(const ESRect *scr, const ESRect *boxes, int count,
-                     ESInsets *out)
+                     int margin_px, ESInsets *out)
 {
     int i;
 
@@ -87,15 +87,15 @@ void es_panel_insets(const ESRect *scr, const ESRect *boxes, int count,
 
     /* breathing room: snapped windows never sit glued to a panel */
     if (out->l > 0) {
-        out->l += ES_PANEL_MARGIN_PX;
+        out->l += margin_px;
     }
     if (out->r > 0) {
-        out->r += ES_PANEL_MARGIN_PX;
+        out->r += margin_px;
     }
     if (out->t > 0) {
-        out->t += ES_PANEL_MARGIN_PX;
+        out->t += margin_px;
     }
     if (out->b > 0) {
-        out->b += ES_PANEL_MARGIN_PX;
+        out->b += margin_px;
     }
 }
