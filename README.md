@@ -54,6 +54,14 @@ target-system behavior.
   sensitivity, preview, dock detection and margin, own margins, bypass
   qualifier). Workbench tooltypes and the native prefs GUIs come with
   packaging.
+- **Phase 4 (native integration): in progress.** The API surface now
+  lives in `library/edgesnap_body.c` behind a semaphore - snap, unsnap,
+  query, exclude, options, capabilities, plus the interactive path that
+  samples windows, runs the engine and performs the snap. The commodity
+  contributes only raw input facts and the drawing of the preview
+  frame, and gets a report back to log (a library never prints). Next:
+  the OS4 ELF/interface skeleton and the MorphOS LVO skeleton around
+  that same body.
 
 ## The reference commodity
 
@@ -112,8 +120,11 @@ struct Window * is never used without re-validation via the screen lists.
   zone geometry, the drag/snap engine, the snap registry
 - `include/` - public headers: portable constants (edgesnap_types.h) and
   the draft platform API contract (edgesnap.h)
+- `library/` - edgesnap.library's body: the one implementation behind
+  the public API (state, validation, snapping, the interactive path),
+  wrapped by the platform skeletons and linked by the commodity
 - `commodity/` - the reference commodity (OS4 + MorphOS from one
-  source): pure glue between the OS and the kernel
+  source): raw input facts in, preview frame drawn, nothing decided
 - `Makefile.host` / `Makefile.os4` / `Makefile.morphos` - one lane each
 - `scripts/` - container build wrappers
 

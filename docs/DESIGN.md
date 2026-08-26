@@ -296,6 +296,16 @@ commodity/  Exchange controller
   an outline fallback everywhere else.
 - **Phase 4 - native integration**: platform library skeletons, ABI checks,
   documentation, locale catalogs, and target-system compatibility testing.
+  *Status 2026-08-26: the library BODY exists (`library/edgesnap_body.c`):
+  one semaphore-protected implementation of the public API, including
+  window validation, the dock-aware usable area, the snap registry and
+  the interactive path. Frontends contribute raw input facts and draw
+  the preview frame; the body reports what happened so the frontend can
+  log it, because a library never prints. The commodity links it
+  directly and was verified in-VM on OS4 (drag detected -> zone ->
+  snap). Next: the OS4 ELF/interface skeleton, then the MorphOS LVO
+  skeleton with gates, then the commodity opens the library instead of
+  linking it.*
 - **Phase 5 - upstream proposal**: polished examples, migration/API notes,
   maintainer review package, and releases through the appropriate OS4Depot,
   MorphOS, and Aminet channels. Official adoption remains a maintainer
