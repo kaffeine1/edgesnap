@@ -9,21 +9,16 @@
 #ifndef EDGESNAP_ZONES_H
 #define EDGESNAP_ZONES_H
 
+/* ES_ZONE_* live in the public types header: one source of truth shared
+ * with the (future) library API. */
+#include "edgesnap_types.h"
+
 typedef struct ESRect {
     int x;
     int y;
     int w;
     int h;
 } ESRect;
-
-#define ES_ZONE_NONE         0
-#define ES_ZONE_LEFT         1
-#define ES_ZONE_RIGHT        2
-#define ES_ZONE_TOP_LEFT     3
-#define ES_ZONE_TOP_RIGHT    4
-#define ES_ZONE_BOTTOM_LEFT  5
-#define ES_ZONE_BOTTOM_RIGHT 6
-#define ES_ZONE_MAX          7
 
 /*
  * Map a pointer position to a zone. "usable" is the screen area available

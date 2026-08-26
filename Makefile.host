@@ -5,19 +5,31 @@
 # The core must stay strict C89 with zero Amiga dependencies.
 
 CC ?= cc
-CFLAGS ?= -std=c89 -pedantic -Wall -Wextra -Werror -O2 -Icore
-TARGET ?= build/host/zones_test
+CFLAGS ?= -std=c89 -pedantic -Wall -Wextra -Werror -O2 -Icore -Iinclude
+BUILD ?= build/host
+
+TESTS := $(BUILD)/zones_test $(BUILD)/engine_test $(BUILD)/registry_test
 
 .PHONY: all test clean
 
-all: $(TARGET)
+all: $(TESTS)
 
-$(TARGET): core/zones.c core/zones_test.c core/zones.h
-	mkdir -p "$(dir $(TARGET))"
+$(BUILD)/zones_test: core/zones.c core/zones_test.c core/zones.h include/edgesnap_types.h
+	mkdir -p "$(BUILD)"
 	$(CC) $(CFLAGS) -o "$@" core/zones.c core/zones_test.c
 
-test: $(TARGET)
-	./$(TARGET)
+$(BUILD)/engine_test: core/zones.c core/engine.c core/engine_test.c core/zones.h core/engine.h include/edgesnap_types.h
+	mkdir -p "$(BUILD)"
+	$(CC) $(CFLAGS) -o "$@" core/zones.c core/engine.c core/engine_test.c
+
+$(BUILD)/registry_test: core/registry.c core/registry_test.c core/registry.h core/zones.h include/edgesnap_types.h
+	mkdir -p "$(BUILD)"
+	$(CC) $(CFLAGS) -o "$@" core/registry.c core/registry_test.c
+
+test: $(TESTS)
+	./$(BUILD)/zones_test
+	./$(BUILD)/engine_test
+	./$(BUILD)/registry_test
 
 clean:
-	rm -f "$(TARGET)"
+	rm -f $(TESTS)

@@ -33,7 +33,18 @@ The project must not claim official adoption before that review happens; it
 must earn it through API quality, compatibility, documentation, and reliable
 target-system behavior.
 
-## Status: Phase 0 (feasibility spike)
+## Status
+
+- **Phase 0 (spike): validated on AmigaOS 4** (QEMU): drag detection is
+  reliable and snapped geometry sticks. MorphOS runtime test pending.
+- **Phase 1 (library kernel): in progress.** The validated spike behavior
+  now lives as a portable, host-tested kernel: `core/engine.c` (drag/snap
+  state machine), `core/registry.c` (stale-safe snap registry + restore),
+  `include/edgesnap_types.h` (zones, errors, capabilities). The draft
+  public contract is `include/edgesnap.h`. Next: port the commodity onto
+  the kernel (phase 2).
+
+## The Phase 0 spike
 
 `spike/edgesnap_spike.c` is a single-file commodity that must validate the
 two load-bearing assumptions on real systems before any library work:
@@ -78,8 +89,10 @@ struct Window * is never used without re-validation via the screen lists.
 
 ## Layout
 
-- `core/` - pure C89, zero Amiga dependencies, unit-tested on the host
-  (zone geometry today; state machine and snap registry will follow)
+- `core/` - pure C89, zero Amiga dependencies, unit-tested on the host:
+  zone geometry, the drag/snap engine, the snap registry
+- `include/` - public headers: portable constants (edgesnap_types.h) and
+  the draft platform API contract (edgesnap.h)
 - `spike/` - the Phase 0 commodity (OS4 + MorphOS from one source)
 - `Makefile.host` / `Makefile.os4` / `Makefile.morphos` - one lane each
 - `scripts/` - container build wrappers

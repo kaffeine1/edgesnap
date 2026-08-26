@@ -132,6 +132,12 @@ release, document for every entry point:
 Prefer `_TagList` cores with per-platform varargs glue. Do not expose internal
 engine structs or make callers depend on private OS implementation details.
 
+The current draft of this contract lives in `include/edgesnap.h`
+(platform-facing, struct Window * signatures) and
+`include/edgesnap_types.h` (portable constants: zones, errors,
+capabilities - the single source of truth shared with the host-tested
+core).
+
 ## Packaging
 
 Shared C89 core (host-testable, zero Amiga includes) + per-OS library
@@ -180,6 +186,12 @@ commodity/  Exchange controller
   foreign ChangeWindowBox on both OSes. Feasibility gate.
 - **Phase 1 - library kernel**: shared state machine, snap registry, restore,
   capability/error model, and the first host-tested public-header contract.
+  *Status 2026-08-26: kernel landed in `core/` (engine.c = the validated
+  spike behavior as a pure state machine, registry.c = stale-safe restore),
+  host-tested under `-std=c89 -pedantic -Werror`; portable constants in
+  `include/edgesnap_types.h`; draft platform contract in
+  `include/edgesnap.h`. The spike still runs its own inline logic and gets
+  ported onto the kernel in phase 2.*
 - **Phase 2 - reference commodity**: hotkey snapping and preferences through
   the library, with no duplicated snap logic.
 - **Phase 3 - drag-to-edge**: live preview with opacity where available and
@@ -197,5 +209,21 @@ commodity/  Exchange controller
    working name).
 2. Define opaque/public window references versus direct `struct Window *`
    parameters before freezing the ABI.
+   *Proposal (2026-08-26, pending ratification): keep `struct Window *`
+   in the public signatures with validate-per-call semantics. It is the
+   native idiom of every Intuition-facing API on both systems - exactly
+   what "adoptable by OS maintainers" asks for - and an opaque handle
+   would only add a resolve step for callers without removing the need
+   to re-validate against the live window lists on every call. The two
+   real hazards are handled explicitly: vanished windows return
+   ES_ERR_STALE (validation under LockIBase, no dereference outside it),
+   and pointer reuse is defused by the registry's restore rule (restore
+   acts only if the window still sits on its snap geometry, else the
+   state is dropped with ES_ERR_CHANGED - a mishap is bounded to
+   "nothing happens", never "a stranger window moves"). The portable
+   core is reference-agnostic (`void *` identity tokens), so flipping to
+   opaque handles before the ABI freeze would touch only the platform
+   facade if the review process demands it. Full contract text in
+   `include/edgesnap.h`.*
 3. Divider resizes the snapped pair (recommended) or single window only?
 4. License and hosting (MIT on GitHub is the de facto scene standard).
