@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# AmigaOS 4.x shared library lane: edgesnap.library.
+# A library has no startup code of its own (-nostartfiles) and provides
+# its own _start, which refuses to run.
+
+CC = ppc-amigaos-gcc
+CFLAGS ?= -Wall -Wextra -O2 -ffreestanding \
+          -fno-tree-loop-distribute-patterns \
+          -Icore -Iinclude -Ilibrary
+LDFLAGS ?= -nostartfiles -nostdlib
+TARGET ?= build/os4/edgesnap.library
+SRC := library/os4/edgesnap_library.c library/edgesnap_body.c \
+       core/zones.c core/panels.c core/engine.c core/registry.c \
+       core/config.c
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	mkdir -p "$(dir $(TARGET))"
+	$(CC) $(CFLAGS) $(LDFLAGS) -o "$@" $(SRC)
+
+clean:
+	rm -f "$(TARGET)"

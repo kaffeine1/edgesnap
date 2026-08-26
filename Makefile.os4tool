@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# Third-party client of edgesnap.library, AmigaOS 4 lane.
+
+CC = ppc-amigaos-gcc
+CFLAGS ?= -Wall -Wextra -O2 -Iinclude -Icore
+TARGET ?= build/os4/esnaptest
+SRC := tools/esnaptest.c
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	mkdir -p "$(dir $(TARGET))"
+	$(CC) $(CFLAGS) -o "$@" $(SRC)
+
+clean:
+	rm -f "$(TARGET)"

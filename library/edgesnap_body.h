@@ -21,6 +21,7 @@
 
 #include <exec/types.h>
 #include <intuition/intuition.h>
+#include <utility/tagitem.h>
 
 #include "edgesnap_types.h"
 #include "config.h"
@@ -40,6 +41,11 @@ LONG esb_unsnap_window(struct Window *win);
 LONG esb_query_window(struct Window *win, ULONG *zone_out);
 LONG esb_exclude_window(struct Window *win, BOOL exclude);
 LONG esb_set_config(const ESConfig *cfg);
+
+/* Public options path: ES_OPT_* tags mapped onto the configuration.
+ * Unknown tags are ignored (forward compatibility); a tag with an
+ * out-of-range value fails the call and changes nothing. */
+LONG esb_set_options(const struct TagItem *tags);
 LONG esb_enable(BOOL on);
 
 /* Read-only view of the live configuration (the frontend echoes it). */

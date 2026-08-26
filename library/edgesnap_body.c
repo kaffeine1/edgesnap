@@ -34,6 +34,7 @@
 #include <proto/exec.h>
 #include <proto/intuition.h>
 
+#include "edgesnap.h"
 #include "edgesnap_body.h"
 #include "panels.h"
 #include "zones.h"
@@ -420,6 +421,112 @@ LONG esb_set_config(const ESConfig *cfg)
 const ESConfig *esb_config(void)
 {
     return &g_cfg;
+}
+
+/*
+ * Minimal tag walker: utility.library is not opened for this, and the
+ * chain forms (TAG_MORE/TAG_SKIP/TAG_IGNORE) are part of the contract
+ * a caller may legitimately use.
+ */
+static const struct TagItem *esb_next_tag(const struct TagItem **ptr)
+{
+    const struct TagItem *t = *ptr;
+
+    if (t == NULL) {
+        return NULL;
+    }
+    for (;;) {
+        switch (t->ti_Tag) {
+        case TAG_DONE:
+            *ptr = NULL;
+            return NULL;
+        case TAG_IGNORE:
+            t++;
+            break;
+        case TAG_MORE:
+            t = (const struct TagItem *)t->ti_Data;
+            if (t == NULL) {
+                *ptr = NULL;
+                return NULL;
+            }
+            break;
+        case TAG_SKIP:
+            t += 1 + (LONG)t->ti_Data;
+            break;
+        default:
+            *ptr = t + 1;
+            return t;
+        }
+    }
+}
+
+LONG esb_set_options(const struct TagItem *tags)
+{
+    const struct TagItem *scan = tags;
+    const struct TagItem *ti;
+    ESConfig cfg;
+    LONG v;
+
+    if (tags == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    ObtainSemaphore(&g_sem);
+    cfg = g_cfg; /* apply to a copy: a bad tag must change nothing */
+    ReleaseSemaphore(&g_sem);
+
+    while ((ti = esb_next_tag(&scan)) != NULL) {
+        v = (LONG)ti->ti_Data;
+        switch (ti->ti_Tag) {
+        case ES_OPT_EdgePx:
+            if (v < 1 || v > 200) {
+                return ES_ERR_BAD_ARGS;
+            }
+            cfg.engine.edge_px = (int)v;
+            break;
+        case ES_OPT_CornerDiv:
+            if (v < 2 || v > 16) {
+                return ES_ERR_BAD_ARGS;
+            }
+            cfg.engine.corner_div = (int)v;
+            break;
+        case ES_OPT_DragMinPx:
+            if (v < 1 || v > 200) {
+                return ES_ERR_BAD_ARGS;
+            }
+            cfg.engine.drag_min_px = (int)v;
+            break;
+        case ES_OPT_MarginLeft:
+            if (v < 0) {
+                return ES_ERR_BAD_ARGS;
+            }
+            cfg.margin.l = (int)v;
+            break;
+        case ES_OPT_MarginTop:
+            if (v < 0) {
+                return ES_ERR_BAD_ARGS;
+            }
+            cfg.margin.t = (int)v;
+            break;
+        case ES_OPT_MarginRight:
+            if (v < 0) {
+                return ES_ERR_BAD_ARGS;
+            }
+            cfg.margin.r = (int)v;
+            break;
+        case ES_OPT_MarginBottom:
+            if (v < 0) {
+                return ES_ERR_BAD_ARGS;
+            }
+            cfg.margin.b = (int)v;
+            break;
+        case ES_OPT_PanelDetect:
+            cfg.panel_detect = v ? 1 : 0;
+            break;
+        default:
+            break; /* unknown tag: ignored, by contract */
+        }
+    }
+    return esb_set_config(&cfg);
 }
 
 LONG esb_enable(BOOL on)

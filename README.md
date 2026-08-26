@@ -59,9 +59,14 @@ target-system behavior.
   query, exclude, options, capabilities, plus the interactive path that
   samples windows, runs the engine and performs the snap. The commodity
   contributes only raw input facts and the drawing of the preview
-  frame, and gets a report back to log (a library never prints). Next:
-  the OS4 ELF/interface skeleton and the MorphOS LVO skeleton around
-  that same body.
+  frame, and gets a report back to log (a library never prints).
+  **The AmigaOS 4 library is real**: `library/os4/` builds
+  `edgesnap.library` (ELF, manager + "main" interfaces, no C runtime),
+  and `tools/esnaptest.c` - a client that knows nothing of EdgeSnap's
+  internals - opens it from LIBS: and drives the whole API, including
+  the error contract (a stale window answers ES_ERR_STALE, it does not
+  crash). Next: the MorphOS LVO skeleton, then the commodity opens the
+  library instead of linking it.
 
 ## The reference commodity
 
@@ -125,7 +130,10 @@ struct Window * is never used without re-validation via the screen lists.
   wrapped by the platform skeletons and linked by the commodity
 - `commodity/` - the reference commodity (OS4 + MorphOS from one
   source): raw input facts in, preview frame drawn, nothing decided
-- `Makefile.host` / `Makefile.os4` / `Makefile.morphos` - one lane each
+- `tools/` - `esnaptest`, a third-party client used to exercise the ABI
+- `Makefile.host` / `Makefile.os4` / `Makefile.morphos` - commodity and
+  host lanes; `Makefile.os4lib` builds edgesnap.library and
+  `Makefile.os4tool` the test client
 - `scripts/` - container build wrappers
 
 ## Build

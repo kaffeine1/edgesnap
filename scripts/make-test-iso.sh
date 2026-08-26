@@ -26,6 +26,13 @@ cp "$ROOT/build/os4/EdgeSnap" "$STAGE/EdgeSnap"
 if [ -f "$ROOT/build/morphos/EdgeSnap" ]; then
     cp "$ROOT/build/morphos/EdgeSnap" "$STAGE/EdgeSnap-MorphOS"
 fi
+# The native AmigaOS 4 library and its third-party test client.
+if [ -f "$ROOT/build/os4/edgesnap.library" ]; then
+    cp "$ROOT/build/os4/edgesnap.library" "$STAGE/edgesnap.library"
+fi
+if [ -f "$ROOT/build/os4/esnaptest" ]; then
+    cp "$ROOT/build/os4/esnaptest" "$STAGE/esnaptest"
+fi
 
 cat > "$STAGE/EdgeSnap.prefs" <<'EOF'
 # EdgeSnap preferences - copy to ENVARC:EdgeSnap.prefs (and ENV: for
