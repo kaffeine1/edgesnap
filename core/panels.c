@@ -7,17 +7,9 @@
 
 #include "panels.h"
 
-enum {
-    ES_PEDGE_NONE = 0,
-    ES_PEDGE_LEFT,
-    ES_PEDGE_RIGHT,
-    ES_PEDGE_TOP,
-    ES_PEDGE_BOTTOM
-};
-
 /* Which edge does this box reserve? The thin dimension picks the
  * orientation; flushness picks the side. */
-static int es_panel_edge(const ESRect *scr, const ESRect *b)
+int es_panel_classify(const ESRect *scr, const ESRect *b)
 {
     int horizontal = (b->w >= b->h);
 
@@ -65,7 +57,7 @@ void es_panel_insets(const ESRect *scr, const ESRect *boxes, int count,
     for (i = 0; i < count; i++) {
         const ESRect *b = &boxes[i];
 
-        switch (es_panel_edge(scr, b)) {
+        switch (es_panel_classify(scr, b)) {
         case ES_PEDGE_LEFT:
             out->l = es_max(out->l, (b->x + b->w) - scr->x);
             break;

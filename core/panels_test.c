@@ -66,6 +66,19 @@ static void test_top_panel_and_deepest_wins(void)
     CHECK(ins.t == 44);
 }
 
+static void test_floating_centered_dock(void)
+{
+    ESRect p[1];
+    ESInsets ins;
+
+    /* MorphOS field case: compact dock, bottom center, FLOATING 12px
+     * above the screen edge. Reserves up to the edge, gap included. */
+    p[0] = rect(490, 900, 300, 48);
+    es_panel_insets(&SCREEN, p, 1, &ins);
+    CHECK(ins.b == 60);
+    CHECK(ins.l == 0 && ins.r == 0 && ins.t == 0);
+}
+
 static void test_corner_widget_ignored(void)
 {
     ESRect p[1];
@@ -118,6 +131,7 @@ int main(void)
     test_bottom_dock();
     test_side_docks();
     test_top_panel_and_deepest_wins();
+    test_floating_centered_dock();
     test_corner_widget_ignored();
     test_mid_screen_window_ignored();
     test_thick_window_ignored();

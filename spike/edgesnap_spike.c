@@ -204,6 +204,55 @@ static int spike_is_preview_win(struct Window *w);
 
 #define ES_PANEL_SCAN_MAX 16
 
+/*
+ * Called under LockIBase only: usable area of scr = screen minus title
+ * bar minus dock/panel strips (AmiDock, Ambient panels), macOS-style.
+ * Panel candidates: windows that cannot be dragged, sized or are
+ * backdrop, minus the snap target and our own preview bars. Borderless
+ * is deliberately NOT required - real docks are not guaranteed to set
+ * it (MorphOS field finding, 2026-08-26) and the geometry policy in
+ * core/panels.c is the real gatekeeper. skip may be NULL.
+ */
+static void spike_usable_area(struct Screen *scr, struct Window *skip,
+                              ESRect *out_usable, ESInsets *out_ins)
+{
+    ESRect scrrect;
+    ESRect panels[ES_PANEL_SCAN_MAX];
+    struct Window *w;
+    int n = 0;
+    int top;
+
+    scrrect.x = 0;
+    scrrect.y = 0;
+    scrrect.w = scr->Width;
+    scrrect.h = scr->Height;
+    for (w = scr->FirstWindow; w != NULL && n < ES_PANEL_SCAN_MAX;
+         w = w->NextWindow) {
+        if (w == skip || spike_is_preview_win(w)) {
+            continue;
+        }
+        if ((w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET |
+                         WFLG_BACKDROP)) != 0) {
+            continue;
+        }
+        panels[n].x = w->LeftEdge;
+        panels[n].y = w->TopEdge;
+        panels[n].w = w->Width;
+        panels[n].h = w->Height;
+        n++;
+    }
+    es_panel_insets(&scrrect, panels, n, out_ins);
+
+    top = scr->BarHeight + 1;
+    if (out_ins->t > top) {
+        top = out_ins->t;
+    }
+    out_usable->x = out_ins->l;
+    out_usable->y = top;
+    out_usable->w = scr->Width - out_ins->l - out_ins->r;
+    out_usable->h = scr->Height - top - out_ins->b;
+}
+
 /* Called under LockIBase only. */
 static void spike_fill_snapshot(struct Window *win, struct Screen *scr,
                                 struct WinSnap *out)
@@ -225,54 +274,11 @@ static void spike_fill_snapshot(struct Window *win, struct Screen *scr,
         out->max_h = 0;
     }
     out->flags = win->Flags;
-
-    /*
-     * Usable area = screen minus title bar minus dock/panel strips
-     * (AmiDock, Ambient panels), macOS-style. Candidates: borderless
-     * windows that cannot be dragged or sized, minus the snap target
-     * itself and our own preview bars; core policy decides which of
-     * them actually reserve an edge.
-     */
     {
-        ESRect scrrect;
-        ESRect panels[ES_PANEL_SCAN_MAX];
         ESInsets ins;
-        struct Window *w;
-        int n = 0;
-        int top;
 
-        scrrect.x = 0;
-        scrrect.y = 0;
-        scrrect.w = scr->Width;
-        scrrect.h = scr->Height;
-        for (w = scr->FirstWindow; w != NULL && n < ES_PANEL_SCAN_MAX;
-             w = w->NextWindow) {
-            if (w == win || spike_is_preview_win(w)) {
-                continue;
-            }
-            if ((w->Flags & WFLG_BORDERLESS) == 0 ||
-                (w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET |
-                             WFLG_BACKDROP)) != 0) {
-                continue;
-            }
-            panels[n].x = w->LeftEdge;
-            panels[n].y = w->TopEdge;
-            panels[n].w = w->Width;
-            panels[n].h = w->Height;
-            n++;
-        }
-        es_panel_insets(&scrrect, panels, n, &ins);
-
-        top = scr->BarHeight + 1;
-        if (ins.t > top) {
-            top = ins.t;
-        }
-        out->usable.x = ins.l;
-        out->usable.y = top;
-        out->usable.w = scr->Width - ins.l - ins.r;
-        out->usable.h = scr->Height - top - ins.b;
+        spike_usable_area(scr, win, &out->usable, &ins);
     }
-
     out->mouse_x = scr->MouseX;
     out->mouse_y = scr->MouseY;
 }
@@ -679,12 +685,135 @@ static void spike_engine_step(void)
     }
 }
 
+/* ------------------------------------------------------- diagnostics */
+
+/*
+ * ctrl alt d: dump every window of the active screen with geometry,
+ * flags and the panel-policy verdict, plus the resulting usable area.
+ * This is the ground-truth probe for tuning dock detection on real
+ * systems: collect under LockIBase, print after unlocking.
+ */
+
+#define ES_DUMP_MAX 24
+
+struct WinDumpItem {
+    ESRect box;
+    ULONG flags;
+    char title[28];
+    int skipped;  /* 0 candidate, 1 ours, 2 excluded by flags */
+    int edge;     /* es_panel_classify() when candidate         */
+};
+
+static const char *spike_edge_name(int e)
+{
+    switch (e) {
+    case ES_PEDGE_LEFT:
+        return "left";
+    case ES_PEDGE_RIGHT:
+        return "right";
+    case ES_PEDGE_TOP:
+        return "top";
+    case ES_PEDGE_BOTTOM:
+        return "bottom";
+    default:
+        return "-";
+    }
+}
+
+static void spike_dump_windows(void)
+{
+    struct WinDumpItem items[ES_DUMP_MAX];
+    ESRect scrrect, usable;
+    ESInsets ins;
+    ULONG ilock;
+    struct Screen *scr;
+    struct Window *w;
+    int n = 0, scrw = 0, scrh = 0, bar = 0, i;
+
+    usable.x = usable.y = usable.w = usable.h = 0;
+    ins.l = ins.t = ins.r = ins.b = 0;
+
+    ilock = LockIBase(0);
+    scr = ES_IBASE->ActiveScreen;
+    if (scr != NULL) {
+        scrw = scr->Width;
+        scrh = scr->Height;
+        bar = scr->BarHeight;
+        scrrect.x = 0;
+        scrrect.y = 0;
+        scrrect.w = scrw;
+        scrrect.h = scrh;
+        for (w = scr->FirstWindow; w != NULL && n < ES_DUMP_MAX;
+             w = w->NextWindow) {
+            struct WinDumpItem *it = &items[n];
+            const char *src;
+            int t = 0;
+
+            it->box.x = w->LeftEdge;
+            it->box.y = w->TopEdge;
+            it->box.w = w->Width;
+            it->box.h = w->Height;
+            it->flags = w->Flags;
+            src = (const char *)w->Title;
+            if (src != NULL) {
+                for (; t < 27 && src[t] != '\0'; t++) {
+                    it->title[t] = src[t];
+                }
+            }
+            it->title[t] = '\0';
+            if (spike_is_preview_win(w)) {
+                it->skipped = 1;
+            } else if ((w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET |
+                                    WFLG_BACKDROP)) != 0) {
+                it->skipped = 2;
+            } else {
+                it->skipped = 0;
+            }
+            it->edge = (it->skipped == 0) ?
+                es_panel_classify(&scrrect, &it->box) : ES_PEDGE_NONE;
+            n++;
+        }
+        spike_usable_area(scr, NULL, &usable, &ins);
+    }
+    UnlockIBase(ilock);
+
+    if (scr == NULL) {
+        printf("edgesnap: dump: no active screen\n");
+        return;
+    }
+    printf("edgesnap: --- window dump, screen %dx%d barheight %d ---\n",
+           scrw, scrh, bar);
+    for (i = 0; i < n; i++) {
+        struct WinDumpItem *it = &items[i];
+        const char *verdict;
+
+        if (it->skipped == 1) {
+            verdict = "ours";
+        } else if (it->skipped == 2) {
+            verdict = "skip:flags";
+        } else if (it->edge != ES_PEDGE_NONE) {
+            verdict = "PANEL";
+        } else {
+            verdict = "no:geometry";
+        }
+        printf("edgesnap: %4d,%4d %4dx%4d flags %08lx %-11s %-6s \"%s\"\n",
+               it->box.x, it->box.y, it->box.w, it->box.h,
+               (unsigned long)it->flags, verdict,
+               spike_edge_name(it->edge), it->title);
+    }
+    printf("edgesnap: insets l=%d t=%d r=%d b=%d -> usable %d,%d %dx%d\n",
+           ins.l, ins.t, ins.r, ins.b,
+           usable.x, usable.y, usable.w, usable.h);
+    fflush(stdout);
+}
+
 /* ------------------------------------------------------------ commodity */
 
 #define HK_SNAP_LEFT   1
 #define HK_SNAP_RIGHT  2
 #define HK_SNAP_MAX    3
 #define HK_RESTORE     4
+#define HK_DUMP        5
 
 static int spike_add_hotkey(CxObj *broker, struct MsgPort *port,
                             STRPTR descr, LONG id)
@@ -710,6 +839,10 @@ static void spike_handle_hotkey(LONG id)
     struct WinSnap ws;
     struct Window *win;
 
+    if (id == HK_DUMP) {
+        spike_dump_windows();
+        return;
+    }
     win = spike_active_window(&ws);
     if (win == NULL) {
         printf("edgesnap: no active window\n");
@@ -842,6 +975,7 @@ int main(void)
                           HK_SNAP_MAX) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_down",
                           HK_RESTORE) ||
+        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt d", HK_DUMP) ||
         CxObjError(broker) != 0) {
         printf("edgesnap: could not build the commodity tree\n");
         goto out;
@@ -857,8 +991,10 @@ int main(void)
     printf("  drag a window's title bar until the pointer touches a\n");
     printf("  screen edge or corner, then release.\n");
     printf("  hotkeys: ctrl alt cursor left/right/up = snap, down = "
-           "restore.\n");
+           "restore,\n");
+    printf("           ctrl alt d = window dump (dock diagnosis).\n");
     printf("  quit: Ctrl-C here, or remove it from Exchange.\n");
+    spike_dump_windows();
 
     port_mask = 1UL << port->mp_SigBit;
     engine_mask = g_shared.engine_sigmask;

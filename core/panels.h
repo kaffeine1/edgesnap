@@ -12,12 +12,16 @@
  * are edge panels and how much of each screen edge they reserve.
  *
  * Heuristic (documented, deliberately conservative):
- *   - a panel hugs one screen edge (within ES_PANEL_FLUSH_TOL px);
+ *   - a panel hugs one screen edge within ES_PANEL_FLUSH_TOL px - the
+ *     tolerance is generous because real docks FLOAT a few pixels off
+ *     the edge, macOS-style (MorphOS field finding, 2026-08-26);
  *   - it is thin: thickness <= screen dimension / ES_PANEL_MAX_THICK_DIV;
  *   - it is long enough to be a bar, not a corner widget:
- *     length >= ES_PANEL_MIN_LEN_PCT % of its edge.
- * Multiple panels on one edge reserve the deepest inset. Whether real
- * AmiDock/Ambient panel windows match these filters is an explicit
+ *     length >= ES_PANEL_MIN_LEN_PCT % of its edge (compact centered
+ *     docks are short: threshold tuned down from 25).
+ * A floating panel reserves up to the screen edge (gap included), like
+ * the macOS Dock. Multiple panels on one edge reserve the deepest
+ * inset. Matching real AmiDock/Ambient panel windows is an explicit
  * validation task recorded in docs/DESIGN.md.
  */
 
@@ -26,13 +30,25 @@
 
 #include "zones.h"
 
-#define ES_PANEL_FLUSH_TOL      2
+#define ES_PANEL_FLUSH_TOL     16
 #define ES_PANEL_MAX_THICK_DIV  4
-#define ES_PANEL_MIN_LEN_PCT   25
+#define ES_PANEL_MIN_LEN_PCT   15
+
+/* es_panel_classify() results. */
+enum {
+    ES_PEDGE_NONE = 0,
+    ES_PEDGE_LEFT,
+    ES_PEDGE_RIGHT,
+    ES_PEDGE_TOP,
+    ES_PEDGE_BOTTOM
+};
 
 typedef struct ESInsets {
     int l, t, r, b;
 } ESInsets;
+
+/* Which edge does this box reserve, if any? Exposed for diagnostics. */
+int es_panel_classify(const ESRect *screen, const ESRect *box);
 
 /*
  * screen: full screen rectangle. boxes/count: candidate window boxes,
