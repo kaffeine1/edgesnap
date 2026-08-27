@@ -147,6 +147,32 @@ struct Window * is never used without re-validation via the screen lists.
   `Makefile.os4tool` the test client
 - `scripts/` - container build wrappers
 
+## Installing it so it is simply always there
+
+EdgeSnap is a commodity: a program that stays resident. The user never
+starts it by hand - it is installed once and comes up with the system,
+like every other commodity. From the release volume:
+
+```text
+Execute Install-EdgeSnap
+```
+
+That puts `edgesnap.library` in `LIBS:`, the commodity in `C:`, and one
+line in `S:User-Startup`. From the next boot it is simply there:
+dragging a window to a screen edge snaps it, and Exchange is where it
+is enabled, disabled or removed.
+
+`S:User-Startup` rather than `SYS:WBStartup` is a deliberate choice:
+it needs no icon and works on installations that have no WBStartup
+drawer at all - which the OS4 test machine turned out to be. Users who
+prefer the Workbench route can drop `EdgeSnap` and `EdgeSnap.info`
+into `SYS:WBStartup` instead; the icon carries the settings as
+tooltypes, and the commodity reads them (and stays silent, since a
+Workbench start has no console).
+
+Verified on AmigaOS 4 in the VM: install, reboot, and the first drag
+snapped with nothing started by hand.
+
 ## Build
 
 Host tests (any C compiler):

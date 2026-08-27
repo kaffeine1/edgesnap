@@ -50,8 +50,12 @@
 #include <intuition/screens.h> /* DrawInfo pens for the preview frame */
 #include <graphics/view.h>     /* OBP_Precision/PRECISION_GUI          */
 
+#include <workbench/startup.h>
+#include <workbench/workbench.h>
+
 #include <proto/dos.h>
 #include <proto/exec.h>
+#include <proto/icon.h>
 #include <proto/intuition.h>
 #include <proto/graphics.h>
 #include <proto/commodities.h>
@@ -217,6 +221,14 @@ static struct EmulLibEntry spike_cx_trap = {
 #define ES_CX_ACTION ((APTR)spike_cx_action)
 #endif
 
+/*
+ * Started from Workbench (from WBStartup, which is the point of this
+ * program) there is no console at all. Everything the user is meant to
+ * read goes through spike_out(), which falls silent then - the
+ * commodity's face is Exchange, not a shell.
+ */
+static int g_quiet;
+
 /* --------------------------------------------------- non-blocking log */
 
 /*
@@ -254,14 +266,16 @@ static void spike_log_flush(void)
 {
     int i;
 
-    for (i = 0; i < g_log_count; i++) {
-        fputs(g_log_buf[i], stdout);
-    }
-    if (g_log_dropped > 0) {
-        printf("edgesnap: (%d log lines dropped)\n", g_log_dropped);
-    }
-    if (g_log_count > 0 || g_log_dropped > 0) {
-        fflush(stdout);
+    if (!g_quiet) {
+        for (i = 0; i < g_log_count; i++) {
+            fputs(g_log_buf[i], stdout);
+        }
+        if (g_log_dropped > 0) {
+            printf("edgesnap: (%d log lines dropped)\n", g_log_dropped);
+        }
+        if (g_log_count > 0 || g_log_dropped > 0) {
+            fflush(stdout);
+        }
     }
     g_log_count = 0;
     g_log_dropped = 0;
@@ -278,6 +292,18 @@ static void spike_log_flush(void)
  * leave the user without snapping.
  */
 
+static void spike_out(const char *fmt, ...)
+{
+    va_list ap;
+
+    if (g_quiet) {
+        return;
+    }
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+}
+
 #define ES_PREFS_ENV    "ENV:EdgeSnap.prefs"
 #define ES_PREFS_ENVARC "ENVARC:EdgeSnap.prefs"
 
@@ -288,9 +314,9 @@ static void spike_config_line(const char *line, const char *src)
     int rc = es_config_line(&g_cfg, line);
 
     if (rc == ES_ERR_UNSUPPORTED) {
-        printf("edgesnap: %s: unknown setting: %s\n", src, line);
+        spike_out("edgesnap: %s: unknown setting: %s\n", src, line);
     } else if (rc != ES_OK) {
-        printf("edgesnap: %s: bad value: %s\n", src, line);
+        spike_out("edgesnap: %s: bad value: %s\n", src, line);
     }
 }
 
@@ -310,8 +336,76 @@ static int spike_config_load_file(const char *path)
     return 1;
 }
 
-/* ENV: holds the live settings, ENVARC: the archived ones: prefer the
- * live copy, like every other Amiga preferences client. */
+/*
+ * Started from Workbench - which is how it runs when installed in
+ * WBStartup - the settings come from the icon's tooltypes. They are
+ * KEY=VALUE like everything else, so the same parser reads them; an
+ * entry in parentheses is disabled by Amiga convention and skipped,
+ * and DONOTWAIT belongs to Workbench, not to us.
+ */
+static void spike_config_tooltypes(struct WBStartup *wbs)
+{
+    struct Library *IconBase;
+    struct DiskObject *dob;
+    struct WBArg *arg;
+    BPTR olddir;
+    STRPTR *tt;
+#ifdef __amigaos4__
+    struct IconIFace *IIcon;
+#endif
+
+    if (wbs == NULL || wbs->sm_NumArgs < 1 || wbs->sm_ArgList == NULL) {
+        return;
+    }
+    IconBase = OpenLibrary("icon.library", 36);
+    if (IconBase == NULL) {
+        return;
+    }
+#ifdef __amigaos4__
+    IIcon = (struct IconIFace *)GetInterface(IconBase, "main", 1, NULL);
+    if (IIcon == NULL) {
+        CloseLibrary(IconBase);
+        return;
+    }
+#endif
+    arg = &wbs->sm_ArgList[0];
+#ifdef __amigaos4__
+    olddir = SetCurrentDir(arg->wa_Lock);
+#else
+    olddir = CurrentDir(arg->wa_Lock);
+#endif
+    dob = GetDiskObject((STRPTR)arg->wa_Name);
+    if (dob != NULL) {
+        for (tt = dob->do_ToolTypes; tt != NULL && *tt != NULL; tt++) {
+            const char *entry = (const char *)*tt;
+
+            if (entry[0] == '\0' || entry[0] == '(') {
+                continue; /* disabled by convention */
+            }
+            if (entry[0] == 'D' && entry[1] == 'O' && entry[2] == 'N') {
+                continue; /* DONOTWAIT is Workbench's, not ours */
+            }
+            spike_config_line(entry, "tooltype");
+        }
+        FreeDiskObject(dob);
+    }
+#ifdef __amigaos4__
+    SetCurrentDir(olddir);
+#else
+    CurrentDir(olddir);
+#endif
+#ifdef __amigaos4__
+    DropInterface((struct Interface *)IIcon);
+#endif
+    CloseLibrary(IconBase);
+}
+
+/*
+ * ENV: holds the live settings, ENVARC: the archived ones: prefer the
+ * live copy, like every other Amiga preferences client. What the user
+ * asked for THIS launch - Shell arguments, or the icon's tooltypes -
+ * wins over the file.
+ */
 static void spike_config_load(int argc, char **argv)
 {
     int i;
@@ -320,7 +414,13 @@ static void spike_config_load(int argc, char **argv)
     if (!spike_config_load_file(ES_PREFS_ENV)) {
         spike_config_load_file(ES_PREFS_ENVARC);
     }
-    /* Shell arguments override the file: KEY=VALUE, same vocabulary. */
+    if (argc == 0) {
+        /* Workbench start: argv is the WBStartup message, and there is
+         * no console to talk to. */
+        g_quiet = 1;
+        spike_config_tooltypes((struct WBStartup *)argv);
+        return;
+    }
     for (i = 1; i < argc; i++) {
         spike_config_line(argv[i], "argument");
     }
@@ -778,10 +878,10 @@ static void spike_dump_windows(void)
 
     spike_log_flush();
     if (scr == NULL) {
-        printf("edgesnap: dump: no active screen\n");
+        spike_out("edgesnap: dump: no active screen\n");
         return;
     }
-    printf("edgesnap: --- window dump, screen %dx%d barheight %d ---\n",
+    spike_out("edgesnap: --- window dump, screen %dx%d barheight %d ---\n",
            scrw, scrh, bar);
     for (i = 0; i < n; i++) {
         struct WinDumpItem *it = &items[i];
@@ -796,11 +896,11 @@ static void spike_dump_windows(void)
         } else {
             verdict = "candidate";
         }
-        printf("edgesnap: %4d,%4d %4dx%4d flags %08lx %-10s \"%s\"\n",
+        spike_out("edgesnap: %4d,%4d %4dx%4d flags %08lx %-10s \"%s\"\n",
                it->box.x, it->box.y, it->box.w, it->box.h,
                (unsigned long)it->flags, verdict, it->title);
     }
-    printf("edgesnap: insets l=%d t=%d r=%d b=%d -> usable %d,%d %dx%d\n",
+    spike_out("edgesnap: insets l=%d t=%d r=%d b=%d -> usable %d,%d %dx%d\n",
            ins.l, ins.t, ins.r, ins.b,
            usable.x, usable.y, usable.w, usable.h);
     fflush(stdout);
@@ -812,15 +912,15 @@ static int spike_open_edgesnap(void)
 {
     EdgeSnapBase = OpenLibrary("edgesnap.library", ES_API_VERSION);
     if (EdgeSnapBase == NULL) {
-        printf("edgesnap: cannot open edgesnap.library - is it in "
-               "LIBS:?\n");
+        spike_out("edgesnap: cannot open edgesnap.library - is it in "
+                  "LIBS:?\n");
         return 0;
     }
 #ifdef __amigaos4__
     IEdgeSnap = (struct EdgeSnapIFace *)
         GetInterface(EdgeSnapBase, "main", 1, NULL);
     if (IEdgeSnap == NULL) {
-        printf("edgesnap: edgesnap.library has no main interface\n");
+        spike_out("edgesnap: edgesnap.library has no main interface\n");
         CloseLibrary(EdgeSnapBase);
         EdgeSnapBase = NULL;
         return 0;
@@ -881,7 +981,7 @@ static void spike_push_config(void)
     tags[n].ti_Data = 0;
 
     if (ES_CALL(ESnap_SetOptionsA)(tags) != ES_OK) {
-        printf("edgesnap: the library refused some preferences\n");
+        spike_out("edgesnap: the library refused some preferences\n");
     }
 }
 
@@ -935,7 +1035,7 @@ static void spike_handle_hotkey(LONG id)
     }
     win = spike_active_window();
     if (win == NULL) {
-        printf("edgesnap: no active window\n");
+        spike_out("edgesnap: no active window\n");
         return;
     }
     switch (id) {
@@ -956,7 +1056,7 @@ static void spike_handle_hotkey(LONG id)
     }
     spike_log_flush();
     if (rc != ES_OK) {
-        printf("edgesnap: hotkey refused (%ld)\n", (long)rc);
+        spike_out("edgesnap: hotkey refused (%ld)\n", (long)rc);
     }
 }
 
@@ -1031,7 +1131,7 @@ int main(int argc, char **argv)
     spike_config_load(argc, argv);
 
     if (!spike_open_libs()) {
-        printf("edgesnap: need intuition/graphics.library 36 and "
+        spike_out("edgesnap: need intuition/graphics.library 36 and "
                "commodities.library 37\n");
         return RETURN_FAIL;
     }
@@ -1056,7 +1156,7 @@ int main(int argc, char **argv)
 
     broker = CxBroker(&nb, &broker_err);
     if (broker == NULL) {
-        printf("edgesnap: CxBroker failed (%ld)%s\n", (long)broker_err,
+        spike_out("edgesnap: CxBroker failed (%ld)%s\n", (long)broker_err,
                broker_err == CBERR_DUP ? " - already running" : "");
         goto out;
     }
@@ -1073,7 +1173,7 @@ int main(int argc, char **argv)
                           HK_RESTORE) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt d", HK_DUMP) ||
         CxObjError(broker) != 0) {
-        printf("edgesnap: could not build the commodity tree\n");
+        spike_out("edgesnap: could not build the commodity tree\n");
         goto out;
     }
 
@@ -1088,27 +1188,27 @@ int main(int argc, char **argv)
 
     ActivateCxObj(broker, 1L);
 
-    printf("EdgeSnap 1.0 (build " __DATE__ " " __TIME__ ") "
+    spike_out("EdgeSnap 1.0 (build " __DATE__ " " __TIME__ ") "
            "running (commodity \"EdgeSnap\").\n");
-    printf("  Copyright (c) 2026 Michele Dipace "
+    spike_out("  Copyright (c) 2026 Michele Dipace "
            "<michele.dipace@kaffeine.net>, MIT license.\n");
-    printf("  drag a window's title bar until the pointer touches a\n");
-    printf("  screen edge or corner, then release.\n");
-    printf("  hotkeys: ctrl alt cursor left/right/up = snap, down = "
+    spike_out("  drag a window's title bar until the pointer touches a\n");
+    spike_out("  screen edge or corner, then release.\n");
+    spike_out("  hotkeys: ctrl alt cursor left/right/up = snap, down = "
            "restore,\n");
-    printf("           ctrl alt d = window dump (dock diagnosis).\n");
-    printf("  quit: Ctrl-C here, or remove it from Exchange.\n");
-    printf("edgesnap: prefs: zones %04x, edge %d px, corner 1/%d, "
+    spike_out("           ctrl alt d = window dump (dock diagnosis).\n");
+    spike_out("  quit: Ctrl-C here, or remove it from Exchange.\n");
+    spike_out("edgesnap: prefs: zones %04x, edge %d px, corner 1/%d, "
            "drag %d px,\n", (unsigned)g_cfg.engine.zones_mask,
            g_cfg.engine.edge_px, g_cfg.engine.corner_div,
            g_cfg.engine.drag_min_px);
-    printf("edgesnap:        preview %s, panel detect %s (margin %d), "
+    spike_out("edgesnap:        preview %s, panel detect %s (margin %d), "
            "bypass %s,\n", g_cfg.preview ? "on" : "off",
            g_cfg.panel_detect ? "on" : "off", g_cfg.panel_margin,
            g_cfg.bypass_qual == ES_QUAL_ALT ? "alt" :
            g_cfg.bypass_qual == ES_QUAL_CTRL ? "ctrl" :
            g_cfg.bypass_qual == ES_QUAL_SHIFT ? "shift" : "none");
-    printf("edgesnap:        margins l%d t%d r%d b%d "
+    spike_out("edgesnap:        margins l%d t%d r%d b%d "
            "(file: " ES_PREFS_ENV ")\n", g_cfg.margin.l, g_cfg.margin.t,
            g_cfg.margin.r, g_cfg.margin.b);
     spike_dump_windows();
@@ -1163,7 +1263,7 @@ int main(int argc, char **argv)
 
     rc = RETURN_OK;
     spike_log_flush();
-    printf("edgesnap: shutting down\n");
+    spike_out("edgesnap: shutting down\n");
 
 out:
     /*

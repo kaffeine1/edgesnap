@@ -33,6 +33,54 @@ fi
 if [ -f "$ROOT/build/os4/esnaptest" ]; then
     cp "$ROOT/build/os4/esnaptest" "$STAGE/esnaptest"
 fi
+# The Workbench icon: what makes an install into WBStartup possible.
+if [ -f "$ROOT/assets/EdgeSnap.info" ]; then
+    cp "$ROOT/assets/EdgeSnap.info" "$STAGE/EdgeSnap.info"
+fi
+
+cat > "$STAGE/Install-EdgeSnap" <<'EOF'
+; Install-EdgeSnap - run it with:  Execute Install-EdgeSnap
+; Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+;
+; Installs EdgeSnap so that it comes up with the system, every time,
+; with nobody starting anything by hand.
+;
+; S:User-Startup is the mechanism used here rather than SYS:WBStartup:
+; it needs no icon and works even on installations that have no
+; WBStartup drawer at all - which is exactly what the OS4 test machine
+; turned out to be. If you prefer the Workbench way, drop EdgeSnap and
+; EdgeSnap.info into SYS:WBStartup instead and remove the line this
+; script adds.
+
+Echo "Installing edgesnap.library into LIBS: ..."
+Copy edgesnap.library LIBS: CLONE
+
+Echo "Installing the commodity into C: ..."
+Copy EdgeSnap C: CLONE
+Protect C:EdgeSnap +e
+IF EXISTS EdgeSnap.info
+  Copy EdgeSnap.info C: CLONE
+ENDIF
+
+Search >NIL: S:User-Startup "EdgeSnap"
+IF WARN
+  Echo "Adding the startup line to S:User-Startup ..."
+  Echo >>S:User-Startup ""
+  Echo >>S:User-Startup "; EdgeSnap - window snapping, by Michele Dipace"
+  Echo >>S:User-Startup "Run >NIL: C:EdgeSnap"
+ELSE
+  Echo "S:User-Startup already starts EdgeSnap - left alone."
+ENDIF
+
+Echo ""
+Echo "Done. From the next boot EdgeSnap starts by itself."
+Echo "To start it now without rebooting:"
+Echo "  Run >NIL: C:EdgeSnap"
+Echo ""
+Echo "Settings: ENVARC:EdgeSnap.prefs (see EdgeSnap.prefs here), or"
+Echo "tooltypes if you install the icon into SYS:WBStartup instead."
+Echo "Control it from Exchange as any other commodity."
+EOF
 
 cat > "$STAGE/EdgeSnap.prefs" <<'EOF'
 # EdgeSnap preferences
@@ -70,8 +118,21 @@ Distributed under the MIT license.
 Test build: the commodity opens edgesnap.library, so BOTH the
 commodity and the library must be installed.
 
-Install (OS4 shell; use EdgeSnap-MorphOS on MorphOS, from disk):
+INSTALL IT ONCE, IT STARTS BY ITSELF FROM THEN ON:
 
+  Execute Install-EdgeSnap
+
+That copies edgesnap.library into LIBS:, the commodity into C:, and
+adds one line to S:User-Startup - which is what makes the system start
+it at every boot with no intervention. (S:User-Startup rather than
+SYS:WBStartup because it needs no icon and works even where the
+WBStartup drawer does not exist.) Control it from Exchange like any
+other commodity; settings live in ENVARC:EdgeSnap.prefs.
+
+To try it from a Shell instead, without installing (note that BOTH
+files are needed - the commodity opens the library):
+
+  Copy <thisvolume>:edgesnap.library LIBS:
   Copy <thisvolume>:EdgeSnap RAM:
   Protect RAM:EdgeSnap +e
   RAM:EdgeSnap
