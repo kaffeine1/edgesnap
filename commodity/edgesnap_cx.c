@@ -62,11 +62,29 @@
 #endif
 
 #include "zones.h"
-#include "panels.h"
 #include "engine.h"
 #include "registry.h"
 #include "config.h"
-#include "edgesnap_body.h"
+#include "edgesnap.h"
+
+/*
+ * Phase 4d: the commodity is a CLIENT of edgesnap.library, not a
+ * program that contains it. The two systems reach the same API in
+ * their own way - OS4 through an interface (Self is implicit, the
+ * SDK's APICALL is __attribute__((libcall))), MorphOS through the
+ * ppcinline stubs over the jump table - so every call is written once
+ * as ES_CALL(name)(args).
+ */
+#ifdef __amigaos4__
+#include "interfaces/edgesnap.h"
+static struct Library *EdgeSnapBase;
+static struct EdgeSnapIFace *IEdgeSnap;
+#define ES_CALL(fn) IEdgeSnap->fn
+#else
+#include <ppcinline/edgesnap.h>
+struct Library *EdgeSnapBase;
+#define ES_CALL(fn) fn
+#endif
 
 /* ---------------------------------------------------------------- tuning */
 
@@ -349,9 +367,9 @@ static struct Preview g_preview;
 static void spike_publish_ignored(void)
 {
 #ifdef __amigaos4__
-    esb_ignore_windows(NULL, 0);
+    ES_CALL(ESnap_IgnoreWindows)(NULL, 0);
 #else
-    esb_ignore_windows(g_preview.bars, 4);
+    ES_CALL(ESnap_IgnoreWindows)(g_preview.bars, 4);
 #endif
 }
 
@@ -609,35 +627,44 @@ static ULONG g_seen_moves;
  * the library body. A library must not print, so it reports what it
  * did and we log it here.
  */
-static void spike_apply_report(const ESBReport *r)
+static int g_drag_active;
+
+static void spike_apply_report(const struct ESnapReport *r)
 {
-    if (r->preview_hide) {
+    if (r->previewHide) {
         spike_preview_hide();
     }
-    if (r->drag_started) {
+    if (r->dragStarted) {
         spike_log("edgesnap: drag detected\n");
     }
-    if (r->zone_changed) {
-        spike_log("edgesnap: zone -> %s\n", es_zone_name(r->zone));
+    if (r->zoneChanged) {
+        spike_log("edgesnap: zone -> %s\n", es_zone_name((int)r->zone));
     }
-    if (r->preview_show && g_cfg.preview && r->preview_screen != NULL) {
-        spike_preview_show(r->preview_screen, &r->preview_rect);
+    if (r->previewShow && g_cfg.preview && r->previewScreen != NULL) {
+        ESRect rect;
+
+        rect.x = (int)r->previewRect.x;
+        rect.y = (int)r->previewRect.y;
+        rect.w = (int)r->previewRect.w;
+        rect.h = (int)r->previewRect.h;
+        spike_preview_show(r->previewScreen, &rect);
     }
     if (r->snapped) {
-        if (r->snap_rc == ES_OK) {
-            spike_log("edgesnap: snap %p -> %s\n", (void *)r->snap_win,
-                      es_zone_name(r->snap_zone));
+        if (r->snapResult == ES_OK) {
+            spike_log("edgesnap: snap %p -> %s\n", (void *)r->snapWindow,
+                      es_zone_name((int)r->snapZone));
         } else {
             spike_log("edgesnap: snap %p refused (%ld)\n",
-                      (void *)r->snap_win, (long)r->snap_rc);
+                      (void *)r->snapWindow, (long)r->snapResult);
         }
     }
+    g_drag_active = r->dragActive;
 }
 
 static void spike_engine_step(void)
 {
     int new_press, new_move, new_release;
-    ESBReport r;
+    struct ESnapReport r;
 
     new_press = (g_shared.presses != g_seen_presses);
     new_move = (g_shared.moves != g_seen_moves);
@@ -646,11 +673,12 @@ static void spike_engine_step(void)
     g_seen_moves = g_shared.moves;
     g_seen_releases = g_shared.releases;
 
-    esb_input(new_press, new_move, new_release, g_shared.quals, &r);
+    ES_CALL(ESnap_FeedInput)((ULONG)new_press, (ULONG)new_move,
+                             (ULONG)new_release, g_shared.quals, &r);
     spike_apply_report(&r);
 
     /* console output only when no drag is in flight (see spike_log) */
-    if (!esb_drag_active()) {
+    if (!g_drag_active) {
         spike_log_flush();
     }
 }
@@ -671,29 +699,12 @@ struct WinDumpItem {
     ULONG flags;
     char title[28];
     int skipped;  /* 0 candidate, 1 ours, 2 excluded by flags */
-    int edge;     /* es_panel_classify() when candidate         */
 };
-
-static const char *spike_edge_name(int e)
-{
-    switch (e) {
-    case ES_PEDGE_LEFT:
-        return "left";
-    case ES_PEDGE_RIGHT:
-        return "right";
-    case ES_PEDGE_TOP:
-        return "top";
-    case ES_PEDGE_BOTTOM:
-        return "bottom";
-    default:
-        return "-";
-    }
-}
 
 static void spike_dump_windows(void)
 {
     struct WinDumpItem items[ES_DUMP_MAX];
-    ESRect scrrect, usable;
+    ESRect usable;
     ESInsets ins;
     ULONG ilock;
     struct Screen *scr;
@@ -709,10 +720,6 @@ static void spike_dump_windows(void)
         scrw = scr->Width;
         scrh = scr->Height;
         bar = scr->BarHeight;
-        scrrect.x = 0;
-        scrrect.y = 0;
-        scrrect.w = scrw;
-        scrrect.h = scrh;
         for (w = scr->FirstWindow; w != NULL && n < ES_DUMP_MAX;
              w = w->NextWindow) {
             struct WinDumpItem *it = &items[n];
@@ -739,13 +746,27 @@ static void spike_dump_windows(void)
             } else {
                 it->skipped = 0;
             }
-            it->edge = (it->skipped == 0) ?
-                es_panel_classify(&scrrect, &it->box) : ES_PEDGE_NONE;
             n++;
         }
-        esb_debug_usable(scr, &usable, &ins);
+
     }
     UnlockIBase(ilock);
+
+    /* Outside the lock: the library takes LockIBase itself. */
+    if (scr != NULL) {
+        struct ESnapArea area;
+
+        if (ES_CALL(ESnap_QueryScreenArea)(scr, &area) == ES_OK) {
+            usable.x = (int)area.usable.x;
+            usable.y = (int)area.usable.y;
+            usable.w = (int)area.usable.w;
+            usable.h = (int)area.usable.h;
+            ins.l = (int)area.insetLeft;
+            ins.t = (int)area.insetTop;
+            ins.r = (int)area.insetRight;
+            ins.b = (int)area.insetBottom;
+        }
+    }
 
     spike_log_flush();
     if (scr == NULL) {
@@ -758,24 +779,102 @@ static void spike_dump_windows(void)
         struct WinDumpItem *it = &items[i];
         const char *verdict;
 
+        /* Only facts here: whether a window IS a dock is the library's
+         * call, and its answer is the insets line below. */
         if (it->skipped == 1) {
             verdict = "ours";
         } else if (it->skipped == 2) {
             verdict = "skip:flags";
-        } else if (it->edge != ES_PEDGE_NONE) {
-            verdict = "PANEL";
         } else {
-            verdict = "no:geometry";
+            verdict = "candidate";
         }
-        printf("edgesnap: %4d,%4d %4dx%4d flags %08lx %-11s %-6s \"%s\"\n",
+        printf("edgesnap: %4d,%4d %4dx%4d flags %08lx %-10s \"%s\"\n",
                it->box.x, it->box.y, it->box.w, it->box.h,
-               (unsigned long)it->flags, verdict,
-               spike_edge_name(it->edge), it->title);
+               (unsigned long)it->flags, verdict, it->title);
     }
     printf("edgesnap: insets l=%d t=%d r=%d b=%d -> usable %d,%d %dx%d\n",
            ins.l, ins.t, ins.r, ins.b,
            usable.x, usable.y, usable.w, usable.h);
     fflush(stdout);
+}
+
+/* --------------------------------------------- the library we drive */
+
+static int spike_open_edgesnap(void)
+{
+    EdgeSnapBase = OpenLibrary("edgesnap.library", ES_API_VERSION);
+    if (EdgeSnapBase == NULL) {
+        printf("edgesnap: cannot open edgesnap.library - is it in "
+               "LIBS:?\n");
+        return 0;
+    }
+#ifdef __amigaos4__
+    IEdgeSnap = (struct EdgeSnapIFace *)
+        GetInterface(EdgeSnapBase, "main", 1, NULL);
+    if (IEdgeSnap == NULL) {
+        printf("edgesnap: edgesnap.library has no main interface\n");
+        CloseLibrary(EdgeSnapBase);
+        EdgeSnapBase = NULL;
+        return 0;
+    }
+#endif
+    return 1;
+}
+
+static void spike_close_edgesnap(void)
+{
+#ifdef __amigaos4__
+    if (IEdgeSnap != NULL) {
+        DropInterface((struct Interface *)IEdgeSnap);
+        IEdgeSnap = NULL;
+    }
+#endif
+    if (EdgeSnapBase != NULL) {
+        CloseLibrary(EdgeSnapBase);
+        EdgeSnapBase = NULL;
+    }
+}
+
+/*
+ * Preferences are a frontend concern (files, arguments, tooltypes), so
+ * the commodity parses them and hands the library the result as tags -
+ * the same road any other client would take.
+ */
+static void spike_push_config(void)
+{
+    struct TagItem tags[14];
+    int n = 0;
+
+    tags[n].ti_Tag = ES_OPT_EdgePx;
+    tags[n++].ti_Data = (ULONG)g_cfg.engine.edge_px;
+    tags[n].ti_Tag = ES_OPT_CornerDiv;
+    tags[n++].ti_Data = (ULONG)g_cfg.engine.corner_div;
+    tags[n].ti_Tag = ES_OPT_DragMinPx;
+    tags[n++].ti_Data = (ULONG)g_cfg.engine.drag_min_px;
+    tags[n].ti_Tag = ES_OPT_Zones;
+    tags[n++].ti_Data = (ULONG)g_cfg.engine.zones_mask;
+    tags[n].ti_Tag = ES_OPT_MarginLeft;
+    tags[n++].ti_Data = (ULONG)g_cfg.margin.l;
+    tags[n].ti_Tag = ES_OPT_MarginTop;
+    tags[n++].ti_Data = (ULONG)g_cfg.margin.t;
+    tags[n].ti_Tag = ES_OPT_MarginRight;
+    tags[n++].ti_Data = (ULONG)g_cfg.margin.r;
+    tags[n].ti_Tag = ES_OPT_MarginBottom;
+    tags[n++].ti_Data = (ULONG)g_cfg.margin.b;
+    tags[n].ti_Tag = ES_OPT_PanelDetect;
+    tags[n++].ti_Data = (ULONG)g_cfg.panel_detect;
+    tags[n].ti_Tag = ES_OPT_PanelMargin;
+    tags[n++].ti_Data = (ULONG)g_cfg.panel_margin;
+    tags[n].ti_Tag = ES_OPT_Preview;
+    tags[n++].ti_Data = (ULONG)g_cfg.preview;
+    tags[n].ti_Tag = ES_OPT_BypassQual;
+    tags[n++].ti_Data = (ULONG)g_cfg.bypass_qual;
+    tags[n].ti_Tag = TAG_DONE;
+    tags[n].ti_Data = 0;
+
+    if (ES_CALL(ESnap_SetOptionsA)(tags) != ES_OK) {
+        printf("edgesnap: the library refused some preferences\n");
+    }
 }
 
 /* ------------------------------------------------------------ commodity */
@@ -833,16 +932,16 @@ static void spike_handle_hotkey(LONG id)
     }
     switch (id) {
     case HK_SNAP_LEFT:
-        rc = esb_snap_window(win, ES_ZONE_LEFT);
+        rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_LEFT);
         break;
     case HK_SNAP_RIGHT:
-        rc = esb_snap_window(win, ES_ZONE_RIGHT);
+        rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_RIGHT);
         break;
     case HK_SNAP_MAX:
-        rc = esb_snap_window(win, ES_ZONE_MAX);
+        rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_MAX);
         break;
     case HK_RESTORE:
-        rc = esb_unsnap_window(win);
+        rc = ES_CALL(ESnap_UnsnapWindow)(win);
         break;
     default:
         return;
@@ -972,11 +1071,10 @@ int main(int argc, char **argv)
     g_shared.engine_task = FindTask(NULL);
     g_shared.engine_sigmask = 1UL << engine_sig;
     g_shared.armed = 1;
-    if (!esb_init()) {
-        printf("edgesnap: library body failed to initialise\n");
+    if (!spike_open_edgesnap()) {
         goto out;
     }
-    esb_set_config(&g_cfg);
+    spike_push_config();
     spike_publish_ignored();
 
     ActivateCxObj(broker, 1L);
@@ -1026,17 +1124,17 @@ int main(int argc, char **argv)
                     case CXCMD_DISABLE:
                         ActivateCxObj(broker, 0L);
                         {
-                            ESBReport r;
+                            struct ESnapReport r;
 
-                            esb_enable(FALSE);
-                            esb_input_reset(&r);
+                            ES_CALL(ESnap_Enable)(FALSE);
+                            ES_CALL(ESnap_ResetInput)(&r);
                             spike_apply_report(&r);
                         }
                         spike_log_flush();
                         break;
                     case CXCMD_ENABLE:
                         ActivateCxObj(broker, 1L);
-                        esb_enable(TRUE);
+                        ES_CALL(ESnap_Enable)(TRUE);
                         break;
                     default:
                         break;
@@ -1085,7 +1183,7 @@ out:
         DeleteCxObjAll(broker);
     }
     spike_preview_hide();
-    esb_cleanup();
+    spike_close_edgesnap();
     if (port != NULL) {
         CxMsg *msg;
         while ((msg = (CxMsg *)GetMsg(port)) != NULL) {

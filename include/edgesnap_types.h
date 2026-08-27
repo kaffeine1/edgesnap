@@ -16,8 +16,19 @@
 #ifndef EDGESNAP_TYPES_H
 #define EDGESNAP_TYPES_H
 
-/* Draft API generation; becomes 1 with the first public release. */
-#define ES_API_VERSION       0
+/*
+ * API generation. A client opens the library with the generation it
+ * needs, and an older library REFUSES to open - which is the only
+ * thing standing between a new client and a jump into a vector that
+ * does not exist. Learned the hard way on 2026-08-27: a commodity
+ * built against generation 1 opened a generation-0 library and died
+ * with an ISI at address 0.
+ *
+ *   0 - snap/unsnap/query/exclude/options/enable/capabilities
+ *   1 - adds the frontend integration group (FeedInput, ResetInput,
+ *       IgnoreWindows, QueryScreenArea)
+ */
+#define ES_API_VERSION       1
 
 /* ------------------------------------------------------------- zones */
 

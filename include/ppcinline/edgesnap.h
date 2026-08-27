@@ -55,4 +55,25 @@
         BOOL, on, d0, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+#define ESnap_FeedInput(presses, motions, releases, qualifiers, report) \
+    LP5NR(0x48, ESnap_FeedInput, \
+        ULONG, presses, d0, ULONG, motions, d1, ULONG, releases, d2, \
+        ULONG, qualifiers, d3, struct ESnapReport *, report, a0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
+#define ESnap_ResetInput(report) \
+    LP1NR(0x4e, ESnap_ResetInput, \
+        struct ESnapReport *, report, a0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
+#define ESnap_IgnoreWindows(windows, count) \
+    LP2(0x54, LONG, ESnap_IgnoreWindows, \
+        struct Window **, windows, a0, ULONG, count, d0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
+#define ESnap_QueryScreenArea(screen, area) \
+    LP2(0x5a, LONG, ESnap_QueryScreenArea, \
+        struct Screen *, screen, a0, struct ESnapArea *, area, a1, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */

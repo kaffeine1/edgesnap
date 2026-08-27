@@ -22,6 +22,8 @@
 #include <intuition/intuition.h>
 #include <utility/tagitem.h>
 
+#include "edgesnap.h"
+
 struct EdgeSnapIFace
 {
     struct InterfaceData Data;
@@ -44,6 +46,20 @@ struct EdgeSnapIFace
     LONG APICALL (*ESnap_SetOptionsA)(struct EdgeSnapIFace *Self,
                                       const struct TagItem *tags);
     LONG APICALL (*ESnap_Enable)(struct EdgeSnapIFace *Self, BOOL on);
+
+    /* --- frontend integration, appended after the first set --- */
+    void APICALL (*ESnap_FeedInput)(struct EdgeSnapIFace *Self,
+                                    ULONG presses, ULONG motions,
+                                    ULONG releases, ULONG qualifiers,
+                                    struct ESnapReport *report);
+    void APICALL (*ESnap_ResetInput)(struct EdgeSnapIFace *Self,
+                                     struct ESnapReport *report);
+    LONG APICALL (*ESnap_IgnoreWindows)(struct EdgeSnapIFace *Self,
+                                        struct Window **windows,
+                                        ULONG count);
+    LONG APICALL (*ESnap_QueryScreenArea)(struct EdgeSnapIFace *Self,
+                                          struct Screen *screen,
+                                          struct ESnapArea *area);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

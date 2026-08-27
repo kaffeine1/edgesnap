@@ -17,4 +17,8 @@ ESnap_QueryWindow(win,zoneOut)(a0,a1)
 ESnap_ExcludeWindow(win,exclude)(a0,d0)
 ESnap_SetOptionsA(tags)(a0)
 ESnap_Enable(on)(d0)
+ESnap_FeedInput(presses,motions,releases,qualifiers,report)(d0,d1,d2,d3,a0)
+ESnap_ResetInput(report)(a0)
+ESnap_IgnoreWindows(windows,count)(a0,d0)
+ESnap_QueryScreenArea(screen,area)(a0,a1)
 ##end

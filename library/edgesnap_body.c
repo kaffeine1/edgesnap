@@ -522,6 +522,24 @@ LONG esb_set_options(const struct TagItem *tags)
         case ES_OPT_PanelDetect:
             cfg.panel_detect = v ? 1 : 0;
             break;
+        case ES_OPT_PanelMargin:
+            if (v < 0 || v > 200) {
+                return ES_ERR_BAD_ARGS;
+            }
+            cfg.panel_margin = (int)v;
+            break;
+        case ES_OPT_Zones:
+            cfg.engine.zones_mask = (unsigned)ti->ti_Data & ES_ZONEMASK_ALL;
+            break;
+        case ES_OPT_Preview:
+            cfg.preview = v ? 1 : 0;
+            break;
+        case ES_OPT_BypassQual:
+            if (v < ES_QUAL_NONE || v > ES_QUAL_SHIFT) {
+                return ES_ERR_BAD_ARGS;
+            }
+            cfg.bypass_qual = (int)v;
+            break;
         default:
             break; /* unknown tag: ignored, by contract */
         }
@@ -540,6 +558,32 @@ LONG esb_enable(BOOL on)
 int esb_enabled(void)
 {
     return g_enabled;
+}
+
+LONG esb_query_screen_area(struct Screen *scr, struct ESnapArea *out)
+{
+    ESRect usable;
+    ESInsets ins;
+    ULONG ilock;
+
+    if (scr == NULL || out == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    ObtainSemaphore(&g_sem);
+    ilock = LockIBase(0);
+    esb_usable_area_locked(scr, NULL, &usable, &ins);
+    UnlockIBase(ilock);
+    ReleaseSemaphore(&g_sem);
+
+    out->usable.x = usable.x;
+    out->usable.y = usable.y;
+    out->usable.w = usable.w;
+    out->usable.h = usable.h;
+    out->insetLeft = ins.l;
+    out->insetTop = ins.t;
+    out->insetRight = ins.r;
+    out->insetBottom = ins.b;
+    return ES_OK;
 }
 
 int esb_drag_active(void)
@@ -565,43 +609,47 @@ static ULONG esb_bypass_mask(void)
     }
 }
 
-static void esb_report_clear(ESBReport *out)
+static void esb_report_clear(struct ESnapReport *out)
 {
-    out->drag_started = 0;
-    out->zone_changed = 0;
+    out->dragStarted = 0;
+    out->zoneChanged = 0;
     out->zone = ES_ZONE_NONE;
-    out->preview_show = 0;
-    out->preview_hide = 0;
-    out->preview_rect.x = out->preview_rect.y = 0;
-    out->preview_rect.w = out->preview_rect.h = 0;
-    out->preview_screen = NULL;
+    out->previewShow = 0;
+    out->previewHide = 0;
+    out->previewRect.x = out->previewRect.y = 0;
+    out->previewRect.w = out->previewRect.h = 0;
+    out->previewScreen = NULL;
     out->snapped = 0;
-    out->snap_zone = ES_ZONE_NONE;
-    out->snap_rc = ES_OK;
-    out->snap_win = NULL;
+    out->snapZone = ES_ZONE_NONE;
+    out->snapResult = ES_OK;
+    out->snapWindow = NULL;
+    out->dragActive = 0;
 }
 
-static void esb_absorb(const ESEngineActions *a, ESBReport *out)
+static void esb_absorb(const ESEngineActions *a, struct ESnapReport *out)
 {
     if (a->drag_started) {
-        out->drag_started = 1;
+        out->dragStarted = 1;
     }
     if (a->zone_changed) {
-        out->zone_changed = 1;
-        out->zone = a->zone;
+        out->zoneChanged = 1;
+        out->zone = (ULONG)a->zone;
     }
     if (a->hide_preview) {
-        out->preview_hide = 1;
-        out->preview_show = 0;
+        out->previewHide = 1;
+        out->previewShow = 0;
     }
     if (a->show_preview) {
-        out->preview_show = 1;
-        out->preview_rect = a->preview_rect;
+        out->previewShow = 1;
+        out->previewRect.x = a->preview_rect.x;
+        out->previewRect.y = a->preview_rect.y;
+        out->previewRect.w = a->preview_rect.w;
+        out->previewRect.h = a->preview_rect.h;
     }
 }
 
 void esb_input(int press, int motion, int release, ULONG quals,
-               ESBReport *out)
+               struct ESnapReport *out)
 {
     ESEngineActions a;
     struct ESBSnap s;
@@ -657,7 +705,7 @@ void esb_input(int press, int motion, int release, ULONG quals,
                 f.flags |= ES_WF_BYPASS;
             }
             es_engine_motion(&g_engine, &f, &a);
-            out->preview_screen = s.scr;
+            out->previewScreen = s.scr;
         }
         esb_absorb(&a, out);
     }
@@ -678,13 +726,14 @@ void esb_input(int press, int motion, int release, ULONG quals,
      * hold it across ChangeWindowBox for longer than one call. */
     if (do_snap) {
         out->snapped = 1;
-        out->snap_zone = snap_zone;
-        out->snap_win = win;
-        out->snap_rc = esb_snap_rect(win, (ULONG)snap_zone, &snap_rect);
+        out->snapZone = (ULONG)snap_zone;
+        out->snapWindow = win;
+        out->snapResult = esb_snap_rect(win, (ULONG)snap_zone, &snap_rect);
     }
+    out->dragActive = g_engine.button_down;
 }
 
-void esb_input_reset(ESBReport *out)
+void esb_input_reset(struct ESnapReport *out)
 {
     ESEngineActions a;
 

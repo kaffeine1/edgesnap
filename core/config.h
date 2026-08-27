@@ -22,11 +22,14 @@
 #include "engine.h"
 #include "panels.h"
 
-/* Bypass qualifier: hold it to drag a window past the zones. */
+/* Bypass qualifier values (ES_QUAL_*) come from the public header on
+ * Amiga builds; the host tests define them here. */
+#ifndef ES_QUAL_NONE
 #define ES_QUAL_NONE  0
 #define ES_QUAL_ALT   1
 #define ES_QUAL_CTRL  2
 #define ES_QUAL_SHIFT 3
+#endif
 
 typedef struct ESConfig {
     ESEngineConfig engine;   /* edge_px, corner_div, drag_min_px, zones */

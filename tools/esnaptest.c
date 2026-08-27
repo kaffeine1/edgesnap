@@ -76,7 +76,7 @@ int main(void)
         return RETURN_FAIL;
     }
 
-    EdgeSnapBase = OpenLibrary("edgesnap.library", 0);
+    EdgeSnapBase = OpenLibrary("edgesnap.library", ES_API_VERSION);
     if (EdgeSnapBase == NULL) {
         printf("esnaptest: cannot open edgesnap.library\n");
         return RETURN_FAIL;

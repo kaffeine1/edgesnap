@@ -23,7 +23,7 @@
 #include <intuition/intuition.h>
 #include <utility/tagitem.h>
 
-#include "edgesnap_types.h"
+#include "edgesnap.h"
 #include "config.h"
 #include "engine.h"
 #include "registry.h"
@@ -58,28 +58,21 @@ const ESConfig *esb_config(void);
  * frame (platform drawing stays outside) and log it - a library never
  * prints.
  */
-typedef struct ESBReport {
-    int drag_started;
-    int zone_changed;
-    int zone;
-    int preview_show;
-    int preview_hide;
-    ESRect preview_rect;
-    struct Screen *preview_screen;
-    int snapped;          /* a snap was attempted: fields below valid */
-    int snap_zone;
-    LONG snap_rc;
-    struct Window *snap_win;
-} ESBReport;
+/* The report is the PUBLIC struct: no translation layer between the
+ * body and either skeleton, so there is one description of what
+ * happened, not two that can drift. */
 
 /* press/motion/release: how many of each arrived since the last call
  * (counters, so a fast press+release pair is never lost). quals: the
  * qualifier bits seen with the last mouse event. */
 void esb_input(int press, int motion, int release, ULONG quals,
-               ESBReport *out);
+               struct ESnapReport *out);
 
 /* Abort any tracking (disable, shutdown): asks for the frame to go. */
-void esb_input_reset(ESBReport *out);
+void esb_input_reset(struct ESnapReport *out);
+
+/* Usable area of a screen; takes LockIBase itself. */
+LONG esb_query_screen_area(struct Screen *scr, struct ESnapArea *out);
 
 int esb_enabled(void);
 

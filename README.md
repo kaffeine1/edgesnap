@@ -70,8 +70,11 @@ target-system behavior.
   `ppcinline/` stubs - and is **runtime-validated on the MorphOS QEMU
   VM**: the same third-party client opens it, runs the full sequence
   and gets the documented errors for misuse. Both skeletons are proven
-  on their own system. Next: the commodity opens the library instead of
-  linking it.
+  on their own system. **The commodity is now a client**: it opens
+  edgesnap.library rather than linking it, through a documented
+  frontend-integration group in the API (FeedInput / ResetInput /
+  IgnoreWindows / QueryScreenArea). Frontend and library are two
+  binaries, as in the finished product.
 
 ## The reference commodity
 

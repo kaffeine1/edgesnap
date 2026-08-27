@@ -37,9 +37,9 @@
 #include "interfaces/edgesnap.h"
 
 #define ES_LIB_NAME    "edgesnap.library"
-#define ES_LIB_VERSION 0
-#define ES_LIB_REVISION 2
-#define ES_LIB_IDSTRING "edgesnap.library 0.2 (26.8.2026)"
+#define ES_LIB_VERSION 1
+#define ES_LIB_REVISION 0
+#define ES_LIB_IDSTRING "edgesnap.library 1.0 (27.8.2026)"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -265,6 +265,38 @@ static LONG _ESnap_Enable(struct EdgeSnapIFace *Self, BOOL on)
     return esb_enable(on);
 }
 
+static void _ESnap_FeedInput(struct EdgeSnapIFace *Self, ULONG presses,
+                             ULONG motions, ULONG releases,
+                             ULONG qualifiers, struct ESnapReport *report)
+{
+    (void)Self;
+    esb_input((int)presses, (int)motions, (int)releases, qualifiers,
+              report);
+}
+
+static void _ESnap_ResetInput(struct EdgeSnapIFace *Self,
+                              struct ESnapReport *report)
+{
+    (void)Self;
+    esb_input_reset(report);
+}
+
+static LONG _ESnap_IgnoreWindows(struct EdgeSnapIFace *Self,
+                                 struct Window **windows, ULONG count)
+{
+    (void)Self;
+    esb_ignore_windows(windows, (int)count);
+    return ES_OK;
+}
+
+static LONG _ESnap_QueryScreenArea(struct EdgeSnapIFace *Self,
+                                   struct Screen *screen,
+                                   struct ESnapArea *area)
+{
+    (void)Self;
+    return esb_query_screen_area(screen, area);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -278,6 +310,10 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_ExcludeWindow,
     (APTR)_ESnap_SetOptionsA,
     (APTR)_ESnap_Enable,
+    (APTR)_ESnap_FeedInput,
+    (APTR)_ESnap_ResetInput,
+    (APTR)_ESnap_IgnoreWindows,
+    (APTR)_ESnap_QueryScreenArea,
     (APTR)-1
 };
 

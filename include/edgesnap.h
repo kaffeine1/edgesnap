@@ -84,6 +84,93 @@
                     auto-reserve dock/panel strips (AmiDock, Ambient
                     panels) out of the usable area; margins above are
                     applied on top of what detection finds */
+#define ES_OPT_PanelMargin  (ES_TAGBASE + 9)  /* LONG, default 8: breathing
+                    room left around a detected panel */
+#define ES_OPT_Zones        (ES_TAGBASE + 10) /* ULONG mask of ES_ZONEBIT(),
+                    default ES_ZONEMASK_ALL: which zones react         */
+#define ES_OPT_Preview      (ES_TAGBASE + 11) /* BOOL, default TRUE      */
+#define ES_OPT_BypassQual   (ES_TAGBASE + 12) /* ES_QUAL_*, default NONE */
+
+/* Bypass qualifier values for ES_OPT_BypassQual. */
+#define ES_QUAL_NONE  0
+#define ES_QUAL_ALT   1
+#define ES_QUAL_CTRL  2
+#define ES_QUAL_SHIFT 3
+
+/* ------------------------------------------ frontend integration */
+
+/*
+ * The entry points below are what a FRONTEND needs - EdgeSnap's own
+ * commodity, or any alternative one. An application that just wants to
+ * place its windows never touches them.
+ *
+ * The division of labour: the frontend owns the input handler (a
+ * commodities CxCustom object, which must only count events and signal
+ * its task - never call Intuition) and the drawing of the preview
+ * frame, because that is platform decoration. Everything that decides
+ * or remembers stays in the library. The frontend hands over raw event
+ * counts and gets back a report of what happened; a library never
+ * prints, so the frontend logs on its behalf.
+ */
+
+/* Rectangle and per-edge insets, in screen coordinates. */
+struct ESnapRect {
+    LONG x, y, w, h;
+};
+
+struct ESnapArea {
+    struct ESnapRect usable;   /* what snapping may use            */
+    LONG insetLeft, insetTop;  /* what docks/margins reserved      */
+    LONG insetRight, insetBottom;
+};
+
+/*
+ * What one ESnap_FeedInput() call did. Fixed for API v0: later
+ * revisions add information through new functions, never by growing
+ * this structure, so an old client keeps working.
+ */
+struct ESnapReport {
+    LONG dragStarted;          /* a window drag was recognised     */
+    LONG zoneChanged;          /* zone holds the new zone          */
+    ULONG zone;
+    LONG previewShow;          /* draw the frame at previewRect    */
+    LONG previewHide;          /* erase it                         */
+    struct ESnapRect previewRect;
+    struct Screen *previewScreen;
+    LONG snapped;              /* a snap was attempted             */
+    ULONG snapZone;
+    LONG snapResult;           /* ES_OK or an ES_ERR_* code        */
+    struct Window *snapWindow;
+    LONG dragActive;           /* still tracking a drag            */
+};
+
+/*
+ * Feed the engine the events seen since the last call: how many
+ * presses, pointer motions and releases arrived (counts, so a fast
+ * press+release pair is never lost) and the qualifier bits that came
+ * with the last mouse event. Fills *report; never fails.
+ */
+void ESnap_FeedInput(ULONG presses, ULONG motions, ULONG releases,
+                     ULONG qualifiers, struct ESnapReport *report);
+
+/* Abandon any tracking (the frontend was disabled, or is quitting).
+ * The report asks for the preview frame to be erased. */
+void ESnap_ResetInput(struct ESnapReport *report);
+
+/*
+ * Windows the dock scan must never mistake for a panel: a frontend's
+ * own preview frame is thin, edge-flush and long, which is exactly a
+ * dock's shape. Pass NULL/0 to clear.
+ */
+LONG ESnap_IgnoreWindows(struct Window **windows, ULONG count);
+
+/*
+ * Where snapping may place windows on this screen, and what was
+ * reserved. Useful to a frontend's diagnostics, and to any client that
+ * wants to lay windows out itself.
+ *   ES_OK / ES_ERR_BAD_ARGS.
+ */
+LONG ESnap_QueryScreenArea(struct Screen *screen, struct ESnapArea *area);
 
 /* ------------------------------------------------------- functions */
 

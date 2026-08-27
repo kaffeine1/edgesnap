@@ -34,9 +34,9 @@
 #include "edgesnap_body.h"
 
 #define ES_LIB_NAME     "edgesnap.library"
-#define ES_LIB_VERSION  0
-#define ES_LIB_REVISION 2
-#define ES_LIB_IDSTRING "edgesnap.library 0.2 (26.8.2026)\r\n"
+#define ES_LIB_VERSION  1
+#define ES_LIB_REVISION 0
+#define ES_LIB_IDSTRING "edgesnap.library 1.0 (27.8.2026)\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -209,6 +209,29 @@ static LONG G_Enable(void)
     return esb_enable((BOOL)REG_D0);
 }
 
+static void G_FeedInput(void)
+{
+    esb_input((int)REG_D0, (int)REG_D1, (int)REG_D2, (ULONG)REG_D3,
+              (struct ESnapReport *)REG_A0);
+}
+
+static void G_ResetInput(void)
+{
+    esb_input_reset((struct ESnapReport *)REG_A0);
+}
+
+static LONG G_IgnoreWindows(void)
+{
+    esb_ignore_windows((struct Window **)REG_A0, (int)REG_D0);
+    return ES_OK;
+}
+
+static LONG G_QueryScreenArea(void)
+{
+    return esb_query_screen_area((struct Screen *)REG_A0,
+                                 (struct ESnapArea *)REG_A1);
+}
+
 #define ES_GATE(name, fn) \
     static struct EmulLibEntry name = \
         { TRAP_LIB, 0, (void (*)(void))fn }
@@ -224,6 +247,10 @@ ES_GATE(GATE_QueryWindow, G_QueryWindow);
 ES_GATE(GATE_ExcludeWindow, G_ExcludeWindow);
 ES_GATE(GATE_SetOptionsA, G_SetOptionsA);
 ES_GATE(GATE_Enable, G_Enable);
+ES_GATE(GATE_FeedInput, G_FeedInput);
+ES_GATE(GATE_ResetInput, G_ResetInput);
+ES_GATE(GATE_IgnoreWindows, G_IgnoreWindows);
+ES_GATE(GATE_QueryScreenArea, G_QueryScreenArea);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -238,6 +265,10 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_ExcludeWindow,
     (APTR)&GATE_SetOptionsA,
     (APTR)&GATE_Enable,
+    (APTR)&GATE_FeedInput,
+    (APTR)&GATE_ResetInput,
+    (APTR)&GATE_IgnoreWindows,
+    (APTR)&GATE_QueryScreenArea,
     (APTR)-1
 };
 
