@@ -296,6 +296,64 @@ printing into a non-existent console is at best pointless.
 **Verified on AmigaOS 4 (VM, 2026-08-27)**: install, reboot, and the
 first window dragged to an edge snapped, with nobody starting anything.
 
+## One installer for every target (planned)
+
+Today each system gets its own `Install-EdgeSnap`, an AmigaDOS script.
+A release should instead ship ONE package that recognises the machine
+it was double-clicked on, proposes the right build, and lets the user
+override that choice - the way established Amiga packages do it.
+
+**How they are actually made** (researched 2026-08-27):
+
+- The de-facto standard is the **Commodore Installer**: a LISP-like
+  script called `Install`, with an `Install.info` whose default tool is
+  `Installer`. It is present on AmigaOS 3.x/4.x and MorphOS, and AROS
+  ships **InstallerLG**, an open reimplementation of the same language.
+  One script therefore serves every target.
+- A real example, read off a shipped package (TankMouse's driver
+  install), shows the shape and the two functions that matter to us:
+
+  ```
+  (copylib (prompt "...") (help "...") (source "TankMouse.driver")
+           (confirm) (dest "C:"))
+  (startup ("TankMouse")
+     (command "IF EXISTS C:TankMouse.driver\n  RUN <>NIL: C:...\nENDIF\n")
+     (prompt "...") (help "..."))
+  ```
+
+  `(copylib)` compares versions before overwriting - which is what a
+  library install should do - and `(startup)` is the supported way to
+  add a line to `S:User-Startup`: the Installer maintains its own
+  marked block, so re-installing replaces it instead of appending a
+  second copy. Our hand-rolled `Echo >>S:User-Startup` is the crude
+  version of exactly this.
+- AmigaOS 4 additionally has a modern **Python-based Installation
+  Utility** (NewPage/AddPackage/RunInstaller). It is nicer, but it is
+  OS4-only, so it cannot be the single installer for both systems.
+- Installer V44 added `@INSTALLER-VERSION`, back/retrace navigation,
+  media and `(reboot)`. Scripts should test for a MINIMUM version, the
+  way one tests a library, never for equality.
+
+**Plan for EdgeSnap's package**: one `Install` script that
+
+1. detects the system, offers the detected choice pre-selected in an
+   `(askchoice)`, and lets the user pick another - detection assists,
+   it never dictates;
+2. installs the matching `edgesnap.library` with `(copylib)` so an
+   older copy is never silently overwritten by a newer one, or the
+   reverse;
+3. installs the commodity and registers the startup through
+   `(startup)`, so a second install does not add a second line;
+4. offers the WBStartup route as an alternative for those who prefer
+   it, and writes `ENVARC:EdgeSnap.prefs` from the choices made.
+
+**To verify before writing it** (do not guess these): the exact
+predicate for each system - `(exists "MOSSYS:")` for MorphOS,
+exec.library version >= 53 for AmigaOS 4, something equivalent for
+AROS - and which `(database)` keys the Installer on each target
+actually answers. Both VMs can answer this directly; the answers
+belong in this document, not in the script's comments.
+
 ## Roadmap
 
 - **Phase 0 - spike** (this repo, `spike/`): validate drag detection and
@@ -335,6 +393,10 @@ first window dragged to an edge snapped, with nobody starting anything.
   snap). Next: the OS4 ELF/interface skeleton, then the MorphOS LVO
   skeleton with gates, then the commodity opens the library instead of
   linking it.*
+- **Phase 5a - one unified installer**: a single Commodore-Installer
+  script that detects the system, lets the user choose, and installs
+  the right build (see the section above). Replaces the per-system
+  AmigaDOS scripts used during development.
 - **Phase 5 - upstream proposal**: polished examples, migration/API notes,
   maintainer review package, and releases through the appropriate OS4Depot,
   MorphOS, and Aminet channels. Official adoption remains a maintainer
