@@ -36,7 +36,7 @@
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  1
 #define ES_LIB_REVISION 0
-#define ES_LIB_IDSTRING "edgesnap.library 1.0 (27.8.2026)\r\n"
+#define ES_LIB_IDSTRING "edgesnap.library 1.0 (27.8.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;

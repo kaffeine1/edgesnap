@@ -90,6 +90,7 @@ int main(void)
         CloseLibrary(IntuitionBase);
         return RETURN_FAIL;
     }
+    printf("esnaptest by Michele Dipace <michele.dipace@kaffeine.net>\n");
     printf("esnaptest: opened %s %d.%d\n",
            EdgeSnapBase->lib_Node.ln_Name,
            (int)EdgeSnapBase->lib_Version, (int)EdgeSnapBase->lib_Revision);

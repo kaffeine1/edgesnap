@@ -123,8 +123,16 @@ struct CommoditiesIFace *ICommodities;
 unsigned long __stack = 65536UL;
 #endif
 
-/* AmigaDOS stack cookie for lanes that honor it. */
-static const char *es_stack_cookie = "$STACK:65536";
+/* AmigaDOS stack cookie for lanes that honor it, and the version
+ * string the Version command reads - which is where a user on the
+ * target system finds out whose software this is. */
+/* Arrays, not pointers, and marked used: a cookie only works if the
+ * literal actually survives into the binary for Version/the loader to
+ * find. As pointers the compiler was free to drop them - and did. */
+static const char es_stack_cookie[] __attribute__((used)) =
+    "$STACK:65536";
+static const char es_version_cookie[] __attribute__((used)) =
+    "$VER: EdgeSnap 1.0 (27.8.2026) Michele Dipace";
 
 /* ----------------------------------------- input handler <-> main task */
 
@@ -1019,6 +1027,7 @@ int main(int argc, char **argv)
     int rc = RETURN_FAIL;
 
     (void)es_stack_cookie;
+    (void)es_version_cookie;
     spike_config_load(argc, argv);
 
     if (!spike_open_libs()) {
@@ -1039,7 +1048,7 @@ int main(int argc, char **argv)
     memset(&nb, 0, sizeof(nb));
     nb.nb_Version = NB_VERSION;
     nb.nb_Name = (STRPTR)"EdgeSnap";
-    nb.nb_Title = (STRPTR)"EdgeSnap 0.2";
+    nb.nb_Title = (STRPTR)"EdgeSnap 1.0 by Michele Dipace";
     nb.nb_Descr = (STRPTR)"Drag windows to screen edges to tile them";
     nb.nb_Unique = NBU_UNIQUE | NBU_NOTIFY;
     nb.nb_Pri = 0;
@@ -1079,8 +1088,10 @@ int main(int argc, char **argv)
 
     ActivateCxObj(broker, 1L);
 
-    printf("EdgeSnap 0.2 (build " __DATE__ " " __TIME__ ") "
+    printf("EdgeSnap 1.0 (build " __DATE__ " " __TIME__ ") "
            "running (commodity \"EdgeSnap\").\n");
+    printf("  Copyright (c) 2026 Michele Dipace "
+           "<michele.dipace@kaffeine.net>, MIT license.\n");
     printf("  drag a window's title bar until the pointer touches a\n");
     printf("  screen edge or corner, then release.\n");
     printf("  hotkeys: ctrl alt cursor left/right/up = snap, down = "

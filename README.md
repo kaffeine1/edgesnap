@@ -1,5 +1,8 @@
 # EdgeSnap
 
+**Author:** Michele Dipace <michele.dipace@kaffeine.net>
+**License:** MIT (see [LICENSE](LICENSE))
+
 Windows/macOS-style window snapping for AmigaOS 4.x and MorphOS: drag a
 window against a screen edge or corner to tile it to a half or quarter of
 the screen, with a divider to resize the tiled pair afterwards.

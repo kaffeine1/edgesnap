@@ -35,7 +35,10 @@ if [ -f "$ROOT/build/os4/esnaptest" ]; then
 fi
 
 cat > "$STAGE/EdgeSnap.prefs" <<'EOF'
-# EdgeSnap preferences - copy to ENVARC:EdgeSnap.prefs (and ENV: for
+# EdgeSnap preferences
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net> - MIT license.
+#
+# Copy to ENVARC:EdgeSnap.prefs (and ENV: for
 # the running session). Every setting is optional; the same KEY=VALUE
 # vocabulary works as a Shell argument, e.g.
 #   EdgeSnap ZONES=halves EDGEPX=24
@@ -60,8 +63,12 @@ BYPASSQUAL=alt
 EOF
 
 cat > "$STAGE/README.txt" <<'EOF'
-EdgeSnap 0.2 - reference commodity test build (phase 2: all snap
-logic lives in the shared library kernel).
+EdgeSnap - window snapping for AmigaOS 4.x and MorphOS
+Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+Distributed under the MIT license.
+
+Test build: the commodity opens edgesnap.library, so BOTH the
+commodity and the library must be installed.
 
 Install (OS4 shell; use EdgeSnap-MorphOS on MorphOS, from disk):
 

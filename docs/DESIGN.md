@@ -1,5 +1,8 @@
 # EdgeSnap design
 
+**Author:** Michele Dipace <michele.dipace@kaffeine.net>
+**License:** MIT
+
 Windows/macOS-style edge snapping for AmigaOS 4.x and MorphOS, in C89,
 with no system patches. The design target is an upstream-quality shared
 library that can be proposed for adoption by both operating systems. This is
