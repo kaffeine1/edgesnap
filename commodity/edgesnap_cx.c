@@ -979,6 +979,17 @@ static void spike_engine_step(void)
                              (ULONG)new_release, g_shared.quals, &r);
     spike_apply_report(&r);
 
+    /*
+     * Every released drag can have broken the pair - a window dragged
+     * away, resized, or closed. The library checks the pair against
+     * the live windows, so asking again here is what makes the handle
+     * disappear when the seam stops existing.
+     */
+    if (new_release && !r.snapped) {
+        spike_divider_sync();
+        spike_log_flush();
+    }
+
     /* console output only when no drag is in flight (see spike_log) */
     if (!g_drag_active) {
         spike_log_flush();

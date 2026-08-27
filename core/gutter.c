@@ -165,3 +165,66 @@ void es_gutter_apply(const ESSeam *seam, int new_pos,
         out_b->h = b_bottom - pos;
     }
 }
+
+/* Which side of the screen does this zone occupy? */
+static int es_zone_is_left(int z)
+{
+    return z == ES_ZONE_LEFT || z == ES_ZONE_TOP_LEFT ||
+           z == ES_ZONE_BOTTOM_LEFT;
+}
+
+static int es_zone_is_right(int z)
+{
+    return z == ES_ZONE_RIGHT || z == ES_ZONE_TOP_RIGHT ||
+           z == ES_ZONE_BOTTOM_RIGHT;
+}
+
+int es_pair_fill(const ESRegistry *reg, void *self, int zone,
+                 const ESRect *usable, ESRect *rect)
+{
+    int want_left = es_zone_is_left(zone);
+    int want_right = es_zone_is_right(zone);
+    int i;
+
+    if (!want_left && !want_right) {
+        return 0;   /* maximise and the like: nothing to complement */
+    }
+    for (i = 0; i < ES_REGISTRY_SLOTS; i++) {
+        const ESRegistryEntry *e = &reg->slot[i];
+        int from, to;
+
+        if (!e->used || e->ref == self) {
+            continue;
+        }
+        /* the partner must be on the other side and share enough of
+         * this rectangle's height to be the thing beside it */
+        if (want_left && !es_zone_is_right(e->zone)) {
+            continue;
+        }
+        if (want_right && !es_zone_is_left(e->zone)) {
+            continue;
+        }
+        if (!es_overlap_v(rect, &e->snapped, &from, &to)) {
+            continue;
+        }
+        if (want_left) {
+            int edge = e->snapped.x;
+
+            if (edge > rect->x + ES_SEAM_MIN_SIDE &&
+                edge <= usable->x + usable->w) {
+                rect->w = edge - rect->x;
+                return 1;
+            }
+        } else {
+            int edge = e->snapped.x + e->snapped.w;
+
+            if (edge < usable->x + usable->w - ES_SEAM_MIN_SIDE &&
+                edge >= usable->x) {
+                rect->w = (rect->x + rect->w) - edge;
+                rect->x = edge;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}

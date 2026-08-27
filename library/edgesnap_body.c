@@ -315,6 +315,12 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
             es_fit_zone_rect((int)zone, &s.usable, s.min_w, s.min_h,
                              s.max_w, s.max_h, &r);
         }
+        /* Fill what the opposite side is not using, like Windows and
+         * macOS: after a pair has been re-balanced to 70/30, the next
+         * window snapped to the narrow side gets that 30%. */
+        ObtainSemaphore(&g_sem);
+        es_pair_fill(&g_registry, win, (int)zone, &s.usable, &r);
+        ReleaseSemaphore(&g_sem);
         /* Refuse rather than snap without a way back: a full registry
          * would make ESnap_UnsnapWindow silently impossible. */
         rc = es_registry_remember(&g_registry, win, &s.box, &r, (int)zone);
@@ -564,6 +570,23 @@ int esb_enabled(void)
 
 /* ------------------------------------------------------ the divider */
 
+/* Same slack as the registry restore: apps round sizes to increments,
+ * so "where we put it" is a neighbourhood, not a point. */
+static int esb_same_box(const ESRect *a, const ESRect *b)
+{
+    int dx = a->x - b->x;
+    int dy = a->y - b->y;
+    int dw = a->w - b->w;
+    int dh = a->h - b->h;
+
+    if (dx < 0) { dx = -dx; }
+    if (dy < 0) { dy = -dy; }
+    if (dw < 0) { dw = -dw; }
+    if (dh < 0) { dh = -dh; }
+    return dx <= ES_RESTORE_SLACK_PX && dy <= ES_RESTORE_SLACK_PX &&
+           dw <= ES_RESTORE_SLACK_PX && dh <= ES_RESTORE_SLACK_PX;
+}
+
 LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out)
 {
     ESSeam seam;
@@ -578,6 +601,31 @@ LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out)
     ObtainSemaphore(&g_sem);
     found = es_gutter_find(&g_registry, (int)thickness, &seam);
     ReleaseSemaphore(&g_sem);
+
+    /*
+     * A remembered pair is not a real one: either window may have been
+     * moved, resized or closed since. Check both against the live
+     * geometry and drop what no longer matches - otherwise a frontend
+     * would keep a handle sitting on a seam that stopped existing.
+     */
+    if (found) {
+        struct ESBSnap sa, sb;
+        int alive = esb_sample((struct Window *)seam.ref_a, &sa) &&
+                    esb_sample((struct Window *)seam.ref_b, &sb);
+
+        if (!alive || !esb_same_box(&sa.box, &seam.box_a) ||
+            !esb_same_box(&sb.box, &seam.box_b)) {
+            ObtainSemaphore(&g_sem);
+            if (!alive || !esb_same_box(&sa.box, &seam.box_a)) {
+                es_registry_forget(&g_registry, (void *)seam.ref_a);
+            }
+            if (!alive || !esb_same_box(&sb.box, &seam.box_b)) {
+                es_registry_forget(&g_registry, (void *)seam.ref_b);
+            }
+            ReleaseSemaphore(&g_sem);
+            found = 0;
+        }
+    }
 
     if (!found) {
         out->present = 0;
@@ -790,6 +838,10 @@ void esb_input(int press, int motion, int release, ULONG quals,
                 f.flags |= ES_WF_BYPASS;
             }
             es_engine_motion(&g_engine, &f, &a);
+            if (a.show_preview) {
+                es_pair_fill(&g_registry, win, a.zone, &s.usable,
+                             &a.preview_rect);
+            }
             out->previewScreen = s.scr;
         }
         esb_absorb(&a, out);

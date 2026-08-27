@@ -63,4 +63,15 @@ int es_gutter_find(const ESRegistry *reg, int thickness_px, ESSeam *out);
 void es_gutter_apply(const ESSeam *seam, int new_pos,
                      ESRect *out_a, ESRect *out_b);
 
+/*
+ * Make a zone fill the space its opposite side is NOT using, the way
+ * Windows and macOS do: once a pair has been re-balanced to 70/30,
+ * snapping a third window to the narrow side must give it that 30%,
+ * not the default half. self is the window being snapped (it must not
+ * be treated as its own partner). Returns 1 when a partner was found
+ * and *rect was adjusted.
+ */
+int es_pair_fill(const ESRegistry *reg, void *self, int zone,
+                 const ESRect *usable, ESRect *rect);
+
 #endif /* EDGESNAP_GUTTER_H */

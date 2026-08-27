@@ -284,10 +284,10 @@ Implemented across the three layers, and honest about what is proven:
   and reports drags to the library - it never resizes anything itself.
 
 **Proven in-VM on OS4**: the library detects the pair and reports the
-strip (`divider rc=0 present=1 956,33 8x959`), and the handle opens and
-is drawn where it should be (measured: 8 columns of accent colour at
-x=956..963). **Not yet confirmed**: that dragging the handle resizes
-both windows. The path is implemented and the geometry is host-tested,
+strip (`divider rc=0 present=1 956,33 8x959`), the handle opens and is
+drawn where it should be (measured: 8 columns of accent colour at
+x=956..963), and the capability mask now advertises `gutter y`.
+**Not yet confirmed**: that dragging the handle resizes both windows. The path is implemented and the geometry is host-tested,
 but the confirmation needs a hand on the mouse - the scripted pointer
 kept missing an 8-pixel strip, and QEMU's monitor drops the occasional
 mouse delta, so the automation could not settle it either way.
@@ -298,6 +298,31 @@ than from window-relative message coordinates (the handle moves under
 the pointer as the seam follows, so a relative reading measures against
 a position that has already changed), and the handle is no longer
 re-fronted on every pixel of the drag - only when the drag ends.
+
+### Two defects found by using it (2026-08-27), and what they taught
+
+Both came from the first hands-on session with the divider, and both
+were about the same thing: state that was remembered rather than
+observed.
+
+1. **The handle outlived the pair.** `es_gutter_find` works off the
+   registry, which records where windows were PUT; move one away and
+   the registry still describes a pair that no longer exists, so the
+   line stayed on screen. `ESnap_QueryDivider` now checks both windows
+   against their live geometry (same slack as the restore rule) and
+   forgets whichever has wandered off - so the pair dissolves and the
+   frontend closes the handle. The commodity also re-asks after every
+   released drag, which is when a window can have been moved away.
+
+2. **A zone always took its default half.** After re-balancing a pair
+   to 70/30, snapping a window to the narrow side gave it 50% again,
+   overlapping its neighbour - where Windows and macOS give it exactly
+   the space that is free. `es_pair_fill` (host-tested) now adjusts a
+   zone rectangle to stop at the neighbour's edge, and the preview is
+   adjusted with it so the frame promises what the snap delivers.
+
+The lesson worth keeping: the registry is a memory of intent, and any
+answer given to a user must be checked against what is on screen now.
 
 ## Deployment: always-on without user intervention
 

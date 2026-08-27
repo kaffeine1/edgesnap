@@ -106,6 +106,35 @@ int main(void)
            (caps & ES_CAP_PREVIEW_ALPHA) ? "y" : "n",
            (caps & ES_CAP_GUTTER) ? "y" : "n");
 
+    /* The divider: with two windows snapped side by side the library
+     * should offer a seam, and moving it must resize both. This is the
+     * deterministic half of the feature - the frontend's little handle
+     * window is the part a human tests by grabbing it. */
+    {
+        struct ESnapDivider d;
+
+        rc = IEdgeSnap->ESnap_QueryDivider(8, &d);
+        printf("esnaptest: ESnap_QueryDivider -> %s, present %ld\n",
+               rcname(rc), (long)d.present);
+        if (rc == ES_OK && d.present) {
+            printf("esnaptest:   strip %ld,%ld %ldx%ld at %ld "
+                   "(limits %ld..%ld)\n",
+                   (long)d.strip.x, (long)d.strip.y, (long)d.strip.w,
+                   (long)d.strip.h, (long)d.position,
+                   (long)d.minPosition, (long)d.maxPosition);
+            rc = IEdgeSnap->ESnap_MoveDivider(d.position + 300);
+            printf("esnaptest: ESnap_MoveDivider(+300) -> %s\n",
+                   rcname(rc));
+            Delay(75L);
+            rc = IEdgeSnap->ESnap_QueryDivider(8, &d);
+            if (rc == ES_OK && d.present) {
+                printf("esnaptest:   seam is now at %ld\n",
+                       (long)d.position);
+            }
+        }
+    }
+
+
     {
         ULONG ilock = LockIBase(0);
 
@@ -138,34 +167,6 @@ int main(void)
         rc = IEdgeSnap->ESnap_SnapWindow(win, 99);
         printf("esnaptest: snap to zone 99 -> %s (expected "
                "ES_ERR_BAD_ARGS)\n", rcname(rc));
-    }
-
-    /* The divider: with two windows snapped side by side the library
-     * should offer a seam, and moving it must resize both. This is the
-     * deterministic half of the feature - the frontend's little handle
-     * window is the part a human tests by grabbing it. */
-    {
-        struct ESnapDivider d;
-
-        rc = IEdgeSnap->ESnap_QueryDivider(8, &d);
-        printf("esnaptest: ESnap_QueryDivider -> %s, present %ld\n",
-               rcname(rc), (long)d.present);
-        if (rc == ES_OK && d.present) {
-            printf("esnaptest:   strip %ld,%ld %ldx%ld at %ld "
-                   "(limits %ld..%ld)\n",
-                   (long)d.strip.x, (long)d.strip.y, (long)d.strip.w,
-                   (long)d.strip.h, (long)d.position,
-                   (long)d.minPosition, (long)d.maxPosition);
-            rc = IEdgeSnap->ESnap_MoveDivider(d.position + 300);
-            printf("esnaptest: ESnap_MoveDivider(+300) -> %s\n",
-                   rcname(rc));
-            Delay(75L);
-            rc = IEdgeSnap->ESnap_QueryDivider(8, &d);
-            if (rc == ES_OK && d.present) {
-                printf("esnaptest:   seam is now at %ld\n",
-                       (long)d.position);
-            }
-        }
     }
 
     DropInterface((struct Interface *)IEdgeSnap);
