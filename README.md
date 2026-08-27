@@ -67,8 +67,11 @@ target-system behavior.
   the error contract (a stale window answers ES_ERR_STALE, it does not
   crash). The **MorphOS skeleton** (`library/morphos/`) is written and
   builds - classic jump table, EmulLibEntry gates, `.fd` and
-  `ppcinline/` stubs - but has not run on real hardware yet. Next: the
-  commodity opens the library instead of linking it.
+  `ppcinline/` stubs - and is **runtime-validated on the MorphOS QEMU
+  VM**: the same third-party client opens it, runs the full sequence
+  and gets the documented errors for misuse. Both skeletons are proven
+  on their own system. Next: the commodity opens the library instead of
+  linking it.
 
 ## The reference commodity
 
