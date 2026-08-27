@@ -270,6 +270,35 @@ commodity/  Exchange controller
   `Echo >RAM:k "Wait 9"` + `Echo >>RAM:k "Break <cli> C"` +
   `Run >NIL: Execute RAM:k`, then start the drag.
 
+## The divider: status
+
+Implemented across the three layers, and honest about what is proven:
+
+- `core/gutter.c` finds the seam between two snapped windows and works
+  out what dragging it does to both. Host-tested (7 scenarios: vertical
+  and horizontal seams, clamping so neither window can be squeezed
+  away, pairs that only touch by accident, a lone window).
+- The library exposes it as API generation 2: `ESnap_QueryDivider` and
+  `ESnap_MoveDivider`, with `ES_CAP_GUTTER` now in the capability mask.
+- The commodity puts a thin window on the seam with a resize pointer,
+  and reports drags to the library - it never resizes anything itself.
+
+**Proven in-VM on OS4**: the library detects the pair and reports the
+strip (`divider rc=0 present=1 956,33 8x959`), and the handle opens and
+is drawn where it should be (measured: 8 columns of accent colour at
+x=956..963). **Not yet confirmed**: that dragging the handle resizes
+both windows. The path is implemented and the geometry is host-tested,
+but the confirmation needs a hand on the mouse - the scripted pointer
+kept missing an 8-pixel strip, and QEMU's monitor drops the occasional
+mouse delta, so the automation could not settle it either way.
+
+Two fixes that came out of reading the event code afterwards, both in
+the build to try: the pointer position is taken from the SCREEN rather
+than from window-relative message coordinates (the handle moves under
+the pointer as the seam follows, so a relative reading measures against
+a position that has already changed), and the handle is no longer
+re-fronted on every pixel of the drag - only when the drag ends.
+
 ## Deployment: always-on without user intervention
 
 A commodity has to run, but the user must never start it. The install

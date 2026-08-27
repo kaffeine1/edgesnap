@@ -37,6 +37,7 @@
 #include "edgesnap.h"
 #include "edgesnap_body.h"
 #include "panels.h"
+#include "gutter.h"
 #include "zones.h"
 
 /* OS4 declares IntuitionBase as struct Library *; classic/MorphOS as
@@ -282,10 +283,11 @@ static int esb_snappable(const struct ESBSnap *s)
 ULONG esb_query_capabilities(void)
 {
     ULONG caps = ES_CAP_SNAP | ES_CAP_RESTORE | ES_CAP_DRAG_DETECT |
-                 ES_CAP_PREVIEW_OUTLINE | ES_CAP_HOTKEYS;
+                 ES_CAP_PREVIEW_OUTLINE | ES_CAP_HOTKEYS | ES_CAP_GUTTER;
 
-    /* ES_CAP_PREVIEW_ALPHA and ES_CAP_GUTTER are not implemented yet:
-     * a client must be able to tell, so they stay out of the mask. */
+    /* ES_CAP_PREVIEW_ALPHA stays out: translucent previews need
+     * compositing and are not implemented. A client must be able to
+     * tell what is really there. */
     return caps;
 }
 
@@ -558,6 +560,89 @@ LONG esb_enable(BOOL on)
 int esb_enabled(void)
 {
     return g_enabled;
+}
+
+/* ------------------------------------------------------ the divider */
+
+LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out)
+{
+    ESSeam seam;
+    int found;
+
+    if (out == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    if (thickness < 2 || thickness > 64) {
+        return ES_ERR_BAD_ARGS;
+    }
+    ObtainSemaphore(&g_sem);
+    found = es_gutter_find(&g_registry, (int)thickness, &seam);
+    ReleaseSemaphore(&g_sem);
+
+    if (!found) {
+        out->present = 0;
+        out->windowA = NULL;
+        out->windowB = NULL;
+        return ES_OK;
+    }
+    out->present = 1;
+    out->vertical = seam.vertical;
+    out->strip.x = seam.rect.x;
+    out->strip.y = seam.rect.y;
+    out->strip.w = seam.rect.w;
+    out->strip.h = seam.rect.h;
+    out->position = seam.pos;
+    out->minPosition = seam.min_pos;
+    out->maxPosition = seam.max_pos;
+    out->windowA = (struct Window *)seam.ref_a;
+    out->windowB = (struct Window *)seam.ref_b;
+    return ES_OK;
+}
+
+LONG esb_move_divider(LONG position)
+{
+    ESSeam seam;
+    ESRect ra, rb;
+    struct ESBSnap sa, sb;
+    struct Window *wa;
+    struct Window *wb;
+    int found;
+
+    ObtainSemaphore(&g_sem);
+    found = es_gutter_find(&g_registry, 8, &seam);
+    ReleaseSemaphore(&g_sem);
+    if (!found) {
+        return ES_ERR_UNSUPPORTED;
+    }
+
+    wa = (struct Window *)seam.ref_a;
+    wb = (struct Window *)seam.ref_b;
+
+    /* Both windows must still be there: a divider with one window
+     * gone is not a divider, and dropping the state is better than
+     * resizing a stranger that inherited the address. */
+    if (!esb_sample(wa, &sa) || !esb_sample(wb, &sb)) {
+        ObtainSemaphore(&g_sem);
+        es_registry_forget(&g_registry, wa);
+        es_registry_forget(&g_registry, wb);
+        ReleaseSemaphore(&g_sem);
+        return ES_ERR_STALE;
+    }
+
+    es_gutter_apply(&seam, (int)position, &ra, &rb);
+
+    ObtainSemaphore(&g_sem);
+    /* the registry must follow, or the next drag would start from the
+     * geometry the windows had before this one */
+    es_registry_remember(&g_registry, wa, &sa.box, &ra,
+                         es_registry_zone(&g_registry, wa));
+    es_registry_remember(&g_registry, wb, &sb.box, &rb,
+                         es_registry_zone(&g_registry, wb));
+    ReleaseSemaphore(&g_sem);
+
+    ChangeWindowBox(wa, ra.x, ra.y, ra.w, ra.h);
+    ChangeWindowBox(wb, rb.x, rb.y, rb.w, rb.h);
+    return ES_OK;
 }
 
 LONG esb_query_screen_area(struct Screen *scr, struct ESnapArea *out)

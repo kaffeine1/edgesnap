@@ -96,6 +96,11 @@ What the spike does today:
   corner: an outline frame previews where the window will land (four thin
   borderless windows - no compositing needed); release: the window snaps
   to half / quarter / usable-maximum;
+- the divider: when two windows end up side by side, a thin handle
+  appears on the seam - drag it and both resize, so half/half becomes
+  60/40 without touching either window's size gadget (library side
+  host-tested and proven in-VM; the drag itself awaits a hand on the
+  mouse);
 - dock awareness, macOS-style: AmiDock / Ambient panel strips are
   detected and reserved, so snapped windows never cover the dock;
 - preferences from `ENV(ARC):EdgeSnap.prefs` or the command line, same

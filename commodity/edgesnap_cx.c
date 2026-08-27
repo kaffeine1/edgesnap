@@ -48,6 +48,9 @@
 #include <intuition/intuition.h>
 #include <intuition/intuitionbase.h>
 #include <intuition/screens.h> /* DrawInfo pens for the preview frame */
+#ifdef __amigaos4__
+#include <intuition/pointerclass.h> /* POINTERTYPE_* for the divider   */
+#endif
 #include <graphics/view.h>     /* OBP_Precision/PRECISION_GUI          */
 
 #include <workbench/startup.h>
@@ -94,6 +97,7 @@ struct Library *EdgeSnapBase;
 
 /* Drag/zone tuning lives in the kernel (ESEngineConfig defaults). */
 #define ES_FRAME_PX        4   /* preview frame thickness                  */
+#define ES_DIVIDER_PX      8   /* thickness of the divider handle          */
 
 /* --------------------------------------------------------- library bases */
 
@@ -472,13 +476,22 @@ static struct Preview g_preview;
 /* Tell the library which windows its panel scan must ignore: our own
  * frame bars have exactly a dock's shape. The OS4 frame is drawn XOR
  * on the screen, so there is nothing to ignore there. */
+static struct Window *g_divider;   /* forward: defined with the divider */
+
 static void spike_publish_ignored(void)
 {
-#ifdef __amigaos4__
-    ES_CALL(ESnap_IgnoreWindows)(NULL, 0);
-#else
-    ES_CALL(ESnap_IgnoreWindows)(g_preview.bars, 4);
+    struct Window *mine[5];
+    int n = 0;
+
+#ifndef __amigaos4__
+    int i;
+
+    for (i = 0; i < 4; i++) {
+        mine[n++] = g_preview.bars[i];
+    }
 #endif
+    mine[n++] = g_divider;
+    ES_CALL(ESnap_IgnoreWindows)(mine, (ULONG)n);
 }
 
 #ifdef __amigaos4__
@@ -723,6 +736,185 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
 #endif
 }
 
+/* ----------------------------------------------------- the divider */
+
+/*
+ * The handle the user grabs to re-balance two snapped windows. It is a
+ * thin window of ours sitting on the seam: it gets its own IDCMP, so
+ * nothing is stolen from anyone, and the resizing itself is the
+ * library's job - we only report where the pointer went.
+ */
+
+static struct Window *g_divider;
+static int g_divider_vertical;
+static int g_divider_dragging;
+static struct ColorMap *g_divider_cm;
+static LONG g_divider_pen;
+static int g_divider_pen_ok;
+
+static void spike_divider_close(void)
+{
+    if (g_divider != NULL) {
+        CloseWindow(g_divider);
+        g_divider = NULL;
+        g_divider_dragging = 0;
+        if (g_divider_pen_ok) {
+            ReleasePen(g_divider_cm, (ULONG)g_divider_pen);
+            g_divider_pen_ok = 0;
+        }
+        spike_publish_ignored();
+    }
+}
+
+/* Ask the library where the seam is and put the handle there. */
+static void spike_divider_sync(void)
+{
+    struct ESnapDivider d;
+    struct Screen *scr;
+    LONG pen = 3;
+
+    {
+        LONG rc = ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d);
+
+        spike_log("edgesnap: divider rc=%ld present=%ld %d,%d %dx%d\n",
+                  (long)rc, (long)(rc == ES_OK ? d.present : 0),
+                  (int)d.strip.x, (int)d.strip.y,
+                  (int)d.strip.w, (int)d.strip.h);
+        if (rc != ES_OK || !d.present) {
+            spike_divider_close();
+            return;
+        }
+    }
+    if (g_divider != NULL) {
+        /* follow the seam, and stay above the pair: the window that
+         * was just snapped comes to front and would bury the handle */
+        ChangeWindowBox(g_divider, (int)d.strip.x, (int)d.strip.y,
+                        (int)d.strip.w, (int)d.strip.h);
+        WindowToFront(g_divider);
+        g_divider_vertical = d.vertical;
+        return;
+    }
+
+    scr = LockPubScreen(NULL);
+    if (scr == NULL) {
+        return;
+    }
+    /* Same lesson as the preview frame: FILLPEN is a grey almost equal
+     * to the window borders on OS4, so the handle disappeared into
+     * them. Ask for an explicit accent instead. */
+    g_divider_cm = scr->ViewPort.ColorMap;
+    pen = ObtainBestPen(g_divider_cm, 0x22222222UL, 0x88888888UL,
+                        0xFFFFFFFFUL, OBP_Precision, PRECISION_GUI,
+                        TAG_DONE);
+    if (pen != -1) {
+        g_divider_pen_ok = 1;
+    } else {
+        struct DrawInfo *dri = GetScreenDrawInfo(scr);
+
+        pen = 3;
+        if (dri != NULL) {
+            if (dri->dri_NumPens > FILLPEN) {
+                pen = dri->dri_Pens[FILLPEN];
+            }
+            FreeScreenDrawInfo(scr, dri);
+        }
+    }
+    g_divider_pen = pen;
+    g_divider = OpenWindowTags(NULL,
+                               WA_CustomScreen, scr,
+                               WA_Left, (int)d.strip.x,
+                               WA_Top, (int)d.strip.y,
+                               WA_Width, (int)d.strip.w,
+                               WA_Height, (int)d.strip.h,
+                               WA_Flags, WFLG_BORDERLESS |
+                                         WFLG_SMART_REFRESH |
+                                         WFLG_NOCAREREFRESH |
+                                         WFLG_REPORTMOUSE | WFLG_RMBTRAP,
+                               WA_IDCMP, IDCMP_MOUSEBUTTONS |
+                                         IDCMP_MOUSEMOVE,
+                               WA_Activate, FALSE,
+                               TAG_DONE);
+    UnlockPubScreen(NULL, scr);
+    if (g_divider == NULL) {
+        spike_log("edgesnap: divider window would not open\n");
+        return;
+    }
+    spike_log("edgesnap: divider handle open\n");
+    WindowToFront(g_divider);
+    g_divider_vertical = d.vertical;
+    SetAPen(g_divider->RPort, (ULONG)pen);
+    RectFill(g_divider->RPort, 0, 0, g_divider->Width - 1,
+             g_divider->Height - 1);
+    /* the resize pointer tells the user what the strip is for; an
+     * unknown tag is simply ignored, so this is safe on both systems */
+#ifdef __amigaos4__
+    /* The names come from intuition/pointerclass.h: a vertical seam is
+     * dragged east/west, a horizontal one north/south. */
+    SetWindowPointer(g_divider,
+                     WA_PointerType, d.vertical ?
+                         POINTERTYPE_EASTWESTRESIZE :
+                         POINTERTYPE_NORTHSOUTHRESIZE,
+                     TAG_DONE);
+#endif
+    spike_publish_ignored();
+}
+
+/* One IDCMP round for the handle. */
+static void spike_divider_events(void)
+{
+    struct IntuiMessage *im;
+
+    if (g_divider == NULL) {
+        return;
+    }
+    while ((im = (struct IntuiMessage *)GetMsg(g_divider->UserPort))
+           != NULL) {
+        ULONG cls = im->Class;
+        UWORD code = im->Code;
+        ReplyMsg((struct Message *)im);
+
+        if (cls == IDCMP_MOUSEBUTTONS) {
+            if (code == SELECTDOWN) {
+                g_divider_dragging = 1;
+                /* active window: otherwise the moves stop at our edge */
+                ActivateWindow(g_divider);
+            } else if (code == SELECTUP) {
+                g_divider_dragging = 0;
+                spike_divider_sync();
+                spike_log_flush();
+            }
+        } else if (cls == IDCMP_MOUSEMOVE && g_divider_dragging) {
+            /*
+             * Take the pointer from the SCREEN, not from the message's
+             * window-relative coordinates: we move this very window to
+             * follow the seam, so a relative reading would be measured
+             * against a position that has already changed under it.
+             */
+            LONG pos = g_divider_vertical ?
+                (LONG)g_divider->WScreen->MouseX :
+                (LONG)g_divider->WScreen->MouseY;
+            LONG rc = ES_CALL(ESnap_MoveDivider)(pos);
+
+            if (rc == ES_OK) {
+                struct ESnapDivider d;
+
+                /* follow the seam, but do not re-front on every pixel:
+                 * that is for the end of the drag */
+                if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) ==
+                        ES_OK && d.present && g_divider != NULL) {
+                    ChangeWindowBox(g_divider, (int)d.strip.x,
+                                    (int)d.strip.y, (int)d.strip.w,
+                                    (int)d.strip.h);
+                }
+            } else {
+                spike_log("edgesnap: divider gone (%ld)\n", (long)rc);
+                g_divider_dragging = 0;
+                spike_divider_close();
+            }
+        }
+    }
+}
+
 /* ------------------------------------------------ kernel glue (phase 2) */
 
 static ULONG g_seen_presses;
@@ -758,6 +950,8 @@ static void spike_apply_report(const struct ESnapReport *r)
         spike_preview_show(r->previewScreen, &rect);
     }
     if (r->snapped) {
+        /* a new pair may have appeared - or an old one changed shape */
+        spike_divider_sync();
         if (r->snapResult == ES_OK) {
             spike_log("edgesnap: snap %p -> %s\n", (void *)r->snapWindow,
                       es_zone_name((int)r->snapZone));
@@ -1012,6 +1206,8 @@ static int spike_add_hotkey(CxObj *broker, struct MsgPort *port,
     return 1;
 }
 
+static void spike_divider_sync(void);
+
 /* Active window, for the hotkeys: the library re-validates it anyway. */
 static struct Window *spike_active_window(void)
 {
@@ -1054,6 +1250,10 @@ static void spike_handle_hotkey(LONG id)
     default:
         return;
     }
+    /* A hotkey changes the snapped set exactly as a drag does, so the
+     * divider has to be re-checked here too - forgetting this is why
+     * the handle appeared after drags but never after a hotkey. */
+    spike_divider_sync();
     spike_log_flush();
     if (rc != ES_OK) {
         spike_out("edgesnap: hotkey refused (%ld)\n", (long)rc);
@@ -1217,7 +1417,16 @@ int main(int argc, char **argv)
     engine_mask = g_shared.engine_sigmask;
 
     while (running) {
-        ULONG sigs = Wait(port_mask | engine_mask | SIGBREAKF_CTRL_C);
+        /* The divider handle comes and goes with the snapped pairs, so
+         * its port joins the wait mask fresh on every round. */
+        ULONG div_mask = (g_divider != NULL) ?
+            (1UL << g_divider->UserPort->mp_SigBit) : 0UL;
+        ULONG sigs = Wait(port_mask | engine_mask | div_mask |
+                          SIGBREAKF_CTRL_C);
+
+        if (div_mask != 0 && (sigs & div_mask) != 0) {
+            spike_divider_events();
+        }
 
         if (sigs & port_mask) {
             CxMsg *msg;
@@ -1294,6 +1503,7 @@ out:
         DeleteCxObjAll(broker);
     }
     spike_preview_hide();
+    spike_divider_close();
     spike_close_edgesnap();
     if (port != NULL) {
         CxMsg *msg;

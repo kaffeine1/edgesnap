@@ -37,9 +37,9 @@
 #include "interfaces/edgesnap.h"
 
 #define ES_LIB_NAME    "edgesnap.library"
-#define ES_LIB_VERSION 1
+#define ES_LIB_VERSION 2
 #define ES_LIB_REVISION 0
-#define ES_LIB_IDSTRING "edgesnap.library 1.0 (27.8.2026) Michele Dipace"
+#define ES_LIB_IDSTRING "edgesnap.library 2.0 (27.8.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -297,6 +297,19 @@ static LONG _ESnap_QueryScreenArea(struct EdgeSnapIFace *Self,
     return esb_query_screen_area(screen, area);
 }
 
+static LONG _ESnap_QueryDivider(struct EdgeSnapIFace *Self, ULONG thickness,
+                                struct ESnapDivider *divider)
+{
+    (void)Self;
+    return esb_query_divider(thickness, divider);
+}
+
+static LONG _ESnap_MoveDivider(struct EdgeSnapIFace *Self, LONG position)
+{
+    (void)Self;
+    return esb_move_divider(position);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -314,6 +327,8 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_ResetInput,
     (APTR)_ESnap_IgnoreWindows,
     (APTR)_ESnap_QueryScreenArea,
+    (APTR)_ESnap_QueryDivider,
+    (APTR)_ESnap_MoveDivider,
     (APTR)-1
 };
 

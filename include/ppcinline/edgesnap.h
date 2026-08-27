@@ -76,4 +76,14 @@
         struct Screen *, screen, a0, struct ESnapArea *, area, a1, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+#define ESnap_QueryDivider(thickness, divider) \
+    LP2(0x60, LONG, ESnap_QueryDivider, \
+        ULONG, thickness, d0, struct ESnapDivider *, divider, a0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
+#define ESnap_MoveDivider(position) \
+    LP1(0x66, LONG, ESnap_MoveDivider, \
+        LONG, position, d0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */

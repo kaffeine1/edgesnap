@@ -172,6 +172,42 @@ LONG ESnap_IgnoreWindows(struct Window **windows, ULONG count);
  */
 LONG ESnap_QueryScreenArea(struct Screen *screen, struct ESnapArea *area);
 
+/* --------------------------------------------------- the divider */
+
+/*
+ * When two windows are snapped side by side, the seam between them is
+ * a handle: dragging it resizes both, so a half/half split becomes
+ * 60/40 without touching either window's size gadget. The library
+ * finds the seam and performs the resize; a frontend puts a thin
+ * window with a resize pointer on top of it, and reports the drags.
+ */
+struct ESnapDivider {
+    LONG present;              /* 0: there is no pair to divide      */
+    LONG vertical;             /* 1: dragged left/right, 0: up/down  */
+    struct ESnapRect strip;    /* where to place the handle          */
+    LONG position;             /* current seam coordinate            */
+    LONG minPosition;          /* how far it may be dragged          */
+    LONG maxPosition;
+    struct Window *windowA;    /* left/top window                    */
+    struct Window *windowB;    /* right/bottom window                */
+};
+
+/*
+ * Where the divider is, if any. thickness is how wide the handle
+ * should be. Fills *divider (with present = 0 when there is no pair).
+ *   ES_OK / ES_ERR_BAD_ARGS.
+ */
+LONG ESnap_QueryDivider(ULONG thickness, struct ESnapDivider *divider);
+
+/*
+ * Drag the divider to a screen coordinate: both windows are resized,
+ * the value is clamped so neither can be squeezed away. Window
+ * references are re-validated first, as everywhere else.
+ *   ES_OK / ES_ERR_BAD_ARGS / ES_ERR_STALE (one of the two windows is
+ *   gone: the divider no longer exists) / ES_ERR_UNSUPPORTED (no pair).
+ */
+LONG ESnap_MoveDivider(LONG position);
+
 /* ------------------------------------------------------- functions */
 
 /*

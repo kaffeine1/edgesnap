@@ -13,7 +13,7 @@ LDFLAGS ?= -nostartfiles -nostdlib
 TARGET ?= build/morphos/edgesnap.library
 SRC := library/morphos/edgesnap_library.c library/edgesnap_body.c \
        core/zones.c core/panels.c core/engine.c core/registry.c \
-       core/config.c
+       core/config.c core/gutter.c
 
 .PHONY: all clean
 

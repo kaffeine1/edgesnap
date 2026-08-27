@@ -27,8 +27,10 @@
  *   0 - snap/unsnap/query/exclude/options/enable/capabilities
  *   1 - adds the frontend integration group (FeedInput, ResetInput,
  *       IgnoreWindows, QueryScreenArea)
+ *   2 - adds the divider between snapped windows (QueryDivider,
+ *       MoveDivider)
  */
-#define ES_API_VERSION       1
+#define ES_API_VERSION       2
 
 /* ------------------------------------------------------------- zones */
 

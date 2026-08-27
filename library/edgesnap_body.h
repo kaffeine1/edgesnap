@@ -74,6 +74,10 @@ void esb_input_reset(struct ESnapReport *out);
 /* Usable area of a screen; takes LockIBase itself. */
 LONG esb_query_screen_area(struct Screen *scr, struct ESnapArea *out);
 
+/* The divider between two snapped windows. */
+LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out);
+LONG esb_move_divider(LONG position);
+
 int esb_enabled(void);
 
 /* True while a drag is being tracked - the frontend uses it to keep
@@ -86,7 +90,7 @@ int esb_drag_active(void);
  * what a dock looks like. Pass NULL/0 to clear. At most
  * ESB_IGNORE_SLOTS are kept.
  */
-#define ESB_IGNORE_SLOTS 4
+#define ESB_IGNORE_SLOTS 6
 void esb_ignore_windows(struct Window **wins, int count);
 
 /* Diagnostics: usable area and insets of a screen. The caller must

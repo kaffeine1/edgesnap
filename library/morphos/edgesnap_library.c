@@ -34,9 +34,9 @@
 #include "edgesnap_body.h"
 
 #define ES_LIB_NAME     "edgesnap.library"
-#define ES_LIB_VERSION  1
+#define ES_LIB_VERSION  2
 #define ES_LIB_REVISION 0
-#define ES_LIB_IDSTRING "edgesnap.library 1.0 (27.8.2026) Michele Dipace\r\n"
+#define ES_LIB_IDSTRING "edgesnap.library 2.0 (27.8.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -232,6 +232,17 @@ static LONG G_QueryScreenArea(void)
                                  (struct ESnapArea *)REG_A1);
 }
 
+static LONG G_QueryDivider(void)
+{
+    return esb_query_divider((ULONG)REG_D0,
+                             (struct ESnapDivider *)REG_A0);
+}
+
+static LONG G_MoveDivider(void)
+{
+    return esb_move_divider((LONG)REG_D0);
+}
+
 #define ES_GATE(name, fn) \
     static struct EmulLibEntry name = \
         { TRAP_LIB, 0, (void (*)(void))fn }
@@ -251,6 +262,8 @@ ES_GATE(GATE_FeedInput, G_FeedInput);
 ES_GATE(GATE_ResetInput, G_ResetInput);
 ES_GATE(GATE_IgnoreWindows, G_IgnoreWindows);
 ES_GATE(GATE_QueryScreenArea, G_QueryScreenArea);
+ES_GATE(GATE_QueryDivider, G_QueryDivider);
+ES_GATE(GATE_MoveDivider, G_MoveDivider);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -269,6 +282,8 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_ResetInput,
     (APTR)&GATE_IgnoreWindows,
     (APTR)&GATE_QueryScreenArea,
+    (APTR)&GATE_QueryDivider,
+    (APTR)&GATE_MoveDivider,
     (APTR)-1
 };
 

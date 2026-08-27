@@ -60,6 +60,13 @@ struct EdgeSnapIFace
     LONG APICALL (*ESnap_QueryScreenArea)(struct EdgeSnapIFace *Self,
                                           struct Screen *screen,
                                           struct ESnapArea *area);
+
+    /* --- the divider, appended after the frontend group --- */
+    LONG APICALL (*ESnap_QueryDivider)(struct EdgeSnapIFace *Self,
+                                       ULONG thickness,
+                                       struct ESnapDivider *divider);
+    LONG APICALL (*ESnap_MoveDivider)(struct EdgeSnapIFace *Self,
+                                      LONG position);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

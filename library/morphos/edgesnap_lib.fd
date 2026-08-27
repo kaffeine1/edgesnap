@@ -21,4 +21,6 @@ ESnap_FeedInput(presses,motions,releases,qualifiers,report)(d0,d1,d2,d3,a0)
 ESnap_ResetInput(report)(a0)
 ESnap_IgnoreWindows(windows,count)(a0,d0)
 ESnap_QueryScreenArea(screen,area)(a0,a1)
+ESnap_QueryDivider(thickness,divider)(d0,a0)
+ESnap_MoveDivider(position)(d0)
 ##end
