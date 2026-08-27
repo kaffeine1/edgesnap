@@ -65,8 +65,10 @@ target-system behavior.
   and `tools/esnaptest.c` - a client that knows nothing of EdgeSnap's
   internals - opens it from LIBS: and drives the whole API, including
   the error contract (a stale window answers ES_ERR_STALE, it does not
-  crash). Next: the MorphOS LVO skeleton, then the commodity opens the
-  library instead of linking it.
+  crash). The **MorphOS skeleton** (`library/morphos/`) is written and
+  builds - classic jump table, EmulLibEntry gates, `.fd` and
+  `ppcinline/` stubs - but has not run on real hardware yet. Next: the
+  commodity opens the library instead of linking it.
 
 ## The reference commodity
 

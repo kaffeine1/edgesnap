@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# MorphOS shared library lane: edgesnap.library.
+# Like the OS4 lane it links without a C runtime and provides its own
+# memcpy/memset (see library/morphos/edgesnap_library.c).
+
+CC = ppc-morphos-gcc
+CFLAGS ?= -Wall -Wextra -O2 -noixemul -ffreestanding \
+          -fno-tree-loop-distribute-patterns \
+          -Icore -Iinclude -Ilibrary
+LDFLAGS ?= -nostartfiles -nostdlib
+TARGET ?= build/morphos/edgesnap.library
+SRC := library/morphos/edgesnap_library.c library/edgesnap_body.c \
+       core/zones.c core/panels.c core/engine.c core/registry.c \
+       core/config.c
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	mkdir -p "$(dir $(TARGET))"
+	$(CC) $(CFLAGS) $(LDFLAGS) -o "$@" $(SRC)
+
+clean:
+	rm -f "$(TARGET)"

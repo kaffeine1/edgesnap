@@ -1,0 +1,20 @@
+*
+* edgesnap.library function descriptions.
+* Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+* SPDX-License-Identifier: MIT
+*
+* The offsets and register assignment below are the ABI: append only,
+* never reorder, never remove. Semantics are documented once, in
+* include/edgesnap.h.
+*
+##base _EdgeSnapBase
+##bias 30
+##public
+ESnap_QueryCapabilities()()
+ESnap_SnapWindow(win,zone)(a0,d0)
+ESnap_UnsnapWindow(win)(a0)
+ESnap_QueryWindow(win,zoneOut)(a0,a1)
+ESnap_ExcludeWindow(win,exclude)(a0,d0)
+ESnap_SetOptionsA(tags)(a0)
+ESnap_Enable(on)(d0)
+##end

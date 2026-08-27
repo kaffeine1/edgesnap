@@ -1,0 +1,20 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# Third-party client of edgesnap.library, MorphOS lane.
+
+CC = ppc-morphos-gcc
+CFLAGS ?= -Wall -Wextra -O2 -noixemul -Iinclude -Icore
+TARGET ?= build/morphos/esnaptest
+SRC := tools/esnaptest_mos.c
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	mkdir -p "$(dir $(TARGET))"
+	$(CC) $(CFLAGS) -o "$@" $(SRC)
+
+clean:
+	rm -f "$(TARGET)"
