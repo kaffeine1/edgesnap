@@ -605,24 +605,33 @@ LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out)
     /*
      * A remembered pair is not a real one: either window may have been
      * moved, resized or closed since. Check both against the live
-     * geometry and drop what no longer matches - otherwise a frontend
-     * would keep a handle sitting on a seam that stopped existing.
+     * geometry and report no seam when they no longer line up.
+     *
+     * What this must NOT do is forget them. ChangeWindowBox() places a
+     * window asynchronously, so a query made immediately after a snap
+     * sees the window still at its old size - a mismatch that lasts a
+     * few milliseconds. Forgetting on that transient destroyed the
+     * pair permanently, and the seam then never appeared at all. Only
+     * a window that is gone is forgotten; everything else is simply
+     * re-checked next time.
      */
     if (found) {
         struct ESBSnap sa, sb;
-        int alive = esb_sample((struct Window *)seam.ref_a, &sa) &&
-                    esb_sample((struct Window *)seam.ref_b, &sb);
+        int a_alive = esb_sample((struct Window *)seam.ref_a, &sa);
+        int b_alive = esb_sample((struct Window *)seam.ref_b, &sb);
 
-        if (!alive || !esb_same_box(&sa.box, &seam.box_a) ||
-            !esb_same_box(&sb.box, &seam.box_b)) {
+        if (!a_alive || !b_alive) {
             ObtainSemaphore(&g_sem);
-            if (!alive || !esb_same_box(&sa.box, &seam.box_a)) {
+            if (!a_alive) {
                 es_registry_forget(&g_registry, (void *)seam.ref_a);
             }
-            if (!alive || !esb_same_box(&sb.box, &seam.box_b)) {
+            if (!b_alive) {
                 es_registry_forget(&g_registry, (void *)seam.ref_b);
             }
             ReleaseSemaphore(&g_sem);
+            found = 0;
+        } else if (!esb_same_box(&sa.box, &seam.box_a) ||
+                   !esb_same_box(&sb.box, &seam.box_b)) {
             found = 0;
         }
     }

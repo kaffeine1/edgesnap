@@ -272,57 +272,62 @@ commodity/  Exchange controller
 
 ## The divider: status
 
-Implemented across the three layers, and honest about what is proven:
+Implemented across the three layers, and now confirmed end to end.
 
 - `core/gutter.c` finds the seam between two snapped windows and works
   out what dragging it does to both. Host-tested (7 scenarios: vertical
   and horizontal seams, clamping so neither window can be squeezed
   away, pairs that only touch by accident, a lone window).
 - The library exposes it as API generation 2: `ESnap_QueryDivider` and
-  `ESnap_MoveDivider`, with `ES_CAP_GUTTER` now in the capability mask.
-- The commodity puts a thin window on the seam with a resize pointer,
-  and reports drags to the library - it never resizes anything itself.
+  `ESnap_MoveDivider`, with `ES_CAP_GUTTER` in the capability mask.
+- The commodity puts an invisible strip on the seam and reports drags
+  to the library - it never resizes anything itself.
 
-**Proven in-VM on OS4**: the library detects the pair and reports the
-strip (`divider rc=0 present=1 956,33 8x959`), the handle opens and is
-drawn where it should be (measured: 8 columns of accent colour at
-x=956..963), and the capability mask now advertises `gutter y`.
-**Not yet confirmed**: that dragging the handle resizes both windows. The path is implemented and the geometry is host-tested,
-but the confirmation needs a hand on the mouse - the scripted pointer
-kept missing an 8-pixel strip, and QEMU's monitor drops the occasional
-mouse delta, so the automation could not settle it either way.
+**Proven in-VM on AmigaOS 4**: two windows snapped left and right, the
+seam found (`divider rc=0 present=1 956,33 8x959`), the strip grabbed,
+and dragging it 240 px moved the seam to 1071 with both windows
+resized - a 56/44 split from a 50/50 one. Releasing re-asks and the
+strip follows. Three things had to be got right first, and each was a
+real defect found by driving the VM from the host:
 
-Two fixes that came out of reading the event code afterwards, both in
-the build to try: the pointer position is taken from the SCREEN rather
-than from window-relative message coordinates (the handle moves under
-the pointer as the seam follows, so a relative reading measures against
-a position that has already changed), and the handle is no longer
-re-fronted on every pixel of the drag - only when the drag ends.
+**A query must not destroy what it cannot verify.** `QueryDivider`
+checked the remembered pair against the live windows and *forgot* the
+entries when they did not match. But `ChangeWindowBox()` places a
+window asynchronously, so a query made right after a snap sees the
+window still at its old size - a mismatch that lasts a few
+milliseconds. The pair was deleted on that transient, permanently, and
+the seam then never appeared at all (`present=0`, always). Now only a
+window that is *gone* is forgotten; a geometry mismatch just means "no
+seam right now", re-checked next time. The commodity also waits a fifth
+of a second after a snap before asking, so the common case does not
+even see the mismatch.
 
-### Two defects found by using it (2026-08-27), and what they taught
+**The strip must never draw.** A visible bar between two tiled windows
+is not what macOS or Windows show, and worse, it does not clean up
+after itself: painting the strip and then closing the window left a
+blue line behind, because the console windows underneath do not repaint
+what our layer had covered. That is exactly the "line that stays and
+never goes away" reported from MorphOS. The strip is now opened with
+`WA_BackFill, LAYERS_NOBACKFILL` and nothing is ever rendered into it,
+so what shows through is the two window edges that were already there.
+The feedback during a drag is the windows resizing live.
 
-Both came from the first hands-on session with the divider, and both
-were about the same thing: state that was remembered rather than
-observed.
+**The pointer is a property of the ACTIVE window.** `WA_PointerType`
+(V53) with `POINTERTYPE_EASTWESTRESIZE` gives the double arrow, and
+MorphOS has the same pointers under axis names
+(`POINTERTYPE_HORIZONTALRESIZE`). But Intuition shows the pointer of
+the window that is active, not the one under the mouse: hovering the
+seam shows the ordinary arrow, and the double arrow appears the moment
+the strip is grabbed. There is no way around that without stealing
+focus on hover, which would send the user's typing to an invisible
+8-pixel window.
 
-1. **The handle outlived the pair.** `es_gutter_find` works off the
-   registry, which records where windows were PUT; move one away and
-   the registry still describes a pair that no longer exists, so the
-   line stayed on screen. `ESnap_QueryDivider` now checks both windows
-   against their live geometry (same slack as the restore rule) and
-   forgets whichever has wandered off - so the pair dissolves and the
-   frontend closes the handle. The commodity also re-asks after every
-   released drag, which is when a window can have been moved away.
-
-2. **A zone always took its default half.** After re-balancing a pair
-   to 70/30, snapping a window to the narrow side gave it 50% again,
-   overlapping its neighbour - where Windows and macOS give it exactly
-   the space that is free. `es_pair_fill` (host-tested) now adjusts a
-   zone rectangle to stop at the neighbour's edge, and the preview is
-   adjusted with it so the frame promises what the snap delivers.
-
-The lesson worth keeping: the registry is a memory of intent, and any
-answer given to a user must be checked against what is on screen now.
+A warning for anyone testing this: a bad pointer experiment poisons the
+machine until it reboots. While probing whether `WA_PointerType` worked,
+the pointer went invisible **system-wide** and stayed invisible across
+restarts of the program - which made the next three experiments read as
+failures. It was the VM, not the code. Reboot before concluding
+anything about pointers.
 
 ## The package: one icon to double-click
 

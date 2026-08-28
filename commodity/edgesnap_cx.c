@@ -46,10 +46,10 @@
 #include <devices/inputevent.h>
 #include <libraries/commodities.h>
 #include <intuition/intuition.h>
+#include <intuition/pointerclass.h>   /* POINTERTYPE_* for the seam    */
 #include <intuition/intuitionbase.h>
 #include <intuition/screens.h> /* DrawInfo pens for the preview frame */
 #ifdef __amigaos4__
-#include <intuition/pointerclass.h> /* POINTERTYPE_* for the divider   */
 #endif
 #include <graphics/view.h>     /* OBP_Precision/PRECISION_GUI          */
 
@@ -793,12 +793,34 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
  * library's job - we only report where the pointer went.
  */
 
+/*
+ * The double arrow that says "this edge can be dragged", drawn by us.
+ *
+ * Not WA_PointerType: the system's built-in resize pointers are a
+ * V53.37 feature, and on the AmigaOS 4.1 FE test machine asking for
+ * one leaves the pointer BLANK - POINTERTYPE_BUSY included, so it is
+ * not a missing image but the whole tag. A sprite of our own works on
+ * every version of both systems and ignores the user's pointer theme.
+ *
+ * Intuition shows the ACTIVE window's pointer, so this can only appear
+ * once the strip has been clicked - which is exactly when it is wanted.
+ */
+
+/*
+ * The double arrow, under the name each system gives it: AmigaOS 4
+ * points to the compass, MorphOS to the axis.
+ */
+#ifdef __amigaos4__
+#define ES_PTR_SEAM_VERTICAL   POINTERTYPE_EASTWESTRESIZE
+#define ES_PTR_SEAM_HORIZONTAL POINTERTYPE_NORTHSOUTHRESIZE
+#else
+#define ES_PTR_SEAM_VERTICAL   POINTERTYPE_HORIZONTALRESIZE
+#define ES_PTR_SEAM_HORIZONTAL POINTERTYPE_VERTICALRESIZE
+#endif
+
 static struct Window *g_divider;
 static int g_divider_vertical;
 static int g_divider_dragging;
-static struct ColorMap *g_divider_cm;
-static LONG g_divider_pen;
-static int g_divider_pen_ok;
 
 static void spike_divider_close(void)
 {
@@ -806,12 +828,29 @@ static void spike_divider_close(void)
         CloseWindow(g_divider);
         g_divider = NULL;
         g_divider_dragging = 0;
-        if (g_divider_pen_ok) {
-            ReleasePen(g_divider_cm, (ULONG)g_divider_pen);
-            g_divider_pen_ok = 0;
-        }
         spike_publish_ignored();
     }
+}
+
+/*
+ * The strip never draws anything, and this is the reason: painting it
+ * leaves residue on the screen. A band painted while dragging stayed
+ * behind as a blue line after the window closed, because the console
+ * windows underneath do not repaint what our layer had covered - the
+ * exact "line that never goes away" the seam is supposed not to have.
+ *
+ * The feedback during a drag is the two windows resizing live, which
+ * is what macOS shows too. The pointer says the rest.
+ */
+static void spike_divider_pointer(void)
+{
+    if (g_divider == NULL) {
+        return;
+    }
+    SetWindowPointer(g_divider,
+                     WA_PointerType, g_divider_vertical ?
+                         ES_PTR_SEAM_VERTICAL : ES_PTR_SEAM_HORIZONTAL,
+                     TAG_DONE);
 }
 
 /* Ask the library where the seam is and put the handle there. */
@@ -819,7 +858,6 @@ static void spike_divider_sync(void)
 {
     struct ESnapDivider d;
     struct Screen *scr;
-    LONG pen = 3;
 
     {
         LONG rc = ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d);
@@ -839,7 +877,7 @@ static void spike_divider_sync(void)
         ChangeWindowBox(g_divider, (int)d.strip.x, (int)d.strip.y,
                         (int)d.strip.w, (int)d.strip.h);
         WindowToFront(g_divider);
-        g_divider_vertical = d.vertical;
+        g_divider_vertical = (int)d.vertical;
         return;
     }
 
@@ -847,28 +885,16 @@ static void spike_divider_sync(void)
     if (scr == NULL) {
         return;
     }
-    /* Same lesson as the preview frame: FILLPEN is a grey almost equal
-     * to the window borders on OS4, so the handle disappeared into
-     * them. Ask for an explicit accent instead. */
-    g_divider_cm = scr->ViewPort.ColorMap;
-    pen = ObtainBestPen(g_divider_cm, 0x22222222UL, 0x88888888UL,
-                        0xFFFFFFFFUL, OBP_Precision, PRECISION_GUI,
-                        TAG_DONE);
-    if (pen != -1) {
-        g_divider_pen_ok = 1;
-    } else {
-        struct DrawInfo *dri = GetScreenDrawInfo(scr);
-
-        pen = 3;
-        if (dri != NULL) {
-            if (dri->dri_NumPens > FILLPEN) {
-                pen = dri->dri_Pens[FILLPEN];
-            }
-            FreeScreenDrawInfo(scr, dri);
-        }
-    }
-    g_divider_pen = pen;
+    /*
+     * The handle draws NOTHING. macOS and Windows put no line between
+     * two tiled windows - the seam is found by the pointer changing
+     * shape over it, and a permanent bar across the screen reads as
+     * damage, not as an affordance. LAYERS_NOBACKFILL stops Intuition
+     * clearing the strip, so what shows through is the two window
+     * edges that are already there.
+     */
     g_divider = OpenWindowTags(NULL,
+                               WA_BackFill, LAYERS_NOBACKFILL,
                                WA_CustomScreen, scr,
                                WA_Left, (int)d.strip.x,
                                WA_Top, (int)d.strip.y,
@@ -890,20 +916,7 @@ static void spike_divider_sync(void)
     spike_log("edgesnap: divider handle open\n");
     WindowToFront(g_divider);
     g_divider_vertical = d.vertical;
-    SetAPen(g_divider->RPort, (ULONG)pen);
-    RectFill(g_divider->RPort, 0, 0, g_divider->Width - 1,
-             g_divider->Height - 1);
-    /* the resize pointer tells the user what the strip is for; an
-     * unknown tag is simply ignored, so this is safe on both systems */
-#ifdef __amigaos4__
-    /* The names come from intuition/pointerclass.h: a vertical seam is
-     * dragged east/west, a horizontal one north/south. */
-    SetWindowPointer(g_divider,
-                     WA_PointerType, d.vertical ?
-                         POINTERTYPE_EASTWESTRESIZE :
-                         POINTERTYPE_NORTHSOUTHRESIZE,
-                     TAG_DONE);
-#endif
+    spike_divider_pointer();
     spike_publish_ignored();
 }
 
@@ -926,8 +939,11 @@ static void spike_divider_events(void)
                 g_divider_dragging = 1;
                 /* active window: otherwise the moves stop at our edge */
                 ActivateWindow(g_divider);
+                spike_divider_pointer();
             } else if (code == SELECTUP) {
                 g_divider_dragging = 0;
+                /* Re-ask where the seam is now: the drag moved it, and
+                 * it may have stopped existing altogether. */
                 spike_divider_sync();
                 spike_log_flush();
             }
@@ -998,7 +1014,13 @@ static void spike_apply_report(const struct ESnapReport *r)
         spike_preview_show(r->previewScreen, &rect);
     }
     if (r->snapped) {
-        /* a new pair may have appeared - or an old one changed shape */
+        /*
+         * A new pair may have appeared - or an old one changed shape.
+         * ChangeWindowBox() returns before the window has moved, so
+         * asking immediately finds the window still at its old size
+         * and no seam: wait a fifth of a second first.
+         */
+        Delay(10L);
         spike_divider_sync();
         if (r->snapResult == ES_OK) {
             spike_log("edgesnap: snap %p -> %s\n", (void *)r->snapWindow,
@@ -1444,6 +1466,15 @@ int main(int argc, char **argv)
     if (broker == NULL) {
         spike_out("edgesnap: CxBroker failed (%ld)%s\n", (long)broker_err,
                broker_err == CBERR_DUP ? " - already running" : "");
+        /*
+         * Finding ourselves already running is the intended outcome of
+         * a second launch, not a failure - and returning one made every
+         * boot of a machine with two start lines put up an "EdgeSnap
+         * failed with code 20" window across the screen.
+         */
+        if (broker_err == CBERR_DUP) {
+            rc = RETURN_OK;
+        }
         goto out;
     }
 

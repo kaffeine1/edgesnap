@@ -8,12 +8,18 @@
 
 (set #app "EdgeSnap")
 
+(set #app-version "1.0")
+
 (set #welcome
-  (cat "EdgeSnap gives AmigaOS 4.x and MorphOS the window snapping of "
-       "Windows and macOS: drag a window against a screen edge or "
-       "corner and it fills that half or quarter of the screen, with a "
-       "handle on the seam to re-balance a pair afterwards.\n\n"
-       "by Michele Dipace <michele.dipace@kaffeine.net> - MIT license."))
+  (cat "EdgeSnap " #app-version "\n"
+       "Window snapping for AmigaOS 4.x and MorphOS\n"
+       "by Michele Dipace <michele.dipace@kaffeine.net>\n"
+       "MIT license\n\n"
+       "Drag a window against a screen edge or corner and it fills "
+       "that half or quarter of the screen, the way Windows and macOS "
+       "do. Two windows side by side share a seam that can be dragged "
+       "to re-balance them. It installs as a commodity that starts "
+       "with the system, so the behaviour is simply there."))
 
 (set #ask-system "Which system is this?")
 (set #ask-system-help
@@ -43,7 +49,8 @@
        "S:User-Startup.\n\n"))
 
 (set #done
-  (cat "EdgeSnap is installed.\n\n"
+  (cat "EdgeSnap " #app-version " is installed.\n"
+       "by Michele Dipace <michele.dipace@kaffeine.net>\n\n"
        "It starts with the system at every boot. To start it by hand "
        "at any time:\n\n"
        "    Run >NIL: C:EdgeSnap\n\n"
