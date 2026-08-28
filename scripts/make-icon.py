@@ -70,8 +70,29 @@ def amiga_string(text):
     return struct.pack(">I", len(data)) + data
 
 
+WBDISK = 1
+WBDRAWER = 2
 WBTOOL = 3
 WBPROJECT = 4
+
+
+def drawer_data():
+    """
+    A drawer icon carries the window Workbench opens for it: a 56-byte
+    DrawerData (a NewWindow plus the scroll offsets) sitting between the
+    DiskObject and the imagery. Without it the drawer has no icon at
+    all and the package is invisible to anyone who does not switch
+    their file manager to "show all files".
+    """
+    new_window = struct.pack(">hhhh", 80, 60, 420, 160)   # Left/Top/W/H
+    new_window += struct.pack(">BB", 0, 1)                # Detail/BlockPen
+    new_window += struct.pack(">I", 0)                    # IDCMPFlags
+    new_window += struct.pack(">I", 0x0000024F)           # window flags
+    new_window += struct.pack(">IIII", 0, 0, 0, 0)        # gadget..screen
+    new_window += struct.pack(">I", 0)                    # BitMap
+    new_window += struct.pack(">hhhh", 90, 40, 640, 400)  # Min/Max size
+    new_window += struct.pack(">H", 1)                    # Type: WBENCHSCREEN
+    return new_window + struct.pack(">ii", 0, 0)          # CurrentX/Y
 
 
 def build(default_tool, tooltypes, stack, icon_type=WBTOOL):
@@ -103,11 +124,13 @@ def build(default_tool, tooltypes, stack, icon_type=WBTOOL):
     do += struct.pack(">I", 1)                   # do_DefaultTool ptr flag
     do += struct.pack(">I", 1)                   # do_ToolTypes ptr flag
     do += struct.pack(">II", 0x80000000, 0x80000000)  # NO_ICON_POSITION
-    do += struct.pack(">I", 0)                   # do_DrawerData
+    do += struct.pack(">I", 1 if icon_type == WBDRAWER else 0)
     do += struct.pack(">I", 0)                   # do_ToolWindow
     do += struct.pack(">I", stack)               # do_StackSize
 
     out = bytearray(do)
+    if icon_type == WBDRAWER:
+        out += drawer_data()
     out += image
     out += image_data
     out += amiga_string(default_tool)
@@ -153,6 +176,9 @@ PRESETS = {
              ["(EdgeSnap - Michele Dipace)"], 32768),
     "data": (WBPROJECT, "SYS:Utilities/MultiView",
              ["(EdgeSnap - Michele Dipace)"], 32768),
+    # The package drawer itself, for a release that is a drawer on a
+    # disk rather than the root of a CD.
+    "drawer": (WBDRAWER, "", ["(EdgeSnap - Michele Dipace)"], 0),
 }
 
 
