@@ -231,6 +231,29 @@ static struct EmulLibEntry spike_cx_trap = {
  * read goes through spike_out(), which falls silent then - the
  * commodity's face is Exchange, not a shell.
  */
+static int g_quit_mode;   /* QUIT argument: stop a running instance */
+
+/*
+ * How QUIT reaches the instance that is already running. Commodities
+ * only get told THAT another instance tried to start (CXCMD_UNIQUE),
+ * never why - and "any second launch stops the first" is too sharp an
+ * edge: a stray Run in User-Startup, or a second double-click, would
+ * silently disable EdgeSnap. So the asking instance leaves a note in
+ * ENV: first, and the running one quits only if it finds it.
+ */
+#define ES_QUIT_VAR "EdgeSnap.quit"
+
+static int spike_quit_requested(void)
+{
+    char buf[8];
+
+    if (GetVar((STRPTR)ES_QUIT_VAR, (STRPTR)buf, (LONG)sizeof(buf),
+               GVF_GLOBAL_ONLY) < 0) {
+        return 0;
+    }
+    DeleteVar((STRPTR)ES_QUIT_VAR, GVF_GLOBAL_ONLY);
+    return 1;
+}
 static int g_quiet;
 
 /* --------------------------------------------------- non-blocking log */
@@ -410,6 +433,23 @@ static void spike_config_tooltypes(struct WBStartup *wbs)
  * asked for THIS launch - Shell arguments, or the icon's tooltypes -
  * wins over the file.
  */
+static int spike_arg_is(const char *arg, const char *word)
+{
+    int i;
+
+    for (i = 0; word[i] != '\0'; i++) {
+        char c = arg[i];
+
+        if (c >= 'a' && c <= 'z') {
+            c = (char)(c - 'a' + 'A');
+        }
+        if (c != word[i]) {
+            return 0;
+        }
+    }
+    return arg[i] == '\0';
+}
+
 static void spike_config_load(int argc, char **argv)
 {
     int i;
@@ -426,6 +466,14 @@ static void spike_config_load(int argc, char **argv)
         return;
     }
     for (i = 1; i < argc; i++) {
+        /* QUIT is a verb, not a setting: it asks a running EdgeSnap to
+         * stop and starts nothing. It is what an installer runs before
+         * replacing the files, so that the old library can be flushed
+         * out of memory without the user rebooting. */
+        if (spike_arg_is(argv[i], "QUIT")) {
+            g_quit_mode = 1;
+            continue;
+        }
         spike_config_line(argv[i], "argument");
     }
 }
@@ -1365,7 +1413,34 @@ int main(int argc, char **argv)
     nb.nb_Pri = 0;
     nb.nb_Port = port;
 
+    if (g_quit_mode) {
+        /* The note has to be in place before we knock. */
+        SetVar((STRPTR)ES_QUIT_VAR, (STRPTR)"1", -1, GVF_GLOBAL_ONLY);
+    }
+
     broker = CxBroker(&nb, &broker_err);
+
+    if (g_quit_mode) {
+        /*
+         * QUIT does its work by the act of registering: NBU_UNIQUE tells
+         * commodities.library to refuse us, and NBU_NOTIFY makes it tell
+         * the instance that got there first - which stops. So there is
+         * nothing to do here but report which of the two happened, and
+         * leave nothing of our own behind.
+         */
+        if (broker == NULL && broker_err == CBERR_DUP) {
+            Delay(25L); /* half a second: let it read the note */
+            spike_out("edgesnap: asked the running EdgeSnap to quit\n");
+        } else {
+            spike_out("edgesnap: EdgeSnap was not running\n");
+        }
+        /* Never leave the note lying about: a stale one would turn the
+         * next accidental double-start into a shutdown. */
+        DeleteVar((STRPTR)ES_QUIT_VAR, GVF_GLOBAL_ONLY);
+        rc = RETURN_OK;
+        goto out;
+    }
+
     if (broker == NULL) {
         spike_out("edgesnap: CxBroker failed (%ld)%s\n", (long)broker_err,
                broker_err == CBERR_DUP ? " - already running" : "");
@@ -1451,6 +1526,15 @@ int main(int argc, char **argv)
                     switch (id) {
                     case CXCMD_KILL:
                         running = 0;
+                        break;
+                    case CXCMD_UNIQUE:
+                        /* Another instance tried to start. Only "QUIT"
+                         * means stop; a plain second launch just gets
+                         * refused, and we carry on. */
+                        if (spike_quit_requested()) {
+                            spike_out("edgesnap: asked to quit\n");
+                            running = 0;
+                        }
                         break;
                     case CXCMD_DISABLE:
                         ActivateCxObj(broker, 0L);

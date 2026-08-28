@@ -354,6 +354,60 @@ Two things learned by watching it run:
   an empty window; `scripts/make-icon.py` now emits tool icons and
   project icons (a script needs a project icon whose default tool is
   the program that runs it - `Installer` here).
+- **A file copied off a CD arrives read-only.** CDFS hands out its own
+  protection bits - `----r-e-`, no write and no delete - and both
+  `(copyfiles)` and `(copylib)` preserve them, so the installation
+  worked exactly once and then refused for ever with *"Unable to delete
+  a file or drawer -- it was delete protected"*. The script now clears
+  the protection of what is already installed before replacing it, and
+  sets `+rwed` on everything it installs.
+
+The script uses paths relative to itself, so from a Shell it wants the
+package as the current directory: `CD <volume>:` then
+`Installer Install`. Double-clicking the icon does that for you.
+
+### Why it does not reboot, and what it does instead
+
+The obvious way to make an update take effect is to restart the machine,
+and the Installer language appears to offer `(reboot)`. It does not work
+here: the AmigaOS 4 Installer is **Hyperion's 53.12**, but it reports
+`@installer-version` = 0x2B0001, i.e. **language level 43.1**, and
+executing `(reboot)` fails with *"Interpreter: Executing non-function"*.
+A version guard cannot help - the version it reports is the one without
+the function. So an installer on this system cannot restart the machine
+at all.
+
+That turned out to be the better answer anyway, because a reboot was
+only ever a way to shake the previous version out of memory. What
+actually blocks an update is the **running commodity**, which holds the
+old `edgesnap.library` open so that replacing the file changes nothing
+until something expunges it. The installer therefore ends by doing that
+work itself:
+
+    (if (= #update 1) ( (run "C:EdgeSnap QUIT") (run "C:Wait >NIL: 2") ))
+    (run "C:Avail >NIL: FLUSH")
+    ... (askbool "Start it now?") -> (run "Run >NIL: C:EdgeSnap")
+
+so the user neither reboots nor ever meets the words "Avail FLUSH".
+
+`QUIT` is a verb, not a setting. It works through the commodity system's
+own mechanism: the broker registers `NBU_UNIQUE | NBU_NOTIFY`, so a
+second instance is refused and the first is told (`CXCMD_UNIQUE`) that
+somebody tried. The tempting reading of that message - "a second launch
+stops the first" - is a trap, and the test machine demonstrated it
+immediately: its `S:User-Startup` had a duplicate start line left over
+from an older install, the two instances cancelled each other out, and
+nothing was running after boot. The notification says only *that*
+somebody knocked, never *why*.
+
+So the asking instance leaves a note first - `ENV:EdgeSnap.quit` - and
+the running one stops only if it finds it (and deletes it). A plain
+second launch is refused as before and the running instance carries on.
+Verified on AmigaOS 4:
+
+    C:EdgeSnap        -> CxBroker failed (2) - already running
+    C:EdgeSnap QUIT   -> asked the running EdgeSnap to quit
+    C:EdgeSnap QUIT   -> EdgeSnap was not running
 
 ## Deployment: always-on without user intervention
 

@@ -140,8 +140,13 @@ COMMODITY_TOOLTYPES = [
 # script, MultiView for the readable files.
 PRESETS = {
     "commodity": (WBTOOL, "EdgeSnap", COMMODITY_TOOLTYPES, 65536),
+    # LOGFILE keeps the diagnostic the Installer writes but puts it in
+    # T:, where it costs nothing; left unset it lands in the middle of
+    # the user's Work: disk. MINUSER stays unset so the friendly novice
+    # mode - no questions at all - remains the default.
     "install": (WBPROJECT, "Installer",
                 ["APPNAME=EdgeSnap",
+                 "LOGFILE=T:EdgeSnap-install.log",
                  "(EdgeSnap installer - Michele Dipace)",
                  "(MINUSER=average)"], 65536),
     "text": (WBPROJECT, "SYS:Utilities/MultiView",

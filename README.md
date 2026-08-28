@@ -109,6 +109,9 @@ What the spike does today:
 - hotkeys (no drag heuristics involved):
   `ctrl alt cursor left/right/up` = snap left / right / maximize,
   `ctrl alt cursor down` = restore pre-snap geometry;
+- `EdgeSnap QUIT` stops a running instance from a Shell or a script -
+  which is how an update replaces itself without a reboot; launching it
+  twice by accident is simply refused, and the running one carries on;
 - prints every decision to stdout: run it from a Shell, watch it think.
 
 ## Reading guide

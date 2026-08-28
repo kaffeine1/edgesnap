@@ -44,8 +44,8 @@
 
 (set #done
   (cat "EdgeSnap is installed.\n\n"
-       "It starts with the system from the next boot. To use it right "
-       "away, without rebooting, type in a Shell:\n\n"
+       "It starts with the system at every boot. To start it by hand "
+       "at any time:\n\n"
        "    Run >NIL: C:EdgeSnap\n\n"
        "Settings live in ENVARC:EdgeSnap.prefs; EdgeSnap.prefs on this "
        "disk documents every one of them. Exchange enables, disables "
@@ -53,6 +53,13 @@
 
 (complete 0)
 (welcome #welcome)
+
+; Is an older EdgeSnap already on this machine? The answer changes how
+; the installation can end: a fresh one can simply be started, an
+; update has to deal with the previous version still being in memory.
+(if (exists "LIBS:edgesnap.library" (noreq))
+    (set #update 1)
+    (set #update 0))
 
 ; --- which system? MorphOS is the one with MOSSYS: ------------------
 (if (exists "MOSSYS:" (noreq))
@@ -78,6 +85,15 @@
 
 (complete 20)
 
+; A file copied off a CD arrives with the CD's own protection bits:
+; read and execute, no write and - the one that bites - no delete. The
+; installation then works once and refuses for ever after, because it
+; cannot replace what it put there itself. So: unlock what is already
+; installed before replacing it, and leave everything we install in a
+; state the next update can overwrite.
+(if (exists "LIBS:edgesnap.library" (noreq))
+    (protect "LIBS:edgesnap.library" "+rwed"))
+
 ; --- the library ----------------------------------------------------
 (copylib
   (prompt #lib-prompt)
@@ -86,9 +102,14 @@
   (dest "LIBS:")
   (confirm))
 
+(protect "LIBS:edgesnap.library" "+rwed")
+
 (complete 50)
 
 ; --- the commodity --------------------------------------------------
+(if (exists "C:EdgeSnap" (noreq))
+    (protect "C:EdgeSnap" "+rwed"))
+
 (copyfiles
   (prompt #cmd-prompt)
   (help #cmd-help)
@@ -96,7 +117,7 @@
   (dest "C:")
   (confirm))
 
-(protect "C:EdgeSnap" "+e")
+(protect "C:EdgeSnap" "+rwed")
 
 (complete 70)
 
@@ -115,9 +136,42 @@
                  "settings. The file installed here changes nothing on "
                  "its own: every setting in it is commented out.\n\n"))
       (default 1))
-    (copyfiles
-      (source "EdgeSnap.prefs")
-      (dest "ENVARC:")))
+    (
+      (if (exists "ENVARC:EdgeSnap.prefs" (noreq))
+          (protect "ENVARC:EdgeSnap.prefs" "+rwed"))
+      (copyfiles
+        (source "EdgeSnap.prefs")
+        (dest "ENVARC:"))
+      (protect "ENVARC:EdgeSnap.prefs" "+rwed")))
+
+(complete 95)
+
+; What actually stands between an update and the new version running is
+; the OLD one, still in memory and still holding the old library open.
+; So stop it, let the library go, and start what was just installed -
+; the user should not have to know the words "Avail FLUSH", and this
+; Installer has no (reboot) to offer them instead.
+(if (= #update 1)
+    (
+      (run "C:EdgeSnap QUIT")
+      (run "C:Wait >NIL: 2")
+    ))
+
+(run "C:Avail >NIL: FLUSH")
 
 (complete 100)
-(exit #done)
+
+(if (askbool
+      (prompt (cat "EdgeSnap is installed.\n\nStart it now, so that "
+                   "snapping works right away?"))
+      (help (cat "EdgeSnap starts by itself at every boot in any case. "
+                 "Saying yes here only saves you the wait - and, after "
+                 "an update, puts the version just installed in charge "
+                 "of the one that was running before.\n\n"))
+      (default 1))
+    (run "Run >NIL: C:EdgeSnap"))
+
+; (quiet): our own closing text says what happened - the Installer's
+; standard one would add that EdgeSnap "is in Work:", which is not
+; where any of it went.
+(exit #done (quiet))
