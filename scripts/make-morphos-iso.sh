@@ -20,8 +20,6 @@ for f in EdgeSnap edgesnap.library esnaptest; do
 done
 cp "$ROOT/build/swap-morphos/README.txt" "$STAGE/README.txt" 2>/dev/null || true
 
-hdiutil makehybrid -quiet -iso -joliet \
-    -iso-volume-name "$LABEL" -joliet-volume-name "$LABEL" \
-    -o "$OUT" "$STAGE"
+mkisofs -quiet -r -J -V "$LABEL" -o "$OUT" "$STAGE"
 rm -rf "$STAGE"
 echo "$OUT"

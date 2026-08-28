@@ -324,6 +324,37 @@ observed.
 The lesson worth keeping: the registry is a memory of intent, and any
 answer given to a user must be checked against what is on screen now.
 
+## The package: one icon to double-click
+
+The release is a drawer with an **Install icon**. Double-clicking it
+runs `installer/Install` under the Commodore Installer, which is what
+users of these systems expect: a real installation GUI, in the system's
+own language, with the novice/intermediate/expert modes it provides for
+free. Verified end-to-end on AmigaOS 4 (VM): double-click, "EdgeSnap is
+installed", and the files land where they belong.
+
+The script recognises the system (`(exists "MOSSYS:")` = MorphOS) and
+pre-selects the matching build in an `(askchoice)` - detection assists,
+the user decides. It then uses `(copylib)` for the library, `(copyfiles)`
+for the commodity, and `(startup)` for the boot line, which maintains
+its own `;BEGIN EdgeSnap` / `;END EdgeSnap` block so re-installing
+replaces the line instead of adding a second one.
+
+Two things learned by watching it run:
+
+- **Rock Ridge is not optional.** Built as plain ISO9660 the names come
+  out mangled to uppercase 8.3 - and `EdgeSnap.prefs`, with two dots,
+  disappeared from the disc entirely. The ISO scripts now use
+  `mkisofs -r -J`.
+- **`(copylib)` keeps a library of EQUAL version**, so a rebuilt
+  library with the same version.revision is silently not installed. The
+  revision must be bumped for every release that is meant to replace an
+  earlier one.
+- Everything visible in the drawer needs an `.info`, or Workbench shows
+  an empty window; `scripts/make-icon.py` now emits tool icons and
+  project icons (a script needs a project icon whose default tool is
+  the program that runs it - `Installer` here).
+
 ## Deployment: always-on without user intervention
 
 A commodity has to run, but the user must never start it. The install

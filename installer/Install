@@ -1,0 +1,123 @@
+; EdgeSnap - installation script for the Commodore Installer.
+; Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+; SPDX-License-Identifier: MIT
+;
+; Double-click the Install icon. The script recognises the system it is
+; running on, proposes the matching build, and lets the user choose
+; another - detection assists, it never decides on its own.
+
+(set #app "EdgeSnap")
+
+(set #welcome
+  (cat "EdgeSnap gives AmigaOS 4.x and MorphOS the window snapping of "
+       "Windows and macOS: drag a window against a screen edge or "
+       "corner and it fills that half or quarter of the screen, with a "
+       "handle on the seam to re-balance a pair afterwards.\n\n"
+       "by Michele Dipace <michele.dipace@kaffeine.net> - MIT license."))
+
+(set #ask-system "Which system is this?")
+(set #ask-system-help
+  (cat "EdgeSnap ships a build for each system. The one this machine "
+       "looks like is already selected; change it only if you are "
+       "installing onto another system's volumes.\n\n"))
+
+(set #lib-prompt "Installing edgesnap.library into LIBS: ...")
+(set #lib-help
+  (cat "edgesnap.library holds everything EdgeSnap knows how to do. "
+       "Other programs can use it too. If a newer one is already "
+       "installed, it is kept.\n\n"))
+
+(set #cmd-prompt "Installing the EdgeSnap commodity into C: ...")
+(set #cmd-help
+  (cat "The commodity is the part you interact with: it watches the "
+       "mouse, draws the preview and the divider, and appears in "
+       "Exchange like any other commodity.\n\n"))
+
+(set #startup-prompt
+  (cat "EdgeSnap should come up with the system, so that snapping is "
+       "simply there and nobody has to start anything.\n\n"
+       "This adds one line to S:User-Startup."))
+(set #startup-help
+  (cat "Without this line EdgeSnap has to be started by hand each "
+       "time. The line can be removed later by editing "
+       "S:User-Startup.\n\n"))
+
+(set #done
+  (cat "EdgeSnap is installed.\n\n"
+       "It starts with the system from the next boot. To use it right "
+       "away, without rebooting, type in a Shell:\n\n"
+       "    Run >NIL: C:EdgeSnap\n\n"
+       "Settings live in ENVARC:EdgeSnap.prefs; EdgeSnap.prefs on this "
+       "disk documents every one of them. Exchange enables, disables "
+       "or removes it as with any commodity."))
+
+(complete 0)
+(welcome #welcome)
+
+; --- which system? MorphOS is the one with MOSSYS: ------------------
+(if (exists "MOSSYS:" (noreq))
+    (set #detected 1)
+    (set #detected 0))
+
+(set #system
+  (askchoice
+    (prompt #ask-system)
+    (help #ask-system-help)
+    (choices "AmigaOS 4.x" "MorphOS")
+    (default #detected)))
+
+(if (= #system 0)
+    (
+      (set #libsrc "os4/edgesnap.library")
+      (set #cmdsrc "os4/EdgeSnap")
+    )
+    (
+      (set #libsrc "mos/edgesnap.library")
+      (set #cmdsrc "mos/EdgeSnap")
+    ))
+
+(complete 20)
+
+; --- the library ----------------------------------------------------
+(copylib
+  (prompt #lib-prompt)
+  (help #lib-help)
+  (source #libsrc)
+  (dest "LIBS:")
+  (confirm))
+
+(complete 50)
+
+; --- the commodity --------------------------------------------------
+(copyfiles
+  (prompt #cmd-prompt)
+  (help #cmd-help)
+  (source #cmdsrc)
+  (dest "C:")
+  (confirm))
+
+(protect "C:EdgeSnap" "+e")
+
+(complete 70)
+
+; --- start it with the system ---------------------------------------
+(startup #app
+  (prompt #startup-prompt)
+  (help #startup-help)
+  (command "Run >NIL: C:EdgeSnap\n"))
+
+(complete 90)
+
+; --- the preferences template ---------------------------------------
+(if (askbool
+      (prompt "Install the commented preferences file into ENVARC:?")
+      (help (cat "ENVARC:EdgeSnap.prefs is where EdgeSnap reads its "
+                 "settings. The file installed here changes nothing on "
+                 "its own: every setting in it is commented out.\n\n"))
+      (default 1))
+    (copyfiles
+      (source "EdgeSnap.prefs")
+      (dest "ENVARC:")))
+
+(complete 100)
+(exit #done)

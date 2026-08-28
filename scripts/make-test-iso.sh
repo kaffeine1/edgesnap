@@ -21,75 +21,74 @@ if [ ! -f "$ROOT/build/os4/EdgeSnap" ]; then
 fi
 
 rm -rf "$STAGE"
-mkdir -p "$STAGE"
-cp "$ROOT/build/os4/EdgeSnap" "$STAGE/EdgeSnap"
+mkdir -p "$STAGE/os4" "$STAGE/mos"
+
+# Per-system layout: the installer picks the directory that matches the
+# machine it is running on.
+cp "$ROOT/build/os4/EdgeSnap"          "$STAGE/os4/EdgeSnap"
+cp "$ROOT/build/os4/edgesnap.library"  "$STAGE/os4/edgesnap.library"
+cp "$ROOT/build/os4/esnaptest"         "$STAGE/os4/esnaptest"
 if [ -f "$ROOT/build/morphos/EdgeSnap" ]; then
-    cp "$ROOT/build/morphos/EdgeSnap" "$STAGE/EdgeSnap-MorphOS"
-fi
-# The native AmigaOS 4 library and its third-party test client.
-if [ -f "$ROOT/build/os4/edgesnap.library" ]; then
-    cp "$ROOT/build/os4/edgesnap.library" "$STAGE/edgesnap.library"
-fi
-if [ -f "$ROOT/build/os4/esnaptest" ]; then
-    cp "$ROOT/build/os4/esnaptest" "$STAGE/esnaptest"
-fi
-# The Workbench icon: what makes an install into WBStartup possible.
-if [ -f "$ROOT/assets/EdgeSnap.info" ]; then
-    cp "$ROOT/assets/EdgeSnap.info" "$STAGE/EdgeSnap.info"
+    cp "$ROOT/build/morphos/EdgeSnap"         "$STAGE/mos/EdgeSnap"
+    cp "$ROOT/build/morphos/edgesnap.library" "$STAGE/mos/edgesnap.library"
+    cp "$ROOT/build/morphos/esnaptest"        "$STAGE/mos/esnaptest"
 fi
 
-cat > "$STAGE/Install-EdgeSnap" <<'EOF'
-; Install-EdgeSnap - run it with:  Execute Install-EdgeSnap
-; Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
-;
-; Installs EdgeSnap so that it comes up with the system, every time,
-; with nobody starting anything by hand.
-;
-; S:User-Startup is the mechanism used here rather than SYS:WBStartup:
-; it needs no icon and works even on installations that have no
-; WBStartup drawer at all - which is exactly what the OS4 test machine
-; turned out to be. If you prefer the Workbench way, drop EdgeSnap and
-; EdgeSnap.info into SYS:WBStartup instead and remove the line this
-; script adds.
+# What the user sees in the drawer: an Install icon to double-click,
+# and readable files. Everything visible carries an icon, or Workbench
+# shows an empty window.
+cp "$ROOT/installer/Install"        "$STAGE/Install"
+cp "$ROOT/assets/Install.info"      "$STAGE/Install.info"
+cp "$ROOT/assets/EdgeSnap.info"     "$STAGE/os4/EdgeSnap.info"
+cp "$ROOT/assets/EdgeSnap.info"     "$STAGE/mos/EdgeSnap.info" 2>/dev/null || true
+cp "$ROOT/assets/README.txt.info"   "$STAGE/README.txt.info"
+cp "$ROOT/assets/EdgeSnap.prefs.info" "$STAGE/EdgeSnap.prefs.info"
 
-Echo "Installing edgesnap.library into LIBS: ..."
-Copy edgesnap.library LIBS: CLONE
+cat > "$STAGE/README.txt" <<'EOF'
+EdgeSnap - window snapping for AmigaOS 4.x and MorphOS
+Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+Distributed under the MIT license.
 
-Echo "Installing the commodity into C: ..."
-Copy EdgeSnap C: CLONE
-Protect C:EdgeSnap +e
-IF EXISTS EdgeSnap.info
-  Copy EdgeSnap.info C: CLONE
-ENDIF
+TO INSTALL: double-click the Install icon.
 
-Search >NIL: S:User-Startup "EdgeSnap"
-IF WARN
-  Echo "Adding the startup line to S:User-Startup ..."
-  Echo >>S:User-Startup ""
-  Echo >>S:User-Startup "; EdgeSnap - window snapping, by Michele Dipace"
-  Echo >>S:User-Startup "Run >NIL: C:EdgeSnap"
-ELSE
-  Echo "S:User-Startup already starts EdgeSnap - left alone."
-ENDIF
+It recognises the system, proposes the matching build, and asks before
+doing anything. It puts edgesnap.library into LIBS:, the commodity into
+C:, and one line into S:User-Startup so that snapping is simply there
+from the next boot - nobody has to start anything by hand.
 
-Echo ""
-Echo "Done. From the next boot EdgeSnap starts by itself."
-Echo "To start it now without rebooting:"
-Echo "  Run >NIL: C:EdgeSnap"
-Echo ""
-Echo "Settings: ENVARC:EdgeSnap.prefs (see EdgeSnap.prefs here), or"
-Echo "tooltypes if you install the icon into SYS:WBStartup instead."
-Echo "Control it from Exchange as any other commodity."
+WHAT IT DOES
+
+  - Drag a window's title bar until the POINTER touches a screen edge
+    or corner: a frame shows where it will land; release and it snaps
+    to that half or quarter. Docks are detected and never covered.
+  - When two windows end up side by side, a handle appears on the seam:
+    drag it and both are resized, so half/half becomes 60/40.
+  - Hotkeys: ctrl alt cursor left/right/up snap the active window,
+    ctrl alt cursor down puts it back where it was.
+  - ctrl alt d prints a window dump, for diagnosing dock detection.
+  - Exchange enables, disables or removes it, as with any commodity.
+
+SETTINGS
+
+  ENVARC:EdgeSnap.prefs - EdgeSnap.prefs here documents every setting
+  and changes nothing on its own. The same KEY=VALUE words work as
+  Shell arguments: EdgeSnap ZONES=halves EDGEPX=24 BYPASSQUAL=alt
+
+FOR DEVELOPERS
+
+  os4/esnaptest and mos/esnaptest are small clients that open
+  edgesnap.library and drive its public API - useful as an example of
+  how another program can ask for windows to be placed.
 EOF
 
 cat > "$STAGE/EdgeSnap.prefs" <<'EOF'
 # EdgeSnap preferences
-# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net> - MIT license.
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net> - MIT.
 #
-# Copy to ENVARC:EdgeSnap.prefs (and ENV: for
-# the running session). Every setting is optional; the same KEY=VALUE
-# vocabulary works as a Shell argument, e.g.
-#   EdgeSnap ZONES=halves EDGEPX=24
+# Copy to ENVARC:EdgeSnap.prefs (the installer offers to do it). Every
+# setting is optional and every line here is commented out, so the file
+# changes nothing until you remove a '#'. The same KEY=VALUE words also
+# work as Shell arguments:  EdgeSnap ZONES=halves EDGEPX=24
 #
 # ZONES       which zones react: all | none | halves | corners |
 #             left,right,topleft,topright,bottomleft,bottomright,maximize
@@ -102,63 +101,18 @@ cat > "$STAGE/EdgeSnap.prefs" <<'EOF'
 # MARGINLEFT/TOP/RIGHT/BOTTOM  extra margins of your own (default 0)
 # BYPASSQUAL  hold to drag past the zones: none | alt | ctrl | shift
 
-ZONES=all
-EDGEPX=12
-PREVIEW=yes
-PANELDETECT=yes
-PANELMARGIN=8
-BYPASSQUAL=alt
+#ZONES=all
+#EDGEPX=12
+#PREVIEW=yes
+#PANELDETECT=yes
+#PANELMARGIN=8
+#BYPASSQUAL=alt
 EOF
 
-cat > "$STAGE/README.txt" <<'EOF'
-EdgeSnap - window snapping for AmigaOS 4.x and MorphOS
-Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
-Distributed under the MIT license.
-
-Test build: the commodity opens edgesnap.library, so BOTH the
-commodity and the library must be installed.
-
-INSTALL IT ONCE, IT STARTS BY ITSELF FROM THEN ON:
-
-  Execute Install-EdgeSnap
-
-That copies edgesnap.library into LIBS:, the commodity into C:, and
-adds one line to S:User-Startup - which is what makes the system start
-it at every boot with no intervention. (S:User-Startup rather than
-SYS:WBStartup because it needs no icon and works even where the
-WBStartup drawer does not exist.) Control it from Exchange like any
-other commodity; settings live in ENVARC:EdgeSnap.prefs.
-
-To try it from a Shell instead, without installing (note that BOTH
-files are needed - the commodity opens the library):
-
-  Copy <thisvolume>:edgesnap.library LIBS:
-  Copy <thisvolume>:EdgeSnap RAM:
-  Protect RAM:EdgeSnap +e
-  RAM:EdgeSnap
-
-The ISO carries no Amiga protection bits, hence the Protect +e.
-
-Try:
-  - drag a window's title bar until the POINTER touches an edge or
-    corner: a frame previews the zone; release to snap. Docks are
-    detected and never covered.
-  - ctrl alt cursor left/right/up = snap active window, down = restore
-  - ctrl alt d = window dump (dock diagnosis)
-  - preferences: EdgeSnap.prefs on this volume documents every
-    setting. Copy it to ENVARC:EdgeSnap.prefs (and ENV:) or pass the
-    same KEY=VALUE pairs as Shell arguments:
-      RAM:EdgeSnap ZONES=halves EDGEPX=24 BYPASSQUAL=alt
-    The startup banner echoes the settings actually in force.
-  - quit: Ctrl-C in the shell, or remove EdgeSnap from Exchange.
-
-The startup banner prints the build date/time - check it matches.
-Diagnostics print when no drag is in flight.
-EOF
-
-hdiutil makehybrid -quiet -iso -joliet \
-    -iso-volume-name "$LABEL" -joliet-volume-name "$LABEL" \
-    -o "$OUT" "$STAGE"
+# Rock Ridge (-r), not plain ISO9660: without it the names are mangled
+# to uppercase 8.3 and a file with two dots - EdgeSnap.prefs - vanishes
+# from the disc entirely. -J adds Joliet for anything reading that.
+mkisofs -quiet -r -J -V "$LABEL" -o "$OUT" "$STAGE"
 rm -rf "$STAGE"
 
 echo "$OUT"

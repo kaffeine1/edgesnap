@@ -70,7 +70,11 @@ def amiga_string(text):
     return struct.pack(">I", len(data)) + data
 
 
-def build(default_tool, tooltypes, stack):
+WBTOOL = 3
+WBPROJECT = 4
+
+
+def build(default_tool, tooltypes, stack, icon_type=WBTOOL):
     image_data = planes(ART)
 
     # struct Image
@@ -94,7 +98,7 @@ def build(default_tool, tooltypes, stack):
     # struct DiskObject
     do = struct.pack(">HH", 0xE310, 1)          # magic, version
     do += gadget                                 # do_Gadget
-    do += struct.pack(">B", 3)                   # do_Type: WBTOOL
+    do += struct.pack(">B", icon_type)           # do_Type
     do += struct.pack(">B", 0)                   # pad
     do += struct.pack(">I", 1)                   # do_DefaultTool ptr flag
     do += struct.pack(">I", 1)                   # do_ToolTypes ptr flag
@@ -113,30 +117,59 @@ def build(default_tool, tooltypes, stack):
     return bytes(out)
 
 
+COMMODITY_TOOLTYPES = [
+    "DONOTWAIT",
+    "(EdgeSnap by Michele Dipace <michele.dipace@kaffeine.net>)",
+    "(Settings below: remove the parentheses to enable one.)",
+    "(ZONES=all)",
+    "(EDGEPX=12)",
+    "(CORNERDIV=4)",
+    "(DRAGMINPX=4)",
+    "(PREVIEW=yes)",
+    "(PANELDETECT=yes)",
+    "(PANELMARGIN=8)",
+    "(MARGINLEFT=0)",
+    "(MARGINTOP=0)",
+    "(MARGINRIGHT=0)",
+    "(MARGINBOTTOM=0)",
+    "(BYPASSQUAL=alt)",
+]
+
+# The icons this project ships. A script gets a PROJECT icon whose
+# default tool is the program that runs it: Installer for the install
+# script, MultiView for the readable files.
+PRESETS = {
+    "commodity": (WBTOOL, "EdgeSnap", COMMODITY_TOOLTYPES, 65536),
+    "install": (WBPROJECT, "Installer",
+                ["APPNAME=EdgeSnap",
+                 "(EdgeSnap installer - Michele Dipace)",
+                 "(MINUSER=average)"], 65536),
+    "text": (WBPROJECT, "SYS:Utilities/MultiView",
+             ["(EdgeSnap - Michele Dipace)"], 32768),
+    "data": (WBPROJECT, "SYS:Utilities/MultiView",
+             ["(EdgeSnap - Michele Dipace)"], 32768),
+}
+
+
 def main():
-    path = sys.argv[1] if len(sys.argv) > 1 else "EdgeSnap.info"
-    tooltypes = [
-        "DONOTWAIT",
-        "(EdgeSnap by Michele Dipace <michele.dipace@kaffeine.net>)",
-        "(Settings below: remove the parentheses to enable one.)",
-        "(ZONES=all)",
-        "(EDGEPX=12)",
-        "(CORNERDIV=4)",
-        "(DRAGMINPX=4)",
-        "(PREVIEW=yes)",
-        "(PANELDETECT=yes)",
-        "(PANELMARGIN=8)",
-        "(MARGINLEFT=0)",
-        "(MARGINTOP=0)",
-        "(MARGINRIGHT=0)",
-        "(MARGINBOTTOM=0)",
-        "(BYPASSQUAL=alt)",
-    ]
-    data = build("EdgeSnap", tooltypes, 65536)
+    preset = "commodity"
+    path = "EdgeSnap.info"
+    args = sys.argv[1:]
+    if args:
+        path = args[0]
+    if len(args) > 1:
+        preset = args[1]
+    if preset not in PRESETS:
+        print("unknown preset %s (have: %s)" %
+              (preset, ", ".join(sorted(PRESETS))))
+        return 1
+    icon_type, tool, tooltypes, stack = PRESETS[preset]
+    data = build(tool, tooltypes, stack, icon_type)
     with open(path, "wb") as fh:
         fh.write(data)
-    print("%s (%d bytes)" % (path, len(data)))
+    print("%s (%s, %d bytes)" % (path, preset, len(data)))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
