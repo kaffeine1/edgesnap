@@ -842,6 +842,18 @@ static void spike_divider_close(void)
  * The feedback during a drag is the two windows resizing live, which
  * is what macOS shows too. The pointer says the rest.
  */
+static void spike_divider_park(void)
+{
+    struct Screen *scr;
+
+    if (g_divider == NULL) {
+        return;
+    }
+    scr = g_divider->WScreen;
+    ChangeWindowBox(g_divider, (int)scr->MouseX - 4, (int)scr->MouseY - 4,
+                    8, 8);
+}
+
 static void spike_divider_pointer(void)
 {
     if (g_divider == NULL) {
@@ -940,6 +952,19 @@ static void spike_divider_events(void)
                 /* active window: otherwise the moves stop at our edge */
                 ActivateWindow(g_divider);
                 spike_divider_pointer();
+                /*
+                 * Shrink to a speck under the pointer for the duration
+                 * of the drag. A full-height strip is invisible only as
+                 * long as nothing renders it - and with window
+                 * transparency switched on, the compositor renders it,
+                 * so a band that lags behind the seam (the windows are
+                 * placed asynchronously) or stops at the clamp shows up
+                 * as a stray vertical line. Eight pixels under the
+                 * pointer cannot be seen, and the window stays active,
+                 * which is what keeps the double arrow and the mouse
+                 * reports coming.
+                 */
+                spike_divider_park();
             } else if (code == SELECTUP) {
                 g_divider_dragging = 0;
                 /* Re-ask where the seam is now: the drag moved it, and
@@ -960,16 +985,15 @@ static void spike_divider_events(void)
             LONG rc = ES_CALL(ESnap_MoveDivider)(pos);
 
             if (rc == ES_OK) {
-                struct ESnapDivider d;
-
-                /* follow the seam, but do not re-front on every pixel:
-                 * that is for the end of the drag */
-                if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) ==
-                        ES_OK && d.present && g_divider != NULL) {
-                    ChangeWindowBox(g_divider, (int)d.strip.x,
-                                    (int)d.strip.y, (int)d.strip.w,
-                                    (int)d.strip.h);
-                }
+                /*
+                 * Follow the POINTER, not the seam. Asking the library
+                 * where the seam is now would race the placement it
+                 * has just asked for - ChangeWindowBox() returns before
+                 * the window has moved - and the answer would be stale
+                 * exactly when the drag is fast. The seam is re-read
+                 * once, on release, when everything has settled.
+                 */
+                spike_divider_park();
             } else {
                 spike_log("edgesnap: divider gone (%ld)\n", (long)rc);
                 g_divider_dragging = 0;
