@@ -18,8 +18,22 @@ mkdir -p "$STAGE/EdgeSnap"
 "$ROOT/scripts/stage-package.sh" "$STAGE/EdgeSnap"
 cp "$ROOT/assets/EdgeSnapDrawer.info" "$STAGE/EdgeSnap.info"
 
+# A real LhA encoder compresses (-lh5-); scripts/make-lha.py only stores
+# (-lh0-), which is fine for a GitHub download and wasteful for Aminet -
+# 154K against 525K for the same files. The Mac's own `lha` is Lhasa,
+# which only extracts, so this wants Koji Arai's:
+#   git clone https://github.com/jca02266/lha && ./configure && make
+LHA_BIN=${LHA_BIN:-"$HOME/amiga-dev/tools/lha-src/src/lha"}
+
 rm -f "$OUT"
-python3 "$ROOT/scripts/make-lha.py" "$OUT" "$STAGE" EdgeSnap.info EdgeSnap
+if [ -x "$LHA_BIN" ]; then
+    ( cd "$STAGE" && "$LHA_BIN" a "$OUT" EdgeSnap.info EdgeSnap >/dev/null )
+    echo "packed with $LHA_BIN (compressed)"
+else
+    python3 "$ROOT/scripts/make-lha.py" "$OUT" "$STAGE" EdgeSnap.info EdgeSnap
+    echo "WARNING: no LhA encoder at $LHA_BIN - the archive is STORED, not" >&2
+    echo "         compressed. Fine for GitHub, not what Aminet expects." >&2
+fi
 
 # Unpack it again and compare: an archive nobody has opened is a
 # promise, not a package.
