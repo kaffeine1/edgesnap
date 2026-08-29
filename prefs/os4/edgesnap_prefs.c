@@ -185,6 +185,9 @@ static void es_close_classes(void)
 
 /* -------------------------------------------------------- the widgets */
 
+static void es_add_child(Object *layout, Object *child, const char *label,
+                         int fill);
+
 /* The zone mask gets a row of checkboxes rather than a cryptic number. */
 static Object *es_zone_group(struct ESPrefsGui *gui)
 {
@@ -207,10 +210,44 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
             GA_Text, es_zone_label[i],
             GA_Selected, on ? TRUE : FALSE,
         End;
-        IDoMethod(group, LM_ADDCHILD, NULL, gui->zone[i],
-                              TAG_END);
+        es_add_child(group, gui->zone[i], NULL, 1);
     }
     return group;
+}
+
+/*
+ * LM_ADDCHILD takes its tags as a TagItem ARRAY, not as loose varargs:
+ * the method's message is {MethodID, window, object, tags}, so tags
+ * written inline put CHILD_Label's tag id where the tag POINTER
+ * belongs, and the layout class follows it. That is the DSI this
+ * program died with on its first run.
+ */
+static void es_add_child(Object *layout, Object *child, const char *label,
+                         int fill)
+{
+    struct TagItem tags[3];
+    Object *lab = NULL;
+    int n = 0;
+
+    if (layout == NULL || child == NULL) {
+        return;
+    }
+    if (label != NULL) {
+        lab = LabelObject,
+            LABEL_Text, label,
+        LabelEnd;
+        if (lab != NULL) {
+            tags[n].ti_Tag = CHILD_Label;
+            tags[n++].ti_Data = (ULONG)lab;
+        }
+    }
+    if (!fill) {
+        tags[n].ti_Tag = CHILD_WeightedHeight;
+        tags[n++].ti_Data = 0;
+    }
+    tags[n].ti_Tag = TAG_END;
+    tags[n].ti_Data = 0;
+    IDoMethod(layout, LM_ADDCHILD, NULL, child, tags);
 }
 
 static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
@@ -271,16 +308,10 @@ static Object *es_build_window(struct ESPrefsGui *gui)
     }
     for (i = 0; i < count; i++) {
         gui->field[i] = es_widget(gui, &t[i], i);
-        Printf("  %s -> %p\n", (APTR)t[i].key, (APTR)gui->field[i]);
         if (gui->field[i] == NULL) {
             continue;
         }
-        IDoMethod(rows, LM_ADDCHILD, NULL, gui->field[i],
-            CHILD_Label, LabelObject,
-                LABEL_Text, t[i].label,
-            LabelEnd,
-            CHILD_WeightedHeight, 0,
-            TAG_END);
+        es_add_child(rows, gui->field[i], t[i].label, 0);
     }
 
     buttons = HLayoutObject,
@@ -304,6 +335,15 @@ static Object *es_build_window(struct ESPrefsGui *gui)
     End;
 
     return WindowObject,
+        /*
+         * window.class works out most of the IDCMP for itself, but the
+         * evidence said otherwise here: the close gadget and window
+         * activation arrived while nothing a button did ever did. Ask
+         * for the gadget classes by name.
+         */
+        WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | IDCMP_GADGETDOWN |
+                  IDCMP_REFRESHWINDOW | IDCMP_NEWSIZE | IDCMP_VANILLAKEY |
+                  IDCMP_IDCMPUPDATE,
         WA_Title, "EdgeSnap Preferences",
         WA_ScreenTitle, "EdgeSnap - by Michele Dipace",
         WA_Activate, TRUE,
@@ -404,21 +444,16 @@ int main(void)
         return RETURN_FAIL;
     }
     gui.win = es_build_window(&gui);
-    Printf("EdgeSnapPrefs: window object %p\n", (APTR)gui.win);
     if (gui.win == NULL) {
         es_close_classes();
         return RETURN_FAIL;
     }
     gui.window = (struct Window *)IDoMethod(gui.win, WM_OPEN, NULL);
-    Printf("EdgeSnapPrefs: window %p\n", (APTR)gui.window);
     if (gui.window == NULL) {
         DisposeObject(gui.win);
         es_close_classes();
         return RETURN_FAIL;
     }
-    Printf("EdgeSnapPrefs: at %ld,%ld size %ldx%ld\n",
-           (LONG)gui.window->LeftEdge, (LONG)gui.window->TopEdge,
-           (LONG)gui.window->Width, (LONG)gui.window->Height);
 
     while (running) {
         GetAttr(WINDOW_SigMask, gui.win, &signals);
