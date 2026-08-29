@@ -31,6 +31,9 @@ cp "$ROOT/build/os4/edgesnap.library"  "$DEST/os4/edgesnap.library"
 cp "$ROOT/build/os4/esnaptest"         "$DEST/os4/esnaptest"
 if [ -f "$ROOT/build/os4/EdgeSnapPrefs" ]; then
     cp "$ROOT/build/os4/EdgeSnapPrefs" "$DEST/os4/EdgeSnapPrefs"
+    # (infos) in the installer copies the icon along with the program,
+    # so the icon has to travel next to it.
+    cp "$ROOT/assets/EdgeSnapPrefs.info" "$DEST/os4/EdgeSnapPrefs.info"
 fi
 if [ -f "$ROOT/build/morphos/EdgeSnap" ]; then
     cp "$ROOT/build/morphos/EdgeSnap"         "$DEST/mos/EdgeSnap"
@@ -38,6 +41,7 @@ if [ -f "$ROOT/build/morphos/EdgeSnap" ]; then
     cp "$ROOT/build/morphos/esnaptest"        "$DEST/mos/esnaptest"
     if [ -f "$ROOT/build/morphos/EdgeSnapPrefs" ]; then
         cp "$ROOT/build/morphos/EdgeSnapPrefs" "$DEST/mos/EdgeSnapPrefs"
+        cp "$ROOT/assets/EdgeSnapPrefs.info" "$DEST/mos/EdgeSnapPrefs.info"
     fi
 else
     echo "WARNING: no MorphOS build - mos/ left empty" >&2

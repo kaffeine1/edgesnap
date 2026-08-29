@@ -19,34 +19,40 @@ Classic .info layout written below:
 import struct
 import sys
 
-W, H, DEPTH = 24, 22, 2
 
 # Two bitplanes. '.' = colour 0 (transparent/background), '1' = pen 1
 # (blue frame), '2' = pen 2 (white fill), '3' = pen 3 (black outline).
-ART = [
-    "........................",
-    ".33333333333333333333333",
-    ".3111111111111111111113.",
-    ".3111111111111111111113.",
-    ".32222222222.222222222 3",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".32222222222.2........23",
-    ".33333333333333333333333",
-    "........................",
-    "...3333333333333333333..",
-    "........................",
-]
+# The picture: a window split in two, which is what EdgeSnap does.
+# Drawn rather than typed, so the size can be changed without redrawing
+# it by hand. Four colours, the Workbench standard: 0 background,
+# 1 black, 2 white, 3 blue.
+W, H, DEPTH = 40, 36, 2
+
+TITLE_H = 7          # rows of title bar, under the top outline
+GAP = 2              # the seam between the two panes
+
+
+def draw():
+    rows = []
+    for y in range(H):
+        row = ""
+        for x in range(W):
+            edge = (x == 0 or x == W - 1 or y == 0 or y == H - 1)
+            if edge:
+                row += "1"                       # outline
+            elif y <= TITLE_H:
+                row += "3"                       # title bar
+            elif y == TITLE_H + 1:
+                row += "1"                       # under the title bar
+            elif abs(x - W // 2) < GAP:
+                row += "1"                       # the seam itself
+            else:
+                row += "2"                       # the two panes
+        rows.append(row)
+    return rows
+
+
+ART = draw()
 
 
 def planes(art):
@@ -172,6 +178,10 @@ PRESETS = {
                  "LOGFILE=T:EdgeSnap-install.log",
                  "(EdgeSnap installer - Michele Dipace)",
                  "(MINUSER=average)"], 65536),
+    # The preferences program, as it sits in SYS:Prefs/ - a tool with
+    # nothing to configure about itself.
+    "prefs": (WBTOOL, "EdgeSnapPrefs",
+              ["(EdgeSnap preferences - Michele Dipace)"], 65536),
     "text": (WBPROJECT, "SYS:Utilities/MultiView",
              ["(EdgeSnap - Michele Dipace)"], 32768),
     "data": (WBPROJECT, "SYS:Utilities/MultiView",

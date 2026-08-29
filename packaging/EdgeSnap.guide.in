@@ -95,6 +95,16 @@ small - that is a limit, not a fault.
   @{b}ctrl alt cursor down@{ub}    put it back where it was
   @{b}ctrl alt d@{ub}              print a window dump, to diagnose dock detection
 
+@{b}Changing the settings@{ub}
+Open @{b}SYS:Prefs/EdgeSnap@{ub} - the installer puts it there, with
+the rest of the system's preferences. Change what you like and press
+Save; EdgeSnap follows immediately, without being restarted. Use
+applies the change for this session only, Cancel changes nothing.
+
+The window offers every setting listed under
+@{" Settings " link SETTINGS}, each with the range it accepts, so
+nothing you can choose there can be refused.
+
 @{b}Getting past the zones@{ub}
 If you want to drag a window right up to the edge without it
 snapping, set @{b}BYPASSQUAL@{ub} (see @{" Settings " link SETTINGS})

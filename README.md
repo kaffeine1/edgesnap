@@ -55,8 +55,8 @@ target-system behavior.
   source. **Preferences** are in: `ENV(ARC):EdgeSnap.prefs` plus Shell
   arguments, parsed by the portable `core/config.c` (zones, edge/corner
   sensitivity, preview, dock detection and margin, own margins, bypass
-  qualifier). Workbench tooltypes and the native prefs GUIs come with
-  packaging.
+  qualifier), and the native preferences windows - ReAction and MUI -
+  are built from the same table.
 - **Phase 4 (native integration): in progress.** The API surface now
   lives in `library/edgesnap_body.c` behind a semaphore - snap, unsnap,
   query, exclude, options, capabilities, plus the interactive path that
@@ -103,8 +103,15 @@ What the spike does today:
   mouse);
 - dock awareness, macOS-style: AmiDock / Ambient panel strips are
   detected and reserved, so snapped windows never cover the dock;
-- preferences from `ENV(ARC):EdgeSnap.prefs` or the command line, same
-  vocabulary either way (`EdgeSnap ZONES=halves EDGEPX=24 BYPASSQUAL=alt`);
+- a **preferences window on each system**, installed in `SYS:Prefs/`
+  where the rest of the system's preferences live: ReAction on
+  AmigaOS 4, MUI on MorphOS, both built by walking the one table that
+  describes the settings, so neither can offer a value the file parser
+  would refuse. Save, Use and Cancel behave as they do everywhere else,
+  and EdgeSnap picks the change up while running;
+- the same settings from `ENV(ARC):EdgeSnap.prefs` or the command line,
+  same vocabulary either way
+  (`EdgeSnap ZONES=halves EDGEPX=24 BYPASSQUAL=alt`);
   the startup banner echoes the settings in force;
 - hotkeys (no drag heuristics involved):
   `ctrl alt cursor left/right/up` = snap left / right / maximize,

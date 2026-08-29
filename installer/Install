@@ -39,6 +39,13 @@
        "mouse, draws the preview and the divider, and appears in "
        "Exchange like any other commodity.\n\n"))
 
+(set #prefs-prompt "Installing the preferences window into SYS:Prefs: ...")
+(set #prefs-help
+  (cat "The preferences window is where the settings are changed: "
+       "which zones react, how close to an edge the pointer must "
+       "come, whether docks are kept clear. EdgeSnap notices the "
+       "change straight away - there is no need to restart it.\n\n"))
+
 (set #startup-prompt
   (cat "EdgeSnap should come up with the system, so that snapping is "
        "simply there and nobody has to start anything.\n\n"
@@ -54,9 +61,10 @@
        "It starts with the system at every boot. To start it by hand "
        "at any time:\n\n"
        "    Run >NIL: C:EdgeSnap\n\n"
-       "Settings live in ENVARC:EdgeSnap.prefs; EdgeSnap.prefs on this "
-       "disk documents every one of them. Exchange enables, disables "
-       "or removes it as with any commodity."))
+       "The settings are in SYS:Prefs/EdgeSnap - open it, change what "
+       "you like, and EdgeSnap follows without being restarted. "
+       "Exchange enables, disables or removes it as with any "
+       "commodity."))
 
 (complete 0)
 (welcome #welcome)
@@ -84,10 +92,12 @@
     (
       (set #libsrc "os4/edgesnap.library")
       (set #cmdsrc "os4/EdgeSnap")
+      (set #prefssrc "os4/EdgeSnapPrefs")
     )
     (
       (set #libsrc "mos/edgesnap.library")
       (set #cmdsrc "mos/EdgeSnap")
+      (set #prefssrc "mos/EdgeSnapPrefs")
     ))
 
 (complete 20)
@@ -125,6 +135,33 @@
   (confirm))
 
 (protect "C:EdgeSnap" "+rwed")
+
+(complete 60)
+
+; --- the preferences window -----------------------------------------
+;
+; SYS:Prefs/ is where people look for it, so that is where it goes,
+; icon included - a preferences program nobody can find is a text file
+; with extra steps.
+(if (exists "SYS:Prefs/EdgeSnap" (noreq))
+    (protect "SYS:Prefs/EdgeSnap" "+rwed"))
+(if (exists "SYS:Prefs/EdgeSnap.info" (noreq))
+    (protect "SYS:Prefs/EdgeSnap.info" "+rwed"))
+
+(copyfiles
+  (prompt #prefs-prompt)
+  (help #prefs-help)
+  (source #prefssrc)
+  (newname "EdgeSnap")
+  (dest "SYS:Prefs")
+  (infos)
+  (confirm))
+
+(protect "SYS:Prefs/EdgeSnap" "+rwed")
+; The icon comes off the CD with the CD's own bits, and an icon that
+; cannot be deleted stops the next installation dead.
+(if (exists "SYS:Prefs/EdgeSnap.info" (noreq))
+    (protect "SYS:Prefs/EdgeSnap.info" "+rwed"))
 
 (complete 70)
 
