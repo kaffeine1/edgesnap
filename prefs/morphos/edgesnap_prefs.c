@@ -33,7 +33,7 @@
 #include "prefs_io.h"
 
 static const char es_version_cookie[] __attribute__((used)) =
-    "$VER: EdgeSnapPrefs 1.0 (29.8.2026) Michele Dipace";
+    "$VER: EdgeSnapPrefs 0.1 (29.8.2026) Michele Dipace";
 
 #define ES_MAX_SETTINGS 24
 #define ES_ZONE_COUNT   7

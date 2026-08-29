@@ -1,11 +1,11 @@
 @database EdgeSnap
-@$VER: EdgeSnap.guide 1.0 (29.8.2026)
+@$VER: EdgeSnap.guide 0.1 (29.8.2026)
 @author "Michele Dipace <michele.dipace@kaffeine.net>"
 @(c) "Copyright (c) 2026 Michele Dipace - MIT licence"
 @wordwrap
 
-@node MAIN "EdgeSnap 1.0"
-@{b}EdgeSnap 1.0@{ub}
+@node MAIN "EdgeSnap 0.1 beta"
+@{b}EdgeSnap 0.1 beta@{ub}
 Window snapping for AmigaOS 4.x and MorphOS
 by Michele Dipace <michele.dipace@kaffeine.net>
 
@@ -142,6 +142,19 @@ script - is noticed at once.
 
 @node LIBRARY "For programmers"
 @{b}For programmers@{ub}
+
+@{b}Two version numbers, and why@{ub}
+EdgeSnap is 0.1: a first public release, complete in what it does but
+proven on only two machines. @{b}edgesnap.library@{ub} says 2.2, and
+that is not a mistake - a library's version is its interface, not its
+product. It reached 2 when the seam was added to the API, and the
+revision climbs with every build meant to replace an earlier one,
+because that is how the installer decides whether to replace it.
+
+While EdgeSnap is below 1.0, treat the library's interface as @{b}not
+frozen@{ub}: methods will only ever be added at the end, never moved
+or removed, but names and arguments may still change if a better shape
+turns up. If you build on it now, say which version you built against.
 
 The behaviour lives in @{b}edgesnap.library@{ub}, not in the
 commodity. The commodity is a client like any other: it contributes
