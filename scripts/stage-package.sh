@@ -47,6 +47,11 @@ else
     echo "WARNING: no MorphOS build - mos/ left empty" >&2
 fi
 
+# The licence travels with the package. The readme and the guide both
+# say the MIT text is in here, and a licence that is only in the
+# repository is not in the hands of the person holding the archive.
+cp "$ROOT/LICENSE"                     "$DEST/LICENSE"
+
 cp "$ROOT/installer/Install"           "$DEST/Install"
 cp "$ROOT/assets/icons/install-es.info" "$DEST/Install.info"
 cp "$ROOT/assets/icons/guide.info"      "$DEST/EdgeSnap.guide.info"
