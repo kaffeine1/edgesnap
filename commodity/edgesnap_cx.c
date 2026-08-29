@@ -42,7 +42,8 @@
 #include <exec/types.h>
 #include <exec/ports.h>
 #include <exec/tasks.h>
-#include <dos/dos.h> /* RETURN_*, SIGBREAKF_CTRL_C */
+#include <dos/dos.h>       /* RETURN_*, SIGBREAKF_CTRL_C                */
+#include <dos/notify.h>    /* StartNotify: prefs that change while we run */
 #include <devices/inputevent.h>
 #include <libraries/commodities.h>
 #include <intuition/intuition.h>
@@ -336,6 +337,15 @@ static void spike_out(const char *fmt, ...)
 
 static ESConfig g_cfg;
 
+/*
+ * Kept so the settings can be loaded again while running: a
+ * preferences window writes ENV:EdgeSnap.prefs and we notice, but
+ * whatever the user asked for on the command line at startup still
+ * has to win afterwards, exactly as it did the first time.
+ */
+static int g_argc;
+static char **g_argv;
+
 static void spike_config_line(const char *line, const char *src)
 {
     int rc = es_config_line(&g_cfg, line);
@@ -453,6 +463,9 @@ static int spike_arg_is(const char *arg, const char *word)
 static void spike_config_load(int argc, char **argv)
 {
     int i;
+
+    g_argc = argc;
+    g_argv = argv;
 
     es_config_defaults(&g_cfg);
     if (!spike_config_load_file(ES_PREFS_ENV)) {
@@ -842,6 +855,40 @@ static void spike_divider_close(void)
  * The feedback during a drag is the two windows resizing live, which
  * is what macOS shows too. The pointer says the rest.
  */
+/*
+ * Grabbing the seam has to activate our strip, or Intuition stops
+ * sending us mouse movements the moment the pointer leaves its eight
+ * pixels. But an invisible window holding the keyboard is a trap: the
+ * user drags the seam, types, and nothing happens anywhere.
+ *
+ * So the focus is handed on when the drag ends - to one of the two
+ * windows just resized, whichever the pointer is on. Remembering who
+ * had it before does not work: Intuition activates the window under
+ * the pointer BEFORE delivering the click, so by the time we hear
+ * about the press the answer is already "us", and sampling earlier
+ * races the activation of whatever the user clicked last. Handing it
+ * to the window under the pointer needs no history and cannot be
+ * stale: the library validated both windows a moment ago.
+ */
+static void spike_divider_pass_focus(const struct ESnapDivider *d)
+{
+    struct Window *win;
+
+    if (d == NULL || !d->present || g_divider == NULL) {
+        return;
+    }
+    if (d->vertical) {
+        win = (g_divider->WScreen->MouseX < (LONG)d->strip.x) ?
+            d->windowA : d->windowB;
+    } else {
+        win = (g_divider->WScreen->MouseY < (LONG)d->strip.y) ?
+            d->windowA : d->windowB;
+    }
+    if (win != NULL) {
+        ActivateWindow(win);
+    }
+}
+
 static void spike_divider_park(void)
 {
     struct Screen *scr;
@@ -932,16 +979,27 @@ static void spike_divider_sync(void)
     spike_publish_ignored();
 }
 
-/* One IDCMP round for the handle. */
+/*
+ * One IDCMP round for the handle.
+ *
+ * The port is taken ONCE, before the loop, and the loop stops the
+ * moment the handle is no longer the same window. Everything in here
+ * can close it - a release re-asks where the seam is and there may no
+ * longer be one, a failed move closes it outright - and re-reading
+ * g_divider->UserPort after that is a read through a freed pointer.
+ * Messages left on the old port belong to a window that has gone; the
+ * new one, if any, is waited on in the next round.
+ */
 static void spike_divider_events(void)
 {
     struct IntuiMessage *im;
+    struct MsgPort *port;
 
     if (g_divider == NULL) {
         return;
     }
-    while ((im = (struct IntuiMessage *)GetMsg(g_divider->UserPort))
-           != NULL) {
+    port = g_divider->UserPort;
+    while ((im = (struct IntuiMessage *)GetMsg(port)) != NULL) {
         ULONG cls = im->Class;
         UWORD code = im->Code;
         ReplyMsg((struct Message *)im);
@@ -969,8 +1027,19 @@ static void spike_divider_events(void)
                 g_divider_dragging = 0;
                 /* Re-ask where the seam is now: the drag moved it, and
                  * it may have stopped existing altogether. */
-                spike_divider_sync();
+                {
+                    struct ESnapDivider d;
+
+                    spike_divider_sync();
+                    if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) ==
+                            ES_OK) {
+                        spike_divider_pass_focus(&d);
+                    }
+                }
                 spike_log_flush();
+            }
+            if (g_divider == NULL || g_divider->UserPort != port) {
+                return;
             }
         } else if (cls == IDCMP_MOUSEMOVE && g_divider_dragging) {
             /*
@@ -998,6 +1067,7 @@ static void spike_divider_events(void)
                 spike_log("edgesnap: divider gone (%ld)\n", (long)rc);
                 g_divider_dragging = 0;
                 spike_divider_close();
+                return;
             }
         }
     }
@@ -1061,6 +1131,7 @@ static void spike_engine_step(void)
 {
     int new_press, new_move, new_release;
     struct ESnapReport r;
+
 
     new_press = (g_shared.presses != g_seen_presses);
     new_move = (g_shared.moves != g_seen_moves);
@@ -1284,6 +1355,25 @@ static void spike_push_config(void)
     }
 }
 
+/*
+ * Preferences changed under us. dos.library tells us the file was
+ * written; who wrote it does not matter - the preferences window, an
+ * editor, or a script - so there is nothing to co-ordinate with and no
+ * protocol to get wrong.
+ */
+static void spike_config_reload(void)
+{
+    spike_config_load(g_argc, g_argv);
+    spike_push_config();
+    spike_out("edgesnap: preferences reloaded: zones %04x, edge %d px, "
+              "corner 1/%d, drag %d px,\n",
+              (unsigned)g_cfg.engine.zones_mask, g_cfg.engine.edge_px,
+              g_cfg.engine.corner_div, g_cfg.engine.drag_min_px);
+    spike_out("edgesnap:        preview %s, panel detect %s (margin %d)\n",
+              g_cfg.preview ? "on" : "off",
+              g_cfg.panel_detect ? "on" : "off", g_cfg.panel_margin);
+}
+
 /* ------------------------------------------------------------ commodity */
 
 #define HK_SNAP_LEFT   1
@@ -1427,7 +1517,10 @@ int main(int argc, char **argv)
     struct NewBroker nb;
     LONG broker_err = 0;
     BYTE engine_sig = -1;
-    ULONG port_mask, engine_mask;
+    BYTE prefs_sig = -1;
+    struct NotifyRequest prefs_notify;
+    int prefs_watched = 0;
+    ULONG port_mask, engine_mask, prefs_mask = 0UL;
     int running = 1;
     int rc = RETURN_FAIL;
 
@@ -1448,6 +1541,18 @@ int main(int argc, char **argv)
     engine_sig = AllocSignal(-1);
     if (engine_sig == -1) {
         goto out;
+    }
+    prefs_sig = AllocSignal(-1);
+    if (prefs_sig != -1) {
+        memset(&prefs_notify, 0, sizeof(prefs_notify));
+        prefs_notify.nr_Name = (STRPTR)ES_PREFS_ENV;
+        prefs_notify.nr_Flags = NRF_SEND_SIGNAL;
+        prefs_notify.nr_stuff.nr_Signal.nr_Task = FindTask(NULL);
+        prefs_notify.nr_stuff.nr_Signal.nr_SignalNum = (UBYTE)prefs_sig;
+        if (StartNotify(&prefs_notify)) {
+            prefs_watched = 1;
+            prefs_mask = 1UL << prefs_sig;
+        }
     }
 
     memset(&nb, 0, sizeof(nb));
@@ -1563,7 +1668,11 @@ int main(int argc, char **argv)
         ULONG div_mask = (g_divider != NULL) ?
             (1UL << g_divider->UserPort->mp_SigBit) : 0UL;
         ULONG sigs = Wait(port_mask | engine_mask | div_mask |
-                          SIGBREAKF_CTRL_C);
+                          prefs_mask | SIGBREAKF_CTRL_C);
+
+        if (prefs_mask != 0UL && (sigs & prefs_mask) != 0) {
+            spike_config_reload();
+        }
 
         if (div_mask != 0 && (sigs & div_mask) != 0) {
             spike_divider_events();
@@ -1661,6 +1770,12 @@ out:
             ReplyMsg((struct Message *)msg);
         }
         DeleteMsgPort(port);
+    }
+    if (prefs_watched) {
+        EndNotify(&prefs_notify);
+    }
+    if (prefs_sig != -1) {
+        FreeSignal(prefs_sig);
     }
     if (engine_sig != -1) {
         FreeSignal(engine_sig);

@@ -251,28 +251,40 @@ int es_config_set(ESConfig *cfg, const char *key, const char *value)
         return ES_OK;
     }
     if (es_key_eq(key, "marginleft")) {
-        if (!es_parse_int(value, &iv) || iv < 0) {
+        /* An upper bound so the setting means the same thing to the
+         * preferences window as it does to this parser: a margin
+         * wider than any screen is a typo, not a preference. */
+        if (!es_parse_int(value, &iv) || iv < 0 || iv > 2000) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->margin.l = iv;
         return ES_OK;
     }
     if (es_key_eq(key, "margintop")) {
-        if (!es_parse_int(value, &iv) || iv < 0) {
+        /* An upper bound so the setting means the same thing to the
+         * preferences window as it does to this parser: a margin
+         * wider than any screen is a typo, not a preference. */
+        if (!es_parse_int(value, &iv) || iv < 0 || iv > 2000) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->margin.t = iv;
         return ES_OK;
     }
     if (es_key_eq(key, "marginright")) {
-        if (!es_parse_int(value, &iv) || iv < 0) {
+        /* An upper bound so the setting means the same thing to the
+         * preferences window as it does to this parser: a margin
+         * wider than any screen is a typo, not a preference. */
+        if (!es_parse_int(value, &iv) || iv < 0 || iv > 2000) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->margin.r = iv;
         return ES_OK;
     }
     if (es_key_eq(key, "marginbottom")) {
-        if (!es_parse_int(value, &iv) || iv < 0) {
+        /* An upper bound so the setting means the same thing to the
+         * preferences window as it does to this parser: a margin
+         * wider than any screen is a typo, not a preference. */
+        if (!es_parse_int(value, &iv) || iv < 0 || iv > 2000) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->margin.b = iv;
@@ -376,4 +388,245 @@ int es_config_line(ESConfig *cfg, const char *line)
         return ES_ERR_BAD_ARGS;
     }
     return es_config_set(cfg, key, val);
+}
+
+
+/* ------------------------------------------------- settings, described
+ *
+ * See the note in config.h: the table is the single description of the
+ * vocabulary, and everything that writes a setting goes through
+ * es_config_set() so the GUI can never accept what the file parser
+ * would refuse.
+ */
+
+static const char *const es_qual_choices[] = {
+    "none", "alt", "ctrl", "shift", 0
+};
+
+static const ESSetting es_setting_table[] = {
+    { "ZONES", "Zones that react",
+      "Which screen edges and corners snap a window.",
+      ES_SET_ZONES, 0, 0, 0 },
+    { "EDGEPX", "Edge distance",
+      "How close to an edge the pointer must come, in pixels.",
+      ES_SET_INT, 1, 200, 0 },
+    { "CORNERDIV", "Corner size",
+      "Corner length is the usable height divided by this.",
+      ES_SET_INT, 2, 16, 0 },
+    { "DRAGMINPX", "Drag threshold",
+      "How far the pointer must travel before it counts as a drag.",
+      ES_SET_INT, 1, 200, 0 },
+    { "PREVIEW", "Show the preview frame",
+      "Outline where the window will land while dragging.",
+      ES_SET_BOOL, 0, 0, 0 },
+    { "PANELDETECT", "Keep clear of docks",
+      "Detect docks and panels, and never cover them.",
+      ES_SET_BOOL, 0, 0, 0 },
+    { "PANELMARGIN", "Space around a dock",
+      "Breathing room left around a detected dock, in pixels.",
+      ES_SET_INT, 0, 200, 0 },
+    { "MARGINLEFT", "Margin: left",
+      "Extra space left free at the left edge.",
+      ES_SET_INT, 0, 2000, 0 },
+    { "MARGINTOP", "Margin: top",
+      "Extra space left free at the top edge.",
+      ES_SET_INT, 0, 2000, 0 },
+    { "MARGINRIGHT", "Margin: right",
+      "Extra space left free at the right edge.",
+      ES_SET_INT, 0, 2000, 0 },
+    { "MARGINBOTTOM", "Margin: bottom",
+      "Extra space left free at the bottom edge.",
+      ES_SET_INT, 0, 2000, 0 },
+    { "BYPASSQUAL", "Hold to ignore zones",
+      "Qualifier that lets a window be dragged past the zones.",
+      ES_SET_CHOICE, 0, 0, es_qual_choices }
+};
+
+#define ES_SETTING_COUNT \
+    ((int)(sizeof(es_setting_table) / sizeof(es_setting_table[0])))
+
+const ESSetting *es_settings(int *count)
+{
+    if (count != 0) {
+        *count = ES_SETTING_COUNT;
+    }
+    return es_setting_table;
+}
+
+int es_setting_value(const ESConfig *cfg, int index)
+{
+    if (cfg == 0 || index < 0 || index >= ES_SETTING_COUNT) {
+        return 0;
+    }
+    switch (index) {
+    case 0:  return (int)cfg->engine.zones_mask;
+    case 1:  return cfg->engine.edge_px;
+    case 2:  return cfg->engine.corner_div;
+    case 3:  return cfg->engine.drag_min_px;
+    case 4:  return cfg->preview;
+    case 5:  return cfg->panel_detect;
+    case 6:  return cfg->panel_margin;
+    case 7:  return cfg->margin.l;
+    case 8:  return cfg->margin.t;
+    case 9:  return cfg->margin.r;
+    case 10: return cfg->margin.b;
+    case 11: return cfg->bypass_qual;
+    default: return 0;
+    }
+}
+
+/* Whole numbers only, and no sprintf: this is C89 that also has to
+ * build without a C runtime inside the library. */
+static char *es_num(int v, char *end)
+{
+    int neg = v < 0;
+    unsigned u = (unsigned)(neg ? -v : v);
+
+    *--end = '\0';
+    do {
+        *--end = (char)('0' + (u % 10u));
+        u /= 10u;
+    } while (u != 0u);
+    if (neg) {
+        *--end = '-';
+    }
+    return end;
+}
+
+/* The zone mask as words. The three sets people actually use get their
+ * own name; anything else is spelled out. */
+static const char *es_zones_text(unsigned mask, char *buf, int size)
+{
+    static const struct { int zone; const char *name; } names[] = {
+        { ES_ZONE_LEFT, "left" },
+        { ES_ZONE_RIGHT, "right" },
+        { ES_ZONE_TOP_LEFT, "topleft" },
+        { ES_ZONE_TOP_RIGHT, "topright" },
+        { ES_ZONE_BOTTOM_LEFT, "bottomleft" },
+        { ES_ZONE_BOTTOM_RIGHT, "bottomright" },
+        { ES_ZONE_MAX, "maximize" }
+    };
+    unsigned halves = ES_ZONEBIT(ES_ZONE_LEFT) | ES_ZONEBIT(ES_ZONE_RIGHT);
+    unsigned corners = ES_ZONEBIT(ES_ZONE_TOP_LEFT) |
+                       ES_ZONEBIT(ES_ZONE_TOP_RIGHT) |
+                       ES_ZONEBIT(ES_ZONE_BOTTOM_LEFT) |
+                       ES_ZONEBIT(ES_ZONE_BOTTOM_RIGHT);
+    int n = 0;
+    int i;
+
+    if (mask == ES_ZONEMASK_ALL) { return "all"; }
+    if (mask == 0u)              { return "none"; }
+    if (mask == halves)          { return "halves"; }
+    if (mask == corners)         { return "corners"; }
+
+    for (i = 0; i < 7; i++) {
+        const char *p;
+
+        if ((mask & ES_ZONEBIT(names[i].zone)) == 0u) {
+            continue;
+        }
+        if (n > 0 && n < size - 1) {
+            buf[n++] = ',';
+        }
+        for (p = names[i].name; *p != '\0' && n < size - 1; p++) {
+            buf[n++] = *p;
+        }
+    }
+    buf[n < size ? n : size - 1] = '\0';
+    return buf;
+}
+
+int es_setting_apply(ESConfig *cfg, int index, int value)
+{
+    const ESSetting *s;
+    char num[16];
+    char zones[96];
+    const char *text;
+
+    if (cfg == 0 || index < 0 || index >= ES_SETTING_COUNT) {
+        return ES_ERR_BAD_ARGS;
+    }
+    s = &es_setting_table[index];
+    switch (s->kind) {
+    case ES_SET_BOOL:
+        text = value ? "yes" : "no";
+        break;
+    case ES_SET_CHOICE:
+        {
+            int n = 0;
+
+            while (s->choices[n] != 0) {
+                n++;
+            }
+            if (value < 0 || value >= n) {
+                return ES_ERR_BAD_ARGS;
+            }
+            text = s->choices[value];
+        }
+        break;
+    case ES_SET_ZONES:
+        text = es_zones_text((unsigned)value, zones, (int)sizeof(zones));
+        break;
+    default:
+        text = es_num(value, num + sizeof(num));
+        break;
+    }
+    return es_config_set(cfg, s->key, text);
+}
+
+static int es_emit(char *buf, int size, int at, const char *text)
+{
+    while (*text != '\0') {
+        if (at < size - 1) {
+            buf[at] = *text;
+        }
+        at++;
+        text++;
+    }
+    return at;
+}
+
+int es_config_write(const ESConfig *cfg, char *buf, int size)
+{
+    static const char header[] =
+        "# EdgeSnap preferences\n"
+        "# Written by the EdgeSnap preferences program.\n"
+        "# Every setting also works as a Shell argument:\n"
+        "#   EdgeSnap ZONES=halves EDGEPX=24\n"
+        "\n";
+    char num[16];
+    char zones[96];
+    int at = 0;
+    int i;
+
+    if (cfg == 0 || buf == 0 || size <= 0) {
+        return 0;
+    }
+    at = es_emit(buf, size, at, header);
+    for (i = 0; i < ES_SETTING_COUNT; i++) {
+        const ESSetting *s = &es_setting_table[i];
+        int v = es_setting_value(cfg, i);
+        const char *text;
+
+        switch (s->kind) {
+        case ES_SET_BOOL:
+            text = v ? "yes" : "no";
+            break;
+        case ES_SET_CHOICE:
+            text = s->choices[v];
+            break;
+        case ES_SET_ZONES:
+            text = es_zones_text((unsigned)v, zones, (int)sizeof(zones));
+            break;
+        default:
+            text = es_num(v, num + sizeof(num));
+            break;
+        }
+        at = es_emit(buf, size, at, s->key);
+        at = es_emit(buf, size, at, "=");
+        at = es_emit(buf, size, at, text);
+        at = es_emit(buf, size, at, "\n");
+    }
+    buf[at < size ? at : size - 1] = '\0';
+    return at;
 }

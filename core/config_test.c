@@ -154,6 +154,139 @@ static void test_bypass_qualifier(void)
     CHECK(es_config_line(&c, "BYPASS=amiga") == ES_ERR_BAD_ARGS);
 }
 
+
+/* ------------------------------------------------- settings + writing
+ *
+ * The preferences GUI and the file have to agree for ever: whatever
+ * the window can produce, the parser must read back as the same
+ * settings. These check the round trip, not the spelling.
+ */
+
+static int same_config(const ESConfig *a, const ESConfig *b)
+{
+    return a->engine.zones_mask == b->engine.zones_mask &&
+           a->engine.edge_px == b->engine.edge_px &&
+           a->engine.corner_div == b->engine.corner_div &&
+           a->engine.drag_min_px == b->engine.drag_min_px &&
+           a->margin.l == b->margin.l && a->margin.t == b->margin.t &&
+           a->margin.r == b->margin.r && a->margin.b == b->margin.b &&
+           a->panel_detect == b->panel_detect &&
+           a->panel_margin == b->panel_margin &&
+           a->preview == b->preview &&
+           a->bypass_qual == b->bypass_qual;
+}
+
+static void feed_text(ESConfig *cfg, const char *text)
+{
+    char line[256];
+    int n = 0;
+
+    es_config_defaults(cfg);
+    for (;;) {
+        if (*text == '\n' || *text == '\0') {
+            line[n] = '\0';
+            es_config_line(cfg, line);
+            n = 0;
+            if (*text == '\0') {
+                return;
+            }
+        } else if (n < (int)sizeof(line) - 1) {
+            line[n++] = *text;
+        }
+        text++;
+    }
+}
+
+static void test_write_round_trip(void)
+{
+    ESConfig a, b;
+    char buf[1024];
+    char small[8];
+    int n;
+
+    es_config_defaults(&a);
+    n = es_config_write(&a, buf, (int)sizeof(buf));
+    CHECK(n > 0 && n < (int)sizeof(buf));
+    feed_text(&b, buf);
+    CHECK(same_config(&a, &b));
+
+    /* something nobody would write by hand */
+    es_config_defaults(&a);
+    a.engine.zones_mask = ES_ZONEBIT(ES_ZONE_LEFT) |
+                          ES_ZONEBIT(ES_ZONE_BOTTOM_RIGHT);
+    a.engine.edge_px = 37;
+    a.engine.corner_div = 5;
+    a.engine.drag_min_px = 9;
+    a.margin.l = 11; a.margin.t = 12; a.margin.r = 13; a.margin.b = 14;
+    a.panel_detect = 0;
+    a.panel_margin = 21;
+    a.preview = 0;
+    a.bypass_qual = ES_QUAL_SHIFT;
+    n = es_config_write(&a, buf, (int)sizeof(buf));
+    CHECK(n > 0);
+    feed_text(&b, buf);
+    CHECK(same_config(&a, &b));
+
+    /* a buffer too small says what it needed and writes nothing past
+     * the end it was given */
+    small[7] = '!';
+    n = es_config_write(&a, small, 4);
+    CHECK(n > 4);
+    CHECK(small[7] == '!');
+}
+
+static void test_settings_table(void)
+{
+    const ESSetting *t;
+    int count = 0;
+    int i;
+    ESConfig cfg;
+
+    t = es_settings(&count);
+    CHECK(t != 0);
+    CHECK(count > 0);
+
+    for (i = 0; i < count; i++) {
+        CHECK(t[i].key != 0);
+        CHECK(t[i].label != 0);
+        CHECK(t[i].help != 0);
+        if (t[i].kind == ES_SET_CHOICE) {
+            CHECK(t[i].choices != 0);
+            CHECK(t[i].choices[0] != 0);
+        }
+        if (t[i].kind == ES_SET_INT) {
+            CHECK(t[i].min < t[i].max);
+        }
+    }
+
+    /* what the GUI reads back is what the GUI set */
+    es_config_defaults(&cfg);
+    for (i = 0; i < count; i++) {
+        int v;
+
+        switch (t[i].kind) {
+        case ES_SET_INT:    v = t[i].max; break;
+        case ES_SET_BOOL:   v = 0; break;
+        case ES_SET_CHOICE: v = 1; break;
+        default:            v = (int)ES_ZONEBIT(ES_ZONE_RIGHT); break;
+        }
+        CHECK(es_setting_apply(&cfg, i, v) == ES_OK);
+        CHECK(es_setting_value(&cfg, i) == v);
+    }
+
+    /* and the GUI cannot slip past the parser's rules */
+    es_config_defaults(&cfg);
+    for (i = 0; i < count; i++) {
+        if (t[i].kind != ES_SET_INT) {
+            continue;
+        }
+        CHECK(es_setting_apply(&cfg, i, t[i].max + 1) == ES_ERR_BAD_ARGS);
+        CHECK(es_setting_apply(&cfg, i, t[i].min - 1) == ES_ERR_BAD_ARGS);
+    }
+    CHECK(es_setting_apply(&cfg, -1, 0) == ES_ERR_BAD_ARGS);
+    CHECK(es_setting_apply(&cfg, count, 0) == ES_ERR_BAD_ARGS);
+}
+
 int main(void)
 {
     test_defaults();
@@ -166,7 +299,9 @@ int main(void)
     test_bypass_qualifier();
 
     if (g_failures == 0) {
-        printf("config_test: all tests passed\n");
+        test_settings_table();
+    test_write_round_trip();
+    printf("config_test: all tests passed\n");
         return 0;
     }
     printf("config_test: %d failure(s)\n", g_failures);
