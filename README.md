@@ -208,8 +208,10 @@ Outputs: `build/os4/EdgeSnap`, `build/morphos/EdgeSnap`.
 
 ## Testing on the target systems
 
-QEMU OS4 VM (the telegram-amiga one on `/Volumes/EXT`): build an ISO and
-hot-swap it into the running VM's CD drive, no network needed:
+QEMU AmigaOS 4 VM: build an ISO and hot-swap it into the running VM's
+CD drive, no network needed. The scripts default to the author's VM
+directory; point them elsewhere with `ES_OS4_VMDIR` (and
+`ES_MOS_VMDIR` for MorphOS):
 
 ```sh
 scripts/make-test-iso.sh     # unique 16-char volume label each time

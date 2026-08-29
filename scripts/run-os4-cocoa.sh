@@ -13,7 +13,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-VMDIR="/Volumes/EXT/Macchine Virtuali/Amiga/emu/telegram-amiga/os4"
+VMDIR="${ES_OS4_VMDIR:-/Volumes/EXT/Macchine Virtuali/Amiga/emu/telegram-amiga/os4}"
 
 ISO="${1:-}"
 if [ -z "$ISO" ]; then

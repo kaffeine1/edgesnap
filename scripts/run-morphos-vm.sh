@@ -9,7 +9,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-VMDIR="/Volumes/EXT/Macchine Virtuali/Amiga/emu/telegram-amiga/morphos"
+VMDIR="${ES_MOS_VMDIR:-/Volumes/EXT/Macchine Virtuali/Amiga/emu/telegram-amiga/morphos}"
 
 ISO="${1:-}"
 if [ -z "$ISO" ]; then

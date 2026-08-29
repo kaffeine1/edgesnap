@@ -8,6 +8,34 @@ with no system patches. The design target is an upstream-quality shared
 library that can be proposed for adoption by both operating systems. This is
 a project goal, not a claim that either system has already adopted it.
 
+## What came before
+
+Window arrangers are not new on these systems. **ZapperNG** and
+**WinAction** are the ones usually named, and both are driven by
+hotkeys: you press a key and the active window is moved or resized.
+That works, and for many people it is enough.
+
+EdgeSnap is a different bet, in three ways.
+
+**The gesture is the drag.** You throw a window at an edge and it
+fills that half or quarter, with a frame showing where it will land
+before you let go - the thing Windows and macOS users reach for
+without thinking. The hotkeys are still there for people who prefer
+them, and they take the same road through the library.
+
+**The seam is live.** Once two windows share an edge, that edge can be
+dragged, and both are resized together. A pair of tiled windows stops
+being two independent placements and becomes a layout.
+
+**The behaviour is a library, not a program.** `edgesnap.library` is
+the deliverable; the commodity is a client of it, and any other
+program can ask for a window to be placed the same way. A hotkey tool
+cannot be reused by anything else - this can.
+
+Where EdgeSnap should be honest: none of the above makes it better for
+someone who is happy pressing a key. It is more code, more state, and
+more that can go wrong in a drag than in a keystroke.
+
 ## Architectural mission
 
 `edgesnap.library` is the product boundary. The commodity and any future

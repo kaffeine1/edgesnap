@@ -9,11 +9,14 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-MON="/Volumes/EXT/Macchine Virtuali/Amiga/emu/telegram-amiga/os4/qemu-monitor-2223.sock"
+# Where the VM lives. Override with ES_OS4_VMDIR; the default is
+# the author's layout, which is the only one that has ever run it.
+VMDIR="${ES_OS4_VMDIR:-/Volumes/EXT/Macchine Virtuali/Amiga/emu/telegram-amiga/os4}"
+MON="$VMDIR/qemu-monitor-2223.sock"
 
 if [ ! -S "$MON" ]; then
     echo "ERROR: monitor socket not found - is the OS4 VM running?" >&2
-    echo "  start it with: \"/Volumes/EXT/Macchine Virtuali/Amiga/emu/telegram-amiga/os4/run-os4-2223.sh\"" >&2
+    echo "  start it with: scripts/run-os4-cocoa.sh" >&2
     exit 1
 fi
 

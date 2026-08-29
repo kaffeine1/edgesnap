@@ -26,7 +26,10 @@
 
 import os, socket, subprocess, sys, time
 
-MON = "/Volumes/EXT/Macchine Virtuali/Amiga/emu/telegram-amiga/os4/qemu-monitor-2223.sock"
+MON = os.environ.get(
+    "ES_OS4_MONITOR",
+    "/Volumes/EXT/Macchine Virtuali/Amiga/emu/telegram-amiga/os4/"
+    "qemu-monitor-2223.sock")
 TMP = "/tmp"
 
 class VM(object):
