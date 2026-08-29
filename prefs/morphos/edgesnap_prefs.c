@@ -102,6 +102,7 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
 
             if (o != NULL) {
                 set(o, MUIA_Selected, value ? TRUE : FALSE);
+                set(o, MUIA_CycleChain, 1);
             }
             return o;
         }
@@ -112,6 +113,7 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
 
             if (o != NULL) {
                 set(o, MUIA_Cycle_Active, value);
+                set(o, MUIA_CycleChain, 1);
             }
             return o;
         }
@@ -122,6 +124,7 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
             MUIA_Numeric_Min, s->min,
             MUIA_Numeric_Max, s->max,
             MUIA_Numeric_Value, value,
+            MUIA_CycleChain, 1,
         End;
     }
 }
@@ -146,6 +149,7 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
             continue;
         }
         set(check, MUIA_Selected, on ? TRUE : FALSE);
+        set(check, MUIA_CycleChain, 1);
         tags[n].ti_Tag = MUIA_Group_Child;
         tags[n++].ti_Data = (ULONG)check;
         if (label != NULL) {
