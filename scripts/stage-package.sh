@@ -5,13 +5,15 @@
 # Fill a directory with the release package, so that the CD image and a
 # copy on a card are the same thing built once:
 #
-#   Install (+ icon)   the Commodore Installer script - double-click it
-#   README.txt         what it is, what it does, how to configure it
-#   EdgeSnap.prefs     the commented settings template
-#   os4/ mos/          one build per system, picked by the installer
+#   Install (+ icon)        the Commodore Installer - double-click it
+#   EdgeSnap.guide (+icon)  the documentation
+#   EdgeSnap.readme (+icon) the Aminet-style summary
+#   EdgeSnap.prefs          the commented settings template (no icon)
+#   os4/ mos/               one build per system, picked by the installer
 #
-# The per-system drawers deliberately have no icons: nothing in them is
-# meant to be started by hand.
+# Only those three carry icons. The programs themselves are deliberately
+# invisible: the installer knows where they go, and a drawer full of
+# executables invites people to start the wrong one by hand.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -35,56 +37,45 @@ else
     echo "WARNING: no MorphOS build - mos/ left empty" >&2
 fi
 
-cp "$ROOT/installer/Install"          "$DEST/Install"
-cp "$ROOT/assets/Install.info"        "$DEST/Install.info"
-cp "$ROOT/assets/EdgeSnap.info"       "$DEST/os4/EdgeSnap.info"
-cp "$ROOT/assets/EdgeSnap.info"       "$DEST/mos/EdgeSnap.info" 2>/dev/null || true
-cp "$ROOT/assets/README.txt.info"     "$DEST/README.txt.info"
-cp "$ROOT/assets/EdgeSnap.prefs.info" "$DEST/EdgeSnap.prefs.info"
+cp "$ROOT/installer/Install"           "$DEST/Install"
+cp "$ROOT/assets/icons/install-es.info" "$DEST/Install.info"
+cp "$ROOT/assets/icons/guide.info"      "$DEST/EdgeSnap.guide.info"
+cp "$ROOT/assets/icons/readme.info"     "$DEST/EdgeSnap.readme.info"
 
-cat > "$DEST/README.txt" <<'EOF'
-EdgeSnap - window snapping for AmigaOS 4.x and MorphOS
-Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
-Distributed under the MIT license.
+"$ROOT/scripts/make-guide.sh" "$DEST/EdgeSnap.guide" >/dev/null
 
-TO INSTALL: double-click the Install icon.
+cat > "$DEST/EdgeSnap.readme" <<'EOF'
+Short:        Drag windows to screen edges to tile them
+Author:       michele.dipace@kaffeine.net (Michele Dipace)
+Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
+Type:         util/wb
+Version:      1.0
+Architecture: ppc-amigaos >= 4.0; ppc-morphos >= 3.0
+Distribution: Aminet
+License:      MIT
 
-It recognises the system, proposes the matching build, and asks before
-doing anything. It puts edgesnap.library into LIBS:, the commodity into
-C:, and one line into S:User-Startup so that snapping is simply there
-from the next boot - nobody has to start anything by hand. Updating is
-just installing again: the running copy is stopped and replaced, with
-no reboot.
+EdgeSnap gives AmigaOS 4.x and MorphOS the window snapping of Windows
+and macOS. Drag a window by its title bar until the POINTER touches a
+screen edge or corner: a frame shows where it will land, and letting
+go fills that half or quarter of the screen.
 
-(From a Shell instead: make this drawer the current directory - CD to
-it - and run "Installer Install", because the script's paths are
-relative to itself.)
+  - docks and panels are detected and never covered;
+  - two windows side by side share their edge: press the seam and the
+    pointer becomes a double arrow, drag it and both are resized;
+  - hotkeys for those who prefer them (ctrl alt cursor keys);
+  - it is a commodity: it starts with the system and Exchange enables,
+    disables or removes it like any other.
 
-WHAT IT DOES
+The behaviour lives in edgesnap.library, not in the commodity, so any
+program can ask for the same things - the commodity is a client like
+any other. esnaptest, in the package, is a worked example.
 
-  - Drag a window's title bar until the POINTER touches a screen edge
-    or corner: a frame shows where it will land; release and it snaps
-    to that half or quarter. Docks are detected and never covered.
-  - When two windows end up side by side, a handle appears on the seam:
-    drag it and both are resized, so half/half becomes 60/40.
-  - Hotkeys: ctrl alt cursor left/right/up snap the active window,
-    ctrl alt cursor down puts it back where it was.
-  - ctrl alt d prints a window dump, for diagnosing dock detection.
-  - Exchange enables, disables or removes it, as with any commodity.
-  - "EdgeSnap QUIT" stops a running copy from a Shell or a script.
-    Starting it twice by accident is simply refused.
+TO INSTALL: double-click the Install icon. It recognises the system,
+proposes the matching build, and puts everything where it belongs -
+including one line in S:User-Startup, so snapping is simply there from
+the next boot. Updating is installing again: no reboot needed.
 
-SETTINGS
-
-  ENVARC:EdgeSnap.prefs - EdgeSnap.prefs here documents every setting
-  and changes nothing on its own. The same KEY=VALUE words work as
-  Shell arguments: EdgeSnap ZONES=halves EDGEPX=24 BYPASSQUAL=alt
-
-FOR DEVELOPERS
-
-  os4/esnaptest and mos/esnaptest are small clients that open
-  edgesnap.library and drive its public API - useful as an example of
-  how another program can ask for windows to be placed.
+Full documentation is in EdgeSnap.guide.
 EOF
 
 cat > "$DEST/EdgeSnap.prefs" <<'EOF'

@@ -32,6 +32,12 @@ mkdir -p "$DEST"
 "$ROOT/scripts/stage-package.sh" "$DEST"
 cp "$ROOT/assets/EdgeSnapDrawer.info" "$CARD/EdgeSnap.info"
 
+# The archive as it will reach testers, next to the drawer it unpacks
+# to - so both can be tried from the same card.
+if [ -f "$ROOT/build/EdgeSnap-1.0.lha" ]; then
+    cp "$ROOT/build/EdgeSnap-1.0.lha" "$CARD/EdgeSnap-1.0.lha"
+fi
+
 # macOS litters removable media with these; on Ambient they show up as
 # junk files next to the real ones.
 find "$DEST" -name '._*' -delete 2>/dev/null || true

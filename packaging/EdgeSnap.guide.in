@@ -1,0 +1,176 @@
+@database EdgeSnap
+@$VER: EdgeSnap.guide 1.0 (29.8.2026)
+@author "Michele Dipace <michele.dipace@kaffeine.net>"
+@(c) "Copyright (c) 2026 Michele Dipace - MIT licence"
+@wordwrap
+
+@node MAIN "EdgeSnap 1.0"
+@{b}EdgeSnap 1.0@{ub}
+Window snapping for AmigaOS 4.x and MorphOS
+by Michele Dipace <michele.dipace@kaffeine.net>
+
+  @{" What it does        " link ABOUT}
+  @{" Installing it       " link INSTALL}
+  @{" Using it            " link USING}
+  @{" Settings            " link SETTINGS}
+  @{" From the Shell      " link SHELL}
+  @{" For programmers     " link LIBRARY}
+  @{" Licence and author  " link AUTHOR}
+
+@endnode
+
+@node ABOUT "What it does"
+@{b}What it does@{ub}
+
+Drag a window by its title bar until the @{b}pointer@{ub} touches a
+screen edge or a corner. A frame shows where the window will land;
+let go and it fills that half or that quarter of the screen - the
+behaviour Windows and macOS users take for granted, on systems that
+never had it.
+
+Two things it is careful about:
+
+@{b}Docks are never covered.@{ub} A dock or panel along an edge is
+detected and the space it occupies is left alone, with a little
+breathing room, so a snapped window sits beside it rather than on
+top of it. This works with docks that float away from the edge too.
+
+@{b}Windows share their edge.@{ub} When two windows end up side by
+side, the seam between them can be dragged: the pointer becomes a
+double arrow and both windows are resized at once, so half and half
+becomes sixty and forty. Neither window can be squeezed out of
+existence.
+
+It runs as a commodity, so it starts with the system and Exchange
+enables, disables or removes it like any other.
+
+@endnode
+
+@node INSTALL "Installing it"
+@{b}Installing it@{ub}
+
+Double-click the @{b}Install@{ub} icon. That is all: the installer
+recognises the system it is running on, proposes the matching build,
+and asks before doing anything.
+
+What it puts where:
+
+  @{b}LIBS:edgesnap.library@{ub}   everything EdgeSnap knows how to do
+  @{b}C:EdgeSnap@{ub}              the commodity you interact with
+  @{b}ENVARC:EdgeSnap.prefs@{ub}   the settings, commented, changing nothing
+  one line in @{b}S:User-Startup@{ub}   so it is simply there at every boot
+
+@{b}Updating@{ub} is installing again. The running copy is stopped,
+the old library is let go of, and the new one takes over - no reboot,
+and nothing for you to type.
+
+To remove it: delete the two files above and the line between
+@{b};BEGIN EdgeSnap@{ub} and @{b};END EdgeSnap@{ub} in S:User-Startup.
+
+@endnode
+
+@node USING "Using it"
+@{b}Using it@{ub}
+
+@{b}Snapping@{ub}
+Drag a window's title bar until the pointer touches an edge or a
+corner, then release. The zones are: left and right edges for halves,
+the four corners for quarters, the top edge to maximise.
+
+If a window is already snapped to one side, snapping another to the
+other side gives it the space that is actually left, not a rigid
+half - so a sixty/forty split stays sixty/forty.
+
+@{b}The seam@{ub}
+Where two snapped windows meet there is nothing to see, as on macOS.
+Press on the join and the pointer becomes a double arrow: drag, and
+both windows are resized together. Let go and the pointer goes back.
+Dragging far towards one side stops when a window would become too
+small - that is a limit, not a fault.
+
+@{b}Hotkeys@{ub}
+  @{b}ctrl alt cursor left@{ub}    snap the active window left
+  @{b}ctrl alt cursor right@{ub}   snap it right
+  @{b}ctrl alt cursor up@{ub}      maximise it
+  @{b}ctrl alt cursor down@{ub}    put it back where it was
+  @{b}ctrl alt d@{ub}              print a window dump, to diagnose dock detection
+
+@{b}Getting past the zones@{ub}
+If you want to drag a window right up to the edge without it
+snapping, set @{b}BYPASSQUAL@{ub} (see @{" Settings " link SETTINGS})
+and hold that key while you drag.
+
+@endnode
+
+%%SETTINGS%%
+
+@node SHELL "From the Shell"
+@{b}From the Shell@{ub}
+
+  @{b}EdgeSnap@{ub}
+      Start it. Settings come from ENV: or ENVARC:, and anything you
+      add on the command line wins over the file.
+
+  @{b}EdgeSnap ZONES=halves EDGEPX=24@{ub}
+      Start it with those settings for this run.
+
+  @{b}EdgeSnap QUIT@{ub}
+      Stop the copy that is running, and start nothing. This is what
+      the installer uses to replace a running EdgeSnap without a
+      reboot. Starting EdgeSnap a second time by accident is simply
+      refused; only QUIT stops it.
+
+Run from a Shell rather than with @{b}Run >NIL:@{ub} and it prints
+what it decides, drag by drag - useful when something does not behave
+as expected.
+
+Settings are re-read while it runs: whatever writes
+@{b}ENV:EdgeSnap.prefs@{ub} - the preferences window, an editor, a
+script - is noticed at once.
+
+@endnode
+
+@node LIBRARY "For programmers"
+@{b}For programmers@{ub}
+
+The behaviour lives in @{b}edgesnap.library@{ub}, not in the
+commodity. The commodity is a client like any other: it contributes
+raw input and draws the preview frame, and every decision - drag
+detection, zones, snapping, restoring, the seam - happens inside the
+library.
+
+That means another program can ask for the same things:
+
+  ESnap_SnapWindow(window, zone)    place a window in a zone
+  ESnap_UnsnapWindow(window)        put it back where it was
+  ESnap_QueryZone(...)              ask what a zone's rectangle is
+  ESnap_QueryDivider(...)           find the seam between two windows
+  ESnap_MoveDivider(position)       move it, resizing both
+
+The library validates every window handle on every call, so a window
+that has been closed gives an error rather than a crash.
+
+@{b}esnaptest@{ub}, in the os4 and mos drawers of this package, is a
+small client that opens the library and drives the whole API - a
+worked example.
+
+@endnode
+
+@node AUTHOR "Licence and author"
+@{b}Licence and author@{ub}
+
+EdgeSnap was written by @{b}Michele Dipace@{ub}
+<michele.dipace@kaffeine.net>.
+
+It is distributed under the MIT licence: you may use, copy, change
+and redistribute it, including in commercial work, as long as the
+copyright notice and the licence text travel with it. It comes with
+no warranty.
+
+Prior art worth naming, because EdgeSnap is not the first to move
+windows about on these systems: @{b}ZapperNG@{ub} and
+@{b}WinAction@{ub} both arrange windows by hotkey. What EdgeSnap adds
+is the drag - the edge itself is the target - and a library any
+program can call.
+
+@endnode
