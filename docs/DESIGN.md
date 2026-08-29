@@ -10,12 +10,15 @@ a project goal, not a claim that either system has already adopted it.
 
 ## What came before
 
-Window arrangers are not new on these systems. **ZapperNG** and
-**WinAction** are the ones usually named, and both are driven by
-hotkeys: you press a key and the active window is moved or resized.
-That works, and for many people it is enough.
+Window snapping is not new on the Amiga, and the closest prior art is
+**GoSnap**, which solves the classic AmigaOS 3.x case and solves it
+well. EdgeSnap is not an attempt to replace it or to do better in that
+world: on 3.x, GoSnap is the answer. **ZapperNG** and **WinAction**
+belong in the same conversation, arranging windows from hotkeys.
 
-EdgeSnap is a different bet, in three ways.
+EdgeSnap starts from a different place - AmigaOS 4.x and MorphOS, with
+their compositing, docks, ReAction and MUI - and makes a different bet,
+in three ways.
 
 **The gesture is the drag.** You throw a window at an edge and it
 fills that half or quarter, with a frame showing where it will land

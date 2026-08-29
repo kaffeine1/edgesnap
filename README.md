@@ -36,6 +36,36 @@ The project must not claim official adoption before that review happens; it
 must earn it through API quality, compatibility, documentation, and reliable
 target-system behavior.
 
+## Prior art
+
+Window snapping is not new on the Amiga, and the closest and most
+successful piece of prior art is **GoSnap**.
+
+**GoSnap solves the classic AmigaOS 3.x case, and solves it well.** It
+is the answer for that world, it is used, and EdgeSnap is not an
+attempt to replace it or to improve on it there. Anyone on 3.x is
+better served by GoSnap today.
+
+**EdgeSnap is written for AmigaOS 4.x and MorphOS.** That is not a
+detail of packaging: these systems bring compositing, ReAction and MUI,
+docks and panels that must not be covered, screens of a size where
+tiling actually pays off, and a commodity and library model EdgeSnap
+leans on throughout. Aiming at them from the first line is what makes
+the dock awareness, the live preview and the two native preferences
+windows possible.
+
+**And the goal is not only interactive snapping.** The product boundary
+is `edgesnap.library`: a documented, versioned service that any program
+can call to have windows placed, to ask where a zone is, or to find and
+move the seam between two tiled windows. The commodity that ships with
+it is a client of that library like any other would be. A window
+utility ends at its own user interface; a shared service does not, and
+that is the bet EdgeSnap is making.
+
+Also worth naming for completeness: **ZapperNG** and **WinAction**,
+which arrange windows from hotkeys. EdgeSnap keeps hotkeys too, but its
+first gesture is the drag.
+
 ## Status
 
 - **Phase 0 (spike): validated on BOTH targets** - AmigaOS 4 (QEMU,
