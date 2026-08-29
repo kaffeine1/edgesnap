@@ -13,7 +13,7 @@ OUT="$ROOT/build/iso-mos/$LABEL.iso"
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE"
-for f in EdgeSnap edgesnap.library esnaptest; do
+for f in EdgeSnap EdgeSnapPrefs edgesnap.library esnaptest; do
     if [ -f "$ROOT/build/morphos/$f" ]; then
         cp "$ROOT/build/morphos/$f" "$STAGE/$f"
     fi

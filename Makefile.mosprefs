@@ -1,0 +1,22 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+#
+# The MorphOS preferences window (MUI).
+# -noixemul is mandatory for native Amiga API calls.
+
+CC = ppc-morphos-gcc
+CFLAGS ?= -Wall -Wextra -O2 -noixemul -Icore -Iinclude -Iprefs
+TARGET ?= build/morphos/EdgeSnapPrefs
+SRC := prefs/morphos/edgesnap_prefs.c prefs/prefs_io.c core/config.c \
+       core/engine.c core/zones.c core/panels.c
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	mkdir -p "$(dir $(TARGET))"
+	$(CC) $(CFLAGS) -o "$@" $(SRC)
+
+clean:
+	rm -f "$(TARGET)"

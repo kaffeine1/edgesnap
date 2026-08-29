@@ -26,7 +26,11 @@ if pgrep -f "qemu-system-ppc.*morphos.*hd.img" >/dev/null 2>&1; then
     exit 1
 fi
 
-rm -f "$VMDIR/qemu-monitor.sock"
+# The monitor socket lives outside the VM directory: the EXT volume
+# refuses to bind one ("Operation not permitted"), and the socket is
+# ours anyway - nothing in the VM's own files needs it.
+MON="${MORPHOS_MONITOR:-/tmp/morphos-monitor.sock}"
+rm -f "$MON"
 nohup qemu-system-ppc \
   -machine pegasos2 \
   -m 512 \
@@ -40,9 +44,10 @@ nohup qemu-system-ppc \
   -device ne2k_pci,netdev=net0 \
   -device usb-tablet \
   -serial file:"$VMDIR/serial.log" \
-  -monitor unix:"$VMDIR/qemu-monitor.sock",server,nowait \
+  -monitor unix:"$MON",server,nowait \
   -display cocoa \
   -name morphos-edgesnap \
   >/dev/null 2>&1 &
 
 echo "started qemu pid $! (cocoa), CD: $ISO"
+echo "monitor: $MON"
