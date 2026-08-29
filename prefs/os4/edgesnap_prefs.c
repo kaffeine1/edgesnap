@@ -1,0 +1,470 @@
+/*
+ * Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+ * SPDX-License-Identifier: MIT
+ *
+ * EdgeSnap preferences for AmigaOS 4.x - a ReAction window.
+ *
+ * The window is not written out gadget by gadget: it is built by
+ * walking es_settings(), the table in core/config.c that describes the
+ * vocabulary. An integer becomes an integer gadget with its own range,
+ * a boolean a checkbox, a choice a chooser, the zone mask a row of
+ * checkboxes. Adding a setting to the table puts it in this window and
+ * in the MorphOS one without either being touched.
+ *
+ * Save writes ENVARC: and ENV:, Use writes ENV: only, Cancel writes
+ * nothing - the three buttons every Amiga preferences program has. The
+ * running EdgeSnap watches ENV: and reconfigures itself, so there is
+ * no protocol between this program and the commodity at all.
+ */
+
+/*
+ * Call the system by name - NewObject(), Open() - instead of through
+ * an interface pointer at every site. This has to be defined before
+ * ANY header: reaction_macros.h chooses between two sets of macros on
+ * it, and getting the answer after those macros are defined expands
+ * IIntuition->IIntuition->NewObject().
+ */
+#ifndef __USE_INLINE__
+#define __USE_INLINE__
+#endif
+
+#include <exec/types.h>
+#include <intuition/intuition.h>
+#include <intuition/gadgetclass.h>
+#include <libraries/gadtools.h>
+#include <classes/window.h>
+#include <gadgets/layout.h>
+#include <gadgets/button.h>
+#include <gadgets/checkbox.h>
+#include <gadgets/integer.h>
+#include <gadgets/chooser.h>
+#include <images/label.h>
+#include <reaction/reaction_macros.h>
+
+#include <proto/exec.h>
+#include <proto/dos.h>
+#include <proto/intuition.h>
+#include <proto/utility.h>
+#include <proto/window.h>
+#include <proto/layout.h>
+#include <proto/button.h>
+#include <proto/checkbox.h>
+#include <proto/integer.h>
+#include <proto/chooser.h>
+#include <proto/label.h>
+
+#include "prefs_io.h"
+#include "zones.h"
+
+/* ReAction's call chains are deep and the preferences file is read
+ * into a buffer of its own: ask for room rather than find out. */
+static const char es_stack_cookie[] __attribute__((used)) =
+    "$STACK:65536";
+static const char es_version_cookie[] __attribute__((used)) =
+    "$VER: EdgeSnapPrefs 1.0 (29.8.2026) Michele Dipace";
+
+#define ES_MAX_SETTINGS 32
+#define ES_ZONE_COUNT   7
+
+#define GID_SAVE    1
+#define GID_USE     2
+#define GID_CANCEL  3
+#define GID_SETTING 100          /* + index of the setting            */
+#define GID_ZONE    200          /* + zone number                     */
+
+struct ESPrefsGui {
+    Object *win;
+    struct Window *window;
+    Object *field[ES_MAX_SETTINGS];      /* one gadget per setting    */
+    Object *zone[ES_ZONE_COUNT + 1];     /* checkboxes for the mask   */
+    ESConfig cfg;
+};
+
+/*
+ * The proto/ headers declare these for us; here are the definitions.
+ * They cannot be static: the inline stubs in those headers refer to
+ * them by name. IExec and IDOS come from the startup code, but
+ * Intuition is ours to open.
+ */
+struct Library *IntuitionBase;
+struct IntuitionIFace *IIntuition;
+
+struct Library *WindowBase, *LayoutBase, *ButtonBase, *CheckBoxBase;
+struct Library *IntegerBase, *ChooserBase, *LabelBase;
+struct WindowIFace *IWindow;
+struct LayoutIFace *ILayout;
+struct ButtonIFace *IButton;
+struct CheckBoxIFace *ICheckBox;
+struct IntegerIFace *IInteger;
+struct ChooserIFace *IChooser;
+struct LabelIFace *ILabel;
+
+static const int es_zone_order[ES_ZONE_COUNT] = {
+    ES_ZONE_LEFT, ES_ZONE_RIGHT, ES_ZONE_TOP_LEFT, ES_ZONE_TOP_RIGHT,
+    ES_ZONE_BOTTOM_LEFT, ES_ZONE_BOTTOM_RIGHT, ES_ZONE_MAX
+};
+
+static const char *const es_zone_label[ES_ZONE_COUNT] = {
+    "Left", "Right", "Top left", "Top right",
+    "Bottom left", "Bottom right", "Maximize"
+};
+
+/* ----------------------------------------------------------- classes */
+
+static struct Library *es_open_class(const char *name, const char *iface,
+                                     APTR *ifptr)
+{
+    struct Library *base = OpenLibrary((STRPTR)name, 51);
+
+    if (base != NULL) {
+        *ifptr = GetInterface(base, (STRPTR)iface, 1, NULL);
+        if (*ifptr == NULL) {
+            CloseLibrary(base);
+            base = NULL;
+        }
+    }
+    return base;
+}
+
+static void es_close_class(struct Library *base, APTR iface)
+{
+    if (iface != NULL) {
+        DropInterface((struct Interface *)iface);
+    }
+    if (base != NULL) {
+        CloseLibrary(base);
+    }
+}
+
+static int es_open_classes(void)
+{
+    IntuitionBase = OpenLibrary("intuition.library", 51);
+    if (IntuitionBase == NULL) {
+        return 0;
+    }
+    IIntuition = (struct IntuitionIFace *)
+        GetInterface(IntuitionBase, "main", 1, NULL);
+    if (IIntuition == NULL) {
+        return 0;
+    }
+    WindowBase = es_open_class("window.class", "main", (APTR *)&IWindow);
+    LayoutBase = es_open_class("gadgets/layout.gadget", "main",
+                               (APTR *)&ILayout);
+    ButtonBase = es_open_class("gadgets/button.gadget", "main",
+                               (APTR *)&IButton);
+    CheckBoxBase = es_open_class("gadgets/checkbox.gadget", "main",
+                                 (APTR *)&ICheckBox);
+    IntegerBase = es_open_class("gadgets/integer.gadget", "main",
+                                (APTR *)&IInteger);
+    ChooserBase = es_open_class("gadgets/chooser.gadget", "main",
+                                (APTR *)&IChooser);
+    LabelBase = es_open_class("images/label.image", "main",
+                              (APTR *)&ILabel);
+    return WindowBase && LayoutBase && ButtonBase && CheckBoxBase &&
+           IntegerBase && ChooserBase && LabelBase;
+}
+
+static void es_close_classes(void)
+{
+    es_close_class(LabelBase, ILabel);
+    es_close_class(ChooserBase, IChooser);
+    es_close_class(IntegerBase, IInteger);
+    es_close_class(CheckBoxBase, ICheckBox);
+    es_close_class(ButtonBase, IButton);
+    es_close_class(LayoutBase, ILayout);
+    es_close_class(WindowBase, IWindow);
+    if (IIntuition != NULL) {
+        DropInterface((struct Interface *)IIntuition);
+        IIntuition = NULL;
+    }
+    if (IntuitionBase != NULL) {
+        CloseLibrary(IntuitionBase);
+        IntuitionBase = NULL;
+    }
+}
+
+/* -------------------------------------------------------- the widgets */
+
+/* The zone mask gets a row of checkboxes rather than a cryptic number. */
+static Object *es_zone_group(struct ESPrefsGui *gui)
+{
+    Object *group;
+    int i;
+
+    group = HLayoutObject,
+        LAYOUT_SpaceOuter, FALSE,
+    End;
+    if (group == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < ES_ZONE_COUNT; i++) {
+        int zone = es_zone_order[i];
+        int on = (gui->cfg.engine.zones_mask & ES_ZONEBIT(zone)) != 0;
+
+        gui->zone[i] = CheckBoxObject,
+            GA_ID, GID_ZONE + zone,
+            GA_RelVerify, TRUE,
+            GA_Text, es_zone_label[i],
+            GA_Selected, on ? TRUE : FALSE,
+        End;
+        IDoMethod(group, LM_ADDCHILD, NULL, gui->zone[i],
+                              TAG_END);
+    }
+    return group;
+}
+
+static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
+                         int index)
+{
+    int value = es_setting_value(&gui->cfg, index);
+
+    switch (s->kind) {
+    case ES_SET_BOOL:
+        return CheckBoxObject,
+            GA_ID, GID_SETTING + index,
+            GA_RelVerify, TRUE,
+            GA_Text, "",
+            GA_Selected, value ? TRUE : FALSE,
+        End;
+    case ES_SET_CHOICE:
+        return ChooserObject,
+            GA_ID, GID_SETTING + index,
+            GA_RelVerify, TRUE,
+            CHOOSER_LabelArray, s->choices,
+            CHOOSER_Selected, value,
+        End;
+    case ES_SET_ZONES:
+        return es_zone_group(gui);
+    default:
+        return IntegerObject,
+            GA_ID, GID_SETTING + index,
+            GA_RelVerify, TRUE,
+            GA_TabCycle, TRUE,
+            INTEGER_Number, value,
+            INTEGER_Minimum, s->min,
+            INTEGER_Maximum, s->max,
+            INTEGER_MaxChars, 6,
+        End;
+    }
+}
+
+static Object *es_build_window(struct ESPrefsGui *gui)
+{
+    const ESSetting *t;
+    Object *rows;
+    Object *buttons;
+    int count = 0;
+    int i;
+
+    t = es_settings(&count);
+    if (count > ES_MAX_SETTINGS) {
+        count = ES_MAX_SETTINGS;
+    }
+
+    rows = VLayoutObject,
+        LAYOUT_SpaceOuter, TRUE,
+        LAYOUT_BevelStyle, BVS_GROUP,
+        LAYOUT_Label, "Snapping",
+    End;
+    if (rows == NULL) {
+        return NULL;
+    }
+    for (i = 0; i < count; i++) {
+        gui->field[i] = es_widget(gui, &t[i], i);
+        Printf("  %s -> %p\n", (APTR)t[i].key, (APTR)gui->field[i]);
+        if (gui->field[i] == NULL) {
+            continue;
+        }
+        IDoMethod(rows, LM_ADDCHILD, NULL, gui->field[i],
+            CHILD_Label, LabelObject,
+                LABEL_Text, t[i].label,
+            LabelEnd,
+            CHILD_WeightedHeight, 0,
+            TAG_END);
+    }
+
+    buttons = HLayoutObject,
+        LAYOUT_SpaceOuter, TRUE,
+        LAYOUT_EvenSize, TRUE,
+        LAYOUT_AddChild, ButtonObject,
+            GA_ID, GID_SAVE,
+            GA_RelVerify, TRUE,
+            GA_Text, "_Save",
+        End,
+        LAYOUT_AddChild, ButtonObject,
+            GA_ID, GID_USE,
+            GA_RelVerify, TRUE,
+            GA_Text, "_Use",
+        End,
+        LAYOUT_AddChild, ButtonObject,
+            GA_ID, GID_CANCEL,
+            GA_RelVerify, TRUE,
+            GA_Text, "_Cancel",
+        End,
+    End;
+
+    return WindowObject,
+        WA_Title, "EdgeSnap Preferences",
+        WA_ScreenTitle, "EdgeSnap - by Michele Dipace",
+        WA_Activate, TRUE,
+        WA_DragBar, TRUE,
+        WA_CloseGadget, TRUE,
+        WA_DepthGadget, TRUE,
+        WA_SizeGadget, TRUE,
+        WINDOW_Position, WPOS_CENTERSCREEN,
+        WINDOW_Layout, VLayoutObject,
+            LAYOUT_SpaceOuter, TRUE,
+            LAYOUT_AddChild, rows,
+            LAYOUT_AddChild, buttons,
+            CHILD_WeightedHeight, 0,
+        End,
+    End;
+}
+
+/* ------------------------------------------------------ reading it back */
+
+static void es_collect(struct ESPrefsGui *gui)
+{
+    const ESSetting *t;
+    int count = 0;
+    int i;
+
+    t = es_settings(&count);
+    if (count > ES_MAX_SETTINGS) {
+        count = ES_MAX_SETTINGS;
+    }
+    for (i = 0; i < count; i++) {
+        ULONG value = 0;
+
+        if (gui->field[i] == NULL) {
+            continue;
+        }
+        switch (t[i].kind) {
+        case ES_SET_BOOL:
+            GetAttr(GA_Selected, gui->field[i], &value);
+            es_setting_apply(&gui->cfg, i, value ? 1 : 0);
+            break;
+        case ES_SET_CHOICE:
+            GetAttr(CHOOSER_Selected, gui->field[i], &value);
+            es_setting_apply(&gui->cfg, i, (int)value);
+            break;
+        case ES_SET_ZONES:
+            {
+                unsigned mask = 0;
+                int z;
+
+                for (z = 0; z < ES_ZONE_COUNT; z++) {
+                    ULONG on = 0;
+
+                    if (gui->zone[z] == NULL) {
+                        continue;
+                    }
+                    GetAttr(GA_Selected, gui->zone[z], &on);
+                    if (on) {
+                        mask |= ES_ZONEBIT(es_zone_order[z]);
+                    }
+                }
+                es_setting_apply(&gui->cfg, i, (int)mask);
+            }
+            break;
+        default:
+            GetAttr(INTEGER_Number, gui->field[i], &value);
+            /* Out of range is simply refused, and the gadget keeps
+             * whatever it had: the table's range and the parser's are
+             * the same one. */
+            es_setting_apply(&gui->cfg, i, (int)value);
+            break;
+        }
+    }
+}
+
+/* ---------------------------------------------------------------- main */
+
+int main(void)
+{
+    struct ESPrefsGui gui;
+    ULONG signals, result;
+    UWORD code;
+    int running = 1;
+    int rc = RETURN_FAIL;
+    int i;
+
+    (void)es_version_cookie;
+    (void)es_stack_cookie;
+    for (i = 0; i < ES_MAX_SETTINGS; i++) {
+        gui.field[i] = NULL;
+    }
+    for (i = 0; i <= ES_ZONE_COUNT; i++) {
+        gui.zone[i] = NULL;
+    }
+    esp_load(&gui.cfg);
+
+    if (!es_open_classes()) {
+        es_close_classes();
+        return RETURN_FAIL;
+    }
+    gui.win = es_build_window(&gui);
+    Printf("EdgeSnapPrefs: window object %p\n", (APTR)gui.win);
+    if (gui.win == NULL) {
+        es_close_classes();
+        return RETURN_FAIL;
+    }
+    gui.window = (struct Window *)IDoMethod(gui.win, WM_OPEN, NULL);
+    Printf("EdgeSnapPrefs: window %p\n", (APTR)gui.window);
+    if (gui.window == NULL) {
+        DisposeObject(gui.win);
+        es_close_classes();
+        return RETURN_FAIL;
+    }
+    Printf("EdgeSnapPrefs: at %ld,%ld size %ldx%ld\n",
+           (LONG)gui.window->LeftEdge, (LONG)gui.window->TopEdge,
+           (LONG)gui.window->Width, (LONG)gui.window->Height);
+
+    while (running) {
+        GetAttr(WINDOW_SigMask, gui.win, &signals);
+        if (Wait(signals | SIGBREAKF_CTRL_C) & SIGBREAKF_CTRL_C) {
+            running = 0;
+            rc = RETURN_OK;
+            break;
+        }
+
+        while ((result = IDoMethod(gui.win, WM_HANDLEINPUT,
+                                               &code)) != WMHI_LASTMSG) {
+            switch (result & WMHI_CLASSMASK) {
+            case WMHI_CLOSEWINDOW:
+                running = 0;
+                rc = RETURN_OK;
+                break;
+            case WMHI_GADGETUP:
+                switch (result & WMHI_GADGETMASK) {
+                case GID_SAVE:
+                    es_collect(&gui);
+                    esp_store(&gui.cfg, 1);
+                    running = 0;
+                    rc = RETURN_OK;
+                    break;
+                case GID_USE:
+                    es_collect(&gui);
+                    esp_store(&gui.cfg, 0);
+                    running = 0;
+                    rc = RETURN_OK;
+                    break;
+                case GID_CANCEL:
+                    running = 0;
+                    rc = RETURN_OK;
+                    break;
+                default:
+                    break;
+                }
+                break;
+            default:
+                break;
+            }
+        }
+    }
+
+    IDoMethod(gui.win, WM_CLOSE, NULL);
+    DisposeObject(gui.win);
+    es_close_classes();
+    return rc;
+}

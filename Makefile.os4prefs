@@ -1,0 +1,21 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+#
+# The AmigaOS 4.x preferences window (ReAction).
+
+CC = ppc-amigaos-gcc
+CFLAGS ?= -Wall -Wextra -O2 -Icore -Iinclude -Iprefs
+TARGET ?= build/os4/EdgeSnapPrefs
+SRC := prefs/os4/edgesnap_prefs.c prefs/prefs_io.c core/config.c \
+       core/engine.c core/zones.c core/panels.c
+
+.PHONY: all clean
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	mkdir -p "$(dir $(TARGET))"
+	$(CC) $(CFLAGS) -o "$@" $(SRC)
+
+clean:
+	rm -f "$(TARGET)"
