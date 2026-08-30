@@ -72,13 +72,13 @@ first gesture is the drag.
   2026-08-11) and real MorphOS hardware (2026-08-26): drag detection,
   snapping and the outline preview all work, including the
   MorphOS-specific CxCustom gate.
-- **Phase 1 (library kernel): done.** The validated spike behavior lives
-  as a portable, host-tested kernel: `core/engine.c` (drag/snap state
+- **Phase 1 (portable core): done.** The validated spike behavior lives
+  as a portable, host-tested core: `core/engine.c` (drag/snap state
   machine), `core/registry.c` (stale-safe snap registry + restore),
   `include/edgesnap_types.h` (zones, errors, capabilities). The draft
   public contract is `include/edgesnap.h`.
 - **Phase 2 (reference commodity): ported.** `commodity/edgesnap_cx.c`
-  now runs entirely on the kernel - the frontend feeds window facts and
+  now runs entirely on the core - the frontend feeds window facts and
   executes emitted actions, with zero snap logic of its own (one snap
   path shared by drag and hotkeys, the road ESnap_SnapWindow() will
   pave). Verified in-VM on OS4; the MorphOS binary builds from the same
@@ -166,8 +166,8 @@ Suggested order for studying the code:
    OS4/MorphOS type differences; the shared handler/task state and the
    CxCustom action (with the MorphOS 68k-ABI gate); the non-blocking
    log; window snapshotting under LockIBase (dock-aware usable area);
-   the one shared snap path over the kernel registry; the preview
-   backends (window frame / OS4 XOR); the kernel glue that feeds
+   the one shared snap path over the core registry; the preview
+   backends (window frame / OS4 XOR); the core glue that feeds
    ESEngine and executes its actions; the commodity plumbing in main().
 
 Key invariants to keep in mind while reading: the CxCustom action runs in

@@ -5,15 +5,15 @@
  * edgesnap_cx.c - the EdgeSnap reference commodity (phase 2).
  *
  * One source for AmigaOS 4.x and MorphOS. ALL drag/snap decisions live
- * in the shared library kernel (core/engine.c state machine,
+ * in the portable core (core/engine.c state machine,
  * core/registry.c stale-safe restore): this file is glue, and must
  * never grow a second snapping engine (docs/LLM_GUIDANCE.md). It:
  *
  *   - watches raw mouse events from a commodities CxCustom object
  *     (input.device context: counters + Signal() only);
- *   - feeds the kernel instantaneous window facts sampled under
+ *   - feeds the core instantaneous window facts sampled under
  *     LockIBase (usable area is dock/panel aware via core/panels.c);
- *   - executes the kernel's emitted actions: zone preview (MorphOS:
+ *   - executes the core's emitted actions: zone preview (MorphOS:
  *     borderless frame windows; OS4: XOR rectangles on the screen
  *     rastport - OpenWindow during an OS4 ghost-drag is unreliable),
  *     and snaps via ChangeWindowBox with re-validation of possibly
@@ -96,7 +96,7 @@ struct Library *EdgeSnapBase;
 
 /* ---------------------------------------------------------------- tuning */
 
-/* Drag/zone tuning lives in the kernel (ESEngineConfig defaults). */
+/* Drag/zone tuning lives in the core (ESEngineConfig defaults). */
 #define ES_FRAME_PX        4   /* preview frame thickness                  */
 #define ES_DIVIDER_PX     10   /* thickness of the divider handle          */
 
@@ -1262,7 +1262,7 @@ static void spike_divider_events(void)
     }
 }
 
-/* ------------------------------------------------ kernel glue (phase 2) */
+/* -------------------------------------------------- core glue (phase 2) */
 
 static ULONG g_seen_presses;
 static ULONG g_seen_releases;

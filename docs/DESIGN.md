@@ -85,14 +85,19 @@ is a shared library in `LIBS:` plus a commodity:
 
 ## Why a library, and not just a commodity
 
-A fair question, and the phase name "library kernel" invites it: everything
-phase 1 delivers - state machine, snap registry, restore, error model,
-host-tested header contract - is portable C that a single executable could
-just as well contain. Testability and one-engine-behind-two-frontends come
-from the portable core in `core/`, not from the shared library, and this
-repo proves it against itself: both preferences programs link
-`core/config.c` statically and never open `edgesnap.library`. Those are
-therefore not arguments for the library, and should not be offered as such.
+A fair question, and this phase used to invite it by calling itself a
+"library kernel". Two words, two problems. On these systems the kernel is
+the system's own, not a third party's state machine, so the word claims a
+place in the machine that EdgeSnap does not have and must never take. And
+everything phase 1 delivers - state machine, snap registry, restore, error
+model, host-tested header contract - is portable C that a single executable
+could just as well contain, so the word "library" promised a component the
+phase does not build. It is now called what it is: the portable core.
+Testability and one-engine-behind-two-frontends come from the portable core
+in `core/`, not from the shared library, and this repo proves it against
+itself: both preferences programs link `core/config.c` statically and never
+open `edgesnap.library`. Those are therefore not arguments for the library,
+and should not be offered as such.
 
 The case for the library form rests on two things:
 
@@ -612,23 +617,23 @@ belong in this document, not in the script's comments.
 
 - **Phase 0 - spike** (this repo, `spike/`): validate drag detection and
   foreign ChangeWindowBox on both OSes. Feasibility gate.
-- **Phase 1 - portable kernel**: shared state machine, snap registry,
+- **Phase 1 - portable core**: shared state machine, snap registry,
   restore, capability/error model, and the first host-tested
   public-header contract. This phase is portable C, not yet the shared
   library; for why the shipping form is a library at all, see "Why a
   library, and not just a commodity" above.
-  *Status 2026-08-26: kernel landed in `core/` (engine.c = the validated
+  *Status 2026-08-26: the core landed in `core/` (engine.c = the validated
   spike behavior as a pure state machine, registry.c = stale-safe restore),
   host-tested under `-std=c89 -pedantic -Werror`; portable constants in
   `include/edgesnap_types.h`; draft platform contract in
   `include/edgesnap.h`. The spike still runs its own inline logic and gets
-  ported onto the kernel in phase 2.*
+  ported onto the core in phase 2.*
 - **Phase 2 - reference commodity**: hotkey snapping and preferences through
   the library, with no duplicated snap logic.
-  *Status 2026-08-26: DONE. The commodity is ported onto the kernel
+  *Status 2026-08-26: DONE. The commodity is ported onto the core
   (commodity/edgesnap_cx.c): it feeds ESEngine window facts sampled
   under LockIBase and executes the emitted actions; drag and hotkeys
-  share one snap path over the kernel registry. Preferences land through
+  share one snap path over the core registry. Preferences land through
   core/config.c from ENV(ARC):EdgeSnap.prefs and Shell arguments
   (arguments override the file), and the startup banner echoes what is
   actually in force. Verified in-VM on OS4: argument overrides, file
