@@ -65,7 +65,11 @@ machines - one AmigaOS 4.1 Final Edition and one MorphOS 3.20 - and
 nowhere else yet. If it covers your dock, misses your seam, or draws
 something odd with window transparency switched on, that is exactly the
 report worth having.
-""" % VERSION),
+
+Report it here, or to the address at the top of this file:
+
+  %s/issues
+""" % (VERSION, URL)),
     ("INSTALLING", """
 Unpack the archive and double-click Install. It recognises the system,
 proposes the matching build, and asks before doing anything: the library

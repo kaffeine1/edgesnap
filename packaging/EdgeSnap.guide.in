@@ -190,6 +190,16 @@ and redistribute it, including in commercial work, as long as the
 copyright notice and the licence text travel with it. It comes with
 no warranty.
 
+@{b}Source, and where to report what you find@{ub}
+This is a first public release and it has run on two machines. If
+EdgeSnap covers your dock, misses your seam, or draws something odd
+with window transparency on, that is exactly the report worth having:
+
+  https://github.com/kaffeine1/edgesnap/issues
+
+The same place holds the source, the design notes and what was learned
+the hard way on each system.
+
 Prior art worth naming, because EdgeSnap is not the first to move
 windows about on these systems: @{b}ZapperNG@{ub} and
 @{b}WinAction@{ub} both arrange windows by hotkey. What EdgeSnap adds
