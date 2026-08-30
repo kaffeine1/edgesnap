@@ -664,6 +664,32 @@ belong in this document, not in the script's comments.
   MorphOS, and Aminet channels. Official adoption remains a maintainer
   decision, not a project assumption.
 
+- **Post-1.0 candidate - animated snap**: the window glides into its zone
+  instead of jumping. Recorded here so it is neither forgotten nor
+  promised. It arrived sideways: someone on Discord (2026-08-30) asked
+  for wobbly windows, which is out of scope (below), but the wish under
+  the joke is that the desktop feel alive, and that part is reachable.
+  It is within our powers because it is repeated ChangeWindowBox and
+  intercepts nobody's rendering. The open question is cost: every step
+  forces the application to redraw itself, so on real hardware with a
+  large window it may well look worse than the honest jump. Measure
+  before offering it, and ship it switched off unless it is clearly
+  better.
+
+## Asked for, and out of scope
+
+Kept so the reasoning is written down once instead of re-argued.
+
+- **Wobbly / jelly windows** (Discord, 2026-08-30). Deforming a window as
+  it moves means redrawing another application's rendered output every
+  frame. That output belongs to its layer and its program; reaching it
+  means patching Intuition's rendering path, which architectural rule #1
+  forbids and which would make EdgeSnap unadoptable by exactly the
+  maintainers phase 5 addresses. It is a window manager feature and it
+  stays one. The OS4 field measurement settles the practical side
+  independently: during a ghost-drag even OpenWindow can stall until
+  release, so nothing of ours reaches the screen mid-drag anyway.
+
 ## Open decisions
 
 1. Confirm the final library name (`edgesnap.library` is the current
