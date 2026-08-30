@@ -35,6 +35,12 @@ if [ -f "$ROOT/build/os4/EdgeSnapPrefs" ]; then
     # so the icon has to travel next to it.
     cp "$ROOT/assets/EdgeSnapPrefs.info" "$DEST/os4/EdgeSnapPrefs.info"
 fi
+# The commodity's own Workbench icon. The installer does not use it -
+# it writes a line into S:User-Startup - but the manual tells anyone
+# who prefers SYS:WBStartup to drop the program AND this icon in there,
+# and a package should carry what its documentation promises. The icon
+# holds DONOTWAIT and every setting as a commented tooltype.
+cp "$ROOT/assets/EdgeSnap.info" "$DEST/os4/EdgeSnap.info"
 if [ -f "$ROOT/build/morphos/EdgeSnap" ]; then
     cp "$ROOT/build/morphos/EdgeSnap"         "$DEST/mos/EdgeSnap"
     cp "$ROOT/build/morphos/edgesnap.library" "$DEST/mos/edgesnap.library"
@@ -43,6 +49,7 @@ if [ -f "$ROOT/build/morphos/EdgeSnap" ]; then
         cp "$ROOT/build/morphos/EdgeSnapPrefs" "$DEST/mos/EdgeSnapPrefs"
         cp "$ROOT/assets/EdgeSnapPrefs.info" "$DEST/mos/EdgeSnapPrefs.info"
     fi
+    cp "$ROOT/assets/EdgeSnap.info" "$DEST/mos/EdgeSnap.info"
 else
     echo "WARNING: no MorphOS build - mos/ left empty" >&2
 fi
