@@ -98,7 +98,7 @@ struct Library *EdgeSnapBase;
 
 /* Drag/zone tuning lives in the kernel (ESEngineConfig defaults). */
 #define ES_FRAME_PX        4   /* preview frame thickness                  */
-#define ES_DIVIDER_PX      8   /* thickness of the divider handle          */
+#define ES_DIVIDER_PX     10   /* thickness of the divider handle          */
 
 /* --------------------------------------------------------- library bases */
 
@@ -520,6 +520,62 @@ static void spike_publish_ignored(void);
  * release, so the preview simply would not show - no harm.
  */
 
+/*
+ * One accent colour for everything EdgeSnap draws - the preview frame
+ * and the seam - obtained once, at startup, and held.
+ *
+ * Not per drawing: ObtainBestPen fails while Intuition is dragging a
+ * window, and the fallback is FILLPEN, a grey almost identical to the
+ * Workbench background. That is how the preview frame came to be drawn
+ * and invisible for an afternoon.
+ */
+static struct Accent {
+    struct Screen *scr;
+    struct ColorMap *cm;
+    LONG pen;
+    int ok;
+} g_accent;
+
+static int spike_accent_init(void)
+{
+    struct Screen *scr = LockPubScreen(NULL);
+
+    if (scr == NULL) {
+        return 0;
+    }
+    g_accent.scr = scr;
+    g_accent.cm = scr->ViewPort.ColorMap;
+    g_accent.pen = ObtainBestPen(g_accent.cm, 0x22222222UL, 0x88888888UL,
+                                 0xFFFFFFFFUL, OBP_Precision,
+                                 PRECISION_GUI, TAG_DONE);
+    if (g_accent.pen != -1) {
+        g_accent.ok = 1;
+    } else {
+        struct DrawInfo *dri = GetScreenDrawInfo(scr);
+
+        g_accent.pen = 3;
+        if (dri != NULL) {
+            if (dri->dri_NumPens > FILLPEN) {
+                g_accent.pen = dri->dri_Pens[FILLPEN];
+            }
+            FreeScreenDrawInfo(scr, dri);
+        }
+    }
+    return 1;
+}
+
+static void spike_accent_free(void)
+{
+    if (g_accent.ok) {
+        ReleasePen(g_accent.cm, (ULONG)g_accent.pen);
+        g_accent.ok = 0;
+    }
+    if (g_accent.scr != NULL) {
+        UnlockPubScreen(NULL, g_accent.scr);
+        g_accent.scr = NULL;
+    }
+}
+
 struct Preview {
     struct Window *bars[4];
     int visible;
@@ -670,43 +726,15 @@ static void spike_pf_hide(void)
  */
 static int spike_pf_init(void)
 {
-    struct Screen *scr = LockPubScreen(NULL);
-
-    if (scr == NULL) {
-        return 0;
-    }
-    g_pf.scr = scr;
-    g_pf.cm = scr->ViewPort.ColorMap;
-    g_pf.pen = ObtainBestPen(g_pf.cm, 0x22222222UL, 0x88888888UL,
-                             0xFFFFFFFFUL, OBP_Precision, PRECISION_GUI,
-                             TAG_DONE);
-    if (g_pf.pen != -1) {
-        g_pf.pen_ok = 1;
-    } else {
-        struct DrawInfo *dri = GetScreenDrawInfo(scr);
-
-        g_pf.pen = 3;
-        if (dri != NULL) {
-            if (dri->dri_NumPens > FILLPEN) {
-                g_pf.pen = dri->dri_Pens[FILLPEN];
-            }
-            FreeScreenDrawInfo(scr, dri);
-        }
-    }
-    return 1;
+    g_pf.scr = g_accent.scr;      /* the screen the accent was taken on */
+    g_pf.pen = g_accent.pen;
+    return g_pf.scr != NULL;
 }
 
 static void spike_pf_cleanup(void)
 {
     spike_pf_hide();
-    if (g_pf.pen_ok) {
-        ReleasePen(g_pf.cm, (ULONG)g_pf.pen);
-        g_pf.pen_ok = 0;
-    }
-    if (g_pf.scr != NULL) {
-        UnlockPubScreen(NULL, g_pf.scr);
-        g_pf.scr = NULL;
-    }
+    g_pf.scr = NULL;
 }
 
 static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
@@ -974,15 +1002,31 @@ static void spike_divider_close(void)
 }
 
 /*
- * The strip never draws anything, and this is the reason: painting it
- * leaves residue on the screen. A band painted while dragging stayed
- * behind as a blue line after the window closed, because the console
- * windows underneath do not repaint what our layer had covered - the
- * exact "line that never goes away" the seam is supposed not to have.
+ * The seam is visible, and it has to be.
  *
- * The feedback during a drag is the two windows resizing live, which
- * is what macOS shows too. The pointer says the rest.
+ * It was invisible first, on the macOS reasoning that two tiled windows
+ * should simply touch. But Intuition shows the pointer of the ACTIVE
+ * window, not of the one under the mouse, so the double arrow only
+ * appears once the strip has been grabbed - which leaves nothing at all
+ * to tell anyone the seam is there or where it is. Reported from the
+ * field as, exactly, "I cannot grab it".
+ *
+ * So it is drawn, in the same accent colour as the preview frame, and
+ * it is ten pixels wide: a line you can see and a target you can hit.
+ * The reason it could be left invisible before - that painting leaves
+ * residue - is handled by never moving it while painted: when the seam
+ * moves the window is closed and a new one opened, which damages the
+ * area and lets the windows underneath repaint it themselves.
  */
+static void spike_divider_paint(void)
+{
+    if (g_divider == NULL || g_accent.scr == NULL) {
+        return;
+    }
+    SetAPen(g_divider->RPort, (ULONG)g_accent.pen);
+    RectFill(g_divider->RPort, 0, 0, g_divider->Width - 1,
+             g_divider->Height - 1);
+}
 /*
  * Grabbing the seam has to activate our strip, or Intuition stops
  * sending us mouse movements the moment the pointer leaves its eight
@@ -1059,10 +1103,20 @@ static void spike_divider_sync(void)
         }
     }
     if (g_divider != NULL) {
-        /* follow the seam, and stay above the pair: the window that
-         * was just snapped comes to front and would bury the handle */
-        ChangeWindowBox(g_divider, (int)d.strip.x, (int)d.strip.y,
-                        (int)d.strip.w, (int)d.strip.h);
+        /*
+         * Moving a painted window drags its paint across the screen,
+         * so when the seam has actually moved the handle is closed and
+         * a new one opened: closing damages the area and the windows
+         * underneath repaint it themselves.
+         */
+        if (g_divider->LeftEdge != (int)d.strip.x ||
+            g_divider->TopEdge != (int)d.strip.y ||
+            g_divider->Width != (int)d.strip.w ||
+            g_divider->Height != (int)d.strip.h) {
+            spike_divider_close();
+        }
+    }
+    if (g_divider != NULL) {
         WindowToFront(g_divider);
         g_divider_vertical = (int)d.vertical;
         return;
@@ -1081,7 +1135,6 @@ static void spike_divider_sync(void)
      * edges that are already there.
      */
     g_divider = OpenWindowTags(NULL,
-                               WA_BackFill, LAYERS_NOBACKFILL,
                                WA_CustomScreen, scr,
                                WA_Left, (int)d.strip.x,
                                WA_Top, (int)d.strip.y,
@@ -1103,6 +1156,7 @@ static void spike_divider_sync(void)
     spike_log("edgesnap: divider handle open\n");
     WindowToFront(g_divider);
     g_divider_vertical = d.vertical;
+    spike_divider_paint();
     spike_divider_pointer();
     spike_publish_ignored();
 }
@@ -1153,11 +1207,18 @@ static void spike_divider_events(void)
                 spike_divider_park();
             } else if (code == SELECTUP) {
                 g_divider_dragging = 0;
-                /* Re-ask where the seam is now: the drag moved it, and
-                 * it may have stopped existing altogether. */
+                /*
+                 * Re-ask where the seam is now: the drag moved it, and
+                 * it may have stopped existing altogether. The wait is
+                 * the same one the snap path needs - ChangeWindowBox()
+                 * returns before the windows have moved, and asking too
+                 * early finds a pair whose geometry does not match yet,
+                 * which reads as "no seam" and takes the handle away.
+                 */
                 {
                     struct ESnapDivider d;
 
+                    Delay(10L);
                     spike_divider_sync();
                     if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) ==
                             ES_OK) {
@@ -1764,8 +1825,11 @@ int main(int argc, char **argv)
     spike_push_config();
     spike_publish_ignored();
 
+    /* The accent colour, before any drag can ask for one. */
+    if (!spike_accent_init()) {
+        spike_out("edgesnap: no public screen, nothing will be drawn\n");
+    }
 #ifdef __amigaos4__
-    /* The screen and the pen, before any drag can ask for them. */
     if (!spike_pf_init()) {
         spike_out("edgesnap: no public screen, no preview frame\n");
     }
@@ -1905,6 +1969,7 @@ out:
     spike_pf_cleanup();
 #endif
     spike_divider_close();
+    spike_accent_free();
     spike_close_edgesnap();
     if (port != NULL) {
         CxMsg *msg;
