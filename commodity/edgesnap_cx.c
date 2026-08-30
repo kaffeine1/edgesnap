@@ -557,78 +557,191 @@ static void spike_publish_ignored(void)
 
 #ifdef __amigaos4__
 /*
- * OS4 field finding (2026-08-26): while Intuition ghost-drags a window,
- * opening our preview windows is unreliable (OpenWindow can block on
- * the drag's internal locks until release - frame never seen). So on
- * OS4 the frame is drawn the way Intuition draws its own drag feedback:
- * XOR (COMPLEMENT) rectangles straight on the screen's RastPort. No
- * layers, no locks, and drawing the same frame twice erases it. The
- * public screen stays locked between draw and erase so it cannot close
- * under us. Cosmetic caveat, accepted for the spike: content repainted
- * beneath a drawn frame (the moving ghost itself) can leave brief
- * artifacts on erase.
+ * The frame on AmigaOS 4, and why it is drawn straight onto the screen.
+ *
+ * While Intuition drags a window, another program's window operations
+ * do not take effect until the button is released - opening a window,
+ * moving one, bringing one to front. Measured twice, in August and
+ * again on 2026-08-29: the four-bar frame that MorphOS uses is placed
+ * correctly (the log says so) and stays invisible for the whole drag,
+ * even where no window covers it. So on OS4 the frame has to be drawn
+ * on the screen's RastPort, which bypasses layers.
+ *
+ * The first version drew it in COMPLEMENT, the way Intuition draws its
+ * own feedback. That works anywhere without knowing the background,
+ * and it looks it: COMPLEMENT inverts what is underneath, so over a
+ * picture backdrop the frame comes out a different colour on every
+ * pixel, and there is no way to repair it when something paints over
+ * it - drawing it again would erase it.
+ *
+ * So: save the pixels under the four strips, fill them with one solid
+ * accent colour, and put the pixels back when the frame goes. A solid
+ * fill is idempotent, which is what makes the frame repairable - it is
+ * refilled on every engine step, so anything that painted over it is
+ * covered again straight away.
+ *
+ * What this still cannot do: if the content under a strip changed
+ * while the frame was up (the dragged window passing beneath it), the
+ * pixels put back are the old ones. The snap that follows repaints
+ * everything, so it is only visible when a drag ends in no zone at all.
  */
-static struct PreviewXor {
+static struct PreviewFrame {
     int drawn;
     ESRect rect;
-    struct Screen *scr;   /* pubscreen-locked while drawn */
-} g_pxor;
+    struct Screen *scr;      /* pubscreen-locked while drawn */
+    LONG pen;
+    int pen_ok;
+    struct ColorMap *cm;
+    UBYTE *saved[4];         /* the pixels each strip covered */
+    ESRect strip[4];
+    int strips;
+} g_pf;
 
-static void spike_pxor_frame(struct Screen *scr, const ESRect *r)
+#define ES_PF_BPP 4          /* PIXF_A8R8G8B8 */
+
+static void spike_pf_strips(const ESRect *r, ESRect *strip, int *count)
 {
-    struct RastPort rp;
     int t = ES_FRAME_PX;
 
-    rp = scr->RastPort; /* private copy: leave the screen rastport alone */
-    SetDrMd(&rp, COMPLEMENT);
     if (r->w < 2 * t || r->h < 2 * t) {
         t = 1;
     }
-    RectFill(&rp, r->x, r->y, r->x + r->w - 1, r->y + t - 1);
-    RectFill(&rp, r->x, r->y + r->h - t, r->x + r->w - 1, r->y + r->h - 1);
-    if (r->h > 2 * t) {
-        RectFill(&rp, r->x, r->y + t, r->x + t - 1, r->y + r->h - t - 1);
-        RectFill(&rp, r->x + r->w - t, r->y + t, r->x + r->w - 1,
-                 r->y + r->h - t - 1);
+    strip[0].x = r->x;              strip[0].y = r->y;
+    strip[0].w = r->w;              strip[0].h = t;
+    strip[1].x = r->x;              strip[1].y = r->y + r->h - t;
+    strip[1].w = r->w;              strip[1].h = t;
+    strip[2].x = r->x;              strip[2].y = r->y + t;
+    strip[2].w = t;                 strip[2].h = r->h - 2 * t;
+    strip[3].x = r->x + r->w - t;   strip[3].y = r->y + t;
+    strip[3].w = t;                 strip[3].h = r->h - 2 * t;
+    *count = (strip[2].h > 0) ? 4 : 2;
+}
+
+/* Paint the four strips in the accent colour. Called again on every
+ * engine step: a solid fill can be repeated, which is the whole reason
+ * for not using COMPLEMENT. */
+static void spike_pf_fill(void)
+{
+    struct RastPort rp;
+    int i;
+
+    if (!g_pf.drawn) {
+        return;
+    }
+    rp = g_pf.scr->RastPort;   /* a copy: leave the screen's own alone */
+    SetAPen(&rp, (ULONG)g_pf.pen);
+    SetDrMd(&rp, JAM1);
+    for (i = 0; i < g_pf.strips; i++) {
+        RectFill(&rp, g_pf.strip[i].x, g_pf.strip[i].y,
+                 g_pf.strip[i].x + g_pf.strip[i].w - 1,
+                 g_pf.strip[i].y + g_pf.strip[i].h - 1);
     }
 }
 
-static void spike_pxor_hide(void)
+static void spike_pf_hide(void)
 {
-    if (!g_pxor.drawn) {
+    int i;
+
+    if (!g_pf.drawn) {
         return;
     }
-    spike_pxor_frame(g_pxor.scr, &g_pxor.rect); /* XOR again = erase */
-    UnlockPubScreen(NULL, g_pxor.scr);
-    g_pxor.drawn = 0;
-    g_pxor.scr = NULL;
+    for (i = 0; i < g_pf.strips; i++) {
+        if (g_pf.saved[i] != NULL) {
+            WritePixelArray(g_pf.saved[i], 0, 0,
+                            (ULONG)(g_pf.strip[i].w * ES_PF_BPP),
+                            PIXF_A8R8G8B8, &g_pf.scr->RastPort,
+                            g_pf.strip[i].x, g_pf.strip[i].y,
+                            (ULONG)g_pf.strip[i].w,
+                            (ULONG)g_pf.strip[i].h);
+            FreeVec(g_pf.saved[i]);
+            g_pf.saved[i] = NULL;
+        }
+    }
+    g_pf.drawn = 0;
 }
 
-static void spike_pxor_show(struct Screen *dragscr, const ESRect *r)
+/*
+ * The screen and the accent pen are taken once, at startup, and kept.
+ * Asking for a pen in the middle of a drag is asking for trouble: if
+ * ObtainBestPen fails there the fallback is FILLPEN, which on the OS4
+ * theme is a grey almost identical to the Workbench background - the
+ * frame would be drawn and be invisible, which is indistinguishable
+ * from not being drawn at all.
+ */
+static int spike_pf_init(void)
 {
-    struct Screen *scr;
+    struct Screen *scr = LockPubScreen(NULL);
 
-    if (g_pxor.drawn &&
-        g_pxor.rect.x == r->x && g_pxor.rect.y == r->y &&
-        g_pxor.rect.w == r->w && g_pxor.rect.h == r->h) {
-        return;
-    }
-    spike_pxor_hide();
-    scr = LockPubScreen(NULL);
     if (scr == NULL) {
-        spike_log("edgesnap: preview: no default public screen\n");
+        return 0;
+    }
+    g_pf.scr = scr;
+    g_pf.cm = scr->ViewPort.ColorMap;
+    g_pf.pen = ObtainBestPen(g_pf.cm, 0x22222222UL, 0x88888888UL,
+                             0xFFFFFFFFUL, OBP_Precision, PRECISION_GUI,
+                             TAG_DONE);
+    if (g_pf.pen != -1) {
+        g_pf.pen_ok = 1;
+    } else {
+        struct DrawInfo *dri = GetScreenDrawInfo(scr);
+
+        g_pf.pen = 3;
+        if (dri != NULL) {
+            if (dri->dri_NumPens > FILLPEN) {
+                g_pf.pen = dri->dri_Pens[FILLPEN];
+            }
+            FreeScreenDrawInfo(scr, dri);
+        }
+    }
+    return 1;
+}
+
+static void spike_pf_cleanup(void)
+{
+    spike_pf_hide();
+    if (g_pf.pen_ok) {
+        ReleasePen(g_pf.cm, (ULONG)g_pf.pen);
+        g_pf.pen_ok = 0;
+    }
+    if (g_pf.scr != NULL) {
+        UnlockPubScreen(NULL, g_pf.scr);
+        g_pf.scr = NULL;
+    }
+}
+
+static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
+{
+    int i;
+
+    if (g_pf.drawn &&
+        g_pf.rect.x == r->x && g_pf.rect.y == r->y &&
+        g_pf.rect.w == r->w && g_pf.rect.h == r->h) {
+        spike_pf_fill();       /* same frame: just repair it */
         return;
     }
-    if (scr != dragscr) {
-        spike_log("edgesnap: preview: drag is not on the default public "
-                  "screen, no preview\n");
-        UnlockPubScreen(NULL, scr);
+    spike_pf_hide();
+
+    if (g_pf.scr == NULL || dragscr != g_pf.scr) {
         return;
     }
-    spike_pxor_frame(scr, r);
-    g_pxor.drawn = 1;
-    g_pxor.rect = *r;
-    g_pxor.scr = scr; /* keep the pubscreen lock until hide */
+    g_pf.rect = *r;
+    spike_pf_strips(r, g_pf.strip, &g_pf.strips);
+
+    for (i = 0; i < g_pf.strips; i++) {
+        ULONG bytes = (ULONG)(g_pf.strip[i].w * g_pf.strip[i].h * ES_PF_BPP);
+
+        g_pf.saved[i] = (UBYTE *)AllocVec(bytes, MEMF_ANY);
+        if (g_pf.saved[i] == NULL) {
+            continue;          /* that strip simply will not be restored */
+        }
+        ReadPixelArray(&g_pf.scr->RastPort, (ULONG)g_pf.strip[i].x,
+                       (ULONG)g_pf.strip[i].y, g_pf.saved[i], 0, 0,
+                       (ULONG)(g_pf.strip[i].w * ES_PF_BPP),
+                       PIXF_A8R8G8B8, (ULONG)g_pf.strip[i].w,
+                       (ULONG)g_pf.strip[i].h);
+    }
+    g_pf.drawn = 1;
+    spike_pf_fill();
 }
 #endif /* __amigaos4__ */
 
@@ -644,10 +757,25 @@ static int spike_is_preview_win(struct Window *w)
     return 0;
 }
 
+/*
+ * Repair the frame. Something painting over it - the window being
+ * dragged, a refresh underneath - takes pieces out of it, and a solid
+ * fill can simply be repeated. Called on every engine step while a
+ * drag is in flight, which is often enough that the eye never catches
+ * the gap. On MorphOS the frame is made of real windows and looks
+ * after itself.
+ */
+static void spike_preview_refresh(void)
+{
+#ifdef __amigaos4__
+    spike_pf_fill();
+#endif
+}
+
 static void spike_preview_hide(void)
 {
 #ifdef __amigaos4__
-    spike_pxor_hide();
+    spike_pf_hide();
 #else
     int i;
 
@@ -696,7 +824,7 @@ static struct Window *spike_preview_bar(struct Screen *scr, LONG pen,
 static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
 {
 #ifdef __amigaos4__
-    spike_pxor_show(dragscr, r);
+    spike_pf_show(dragscr, r);
 #else
     struct Screen *scr;
     struct DrawInfo *dri;
@@ -1143,6 +1271,10 @@ static void spike_engine_step(void)
     ES_CALL(ESnap_FeedInput)((ULONG)new_press, (ULONG)new_move,
                              (ULONG)new_release, g_shared.quals, &r);
     spike_apply_report(&r);
+
+    if (g_drag_active) {
+        spike_preview_refresh();
+    }
 
     /*
      * Every released drag can have broken the pair - a window dragged
@@ -1632,6 +1764,13 @@ int main(int argc, char **argv)
     spike_push_config();
     spike_publish_ignored();
 
+#ifdef __amigaos4__
+    /* The screen and the pen, before any drag can ask for them. */
+    if (!spike_pf_init()) {
+        spike_out("edgesnap: no public screen, no preview frame\n");
+    }
+#endif
+
     ActivateCxObj(broker, 1L);
 
     spike_out("EdgeSnap 0.1 (build " __DATE__ " " __TIME__ ") "
@@ -1762,6 +1901,9 @@ out:
         DeleteCxObjAll(broker);
     }
     spike_preview_hide();
+#ifdef __amigaos4__
+    spike_pf_cleanup();
+#endif
     spike_divider_close();
     spike_close_edgesnap();
     if (port != NULL) {

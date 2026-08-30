@@ -301,6 +301,49 @@ commodity/  Exchange controller
   `Echo >RAM:k "Wait 9"` + `Echo >>RAM:k "Break <cli> C"` +
   `Run >NIL: Execute RAM:k`, then start the drag.
 
+## The preview frame on AmigaOS 4
+
+Two facts about that system decide how the frame is drawn, and both
+were measured rather than assumed.
+
+**While Intuition drags a window, another program's window operations
+do not take effect until the button is released.** Opening a window,
+moving one, bringing one to front - all of it waits. So the four-bar
+frame MorphOS uses cannot work here: measured on 2026-08-29, the bars
+are placed correctly (the log says where) and stay invisible for the
+whole drag, even over empty desktop where nothing could cover them.
+The same four bars appear instantly when the frame is put up outside a
+drag, which is what makes this conclusive rather than a guess.
+
+So on AmigaOS 4 the frame is drawn straight onto the screen's
+RastPort, which bypasses layers.
+
+**And the colour has to be chosen before the drag starts.** The first
+version drew in COMPLEMENT, the way Intuition draws its own feedback:
+no colour to choose, works over anything. It also inverts whatever is
+underneath, so over a picture backdrop the frame came out a different
+colour on every pixel - reported from the field as "the colour is not
+uniform" - and it cannot be repaired when something paints over it,
+because drawing it a second time erases it. That was the other half of
+the same report: "the frame breaks up".
+
+The frame now saves the pixels under its four strips, fills them with
+one solid accent colour, and puts the pixels back when it goes. A
+solid fill can be repeated, so the frame is refilled on every engine
+step and anything that painted over it is covered again at once.
+
+The catch, and it cost an afternoon: **ObtainBestPen fails during a
+drag**. The fallback was FILLPEN, which on the OS4 theme is a grey
+almost identical to the Workbench background, so the frame was drawn
+and was invisible - indistinguishable from not being drawn at all, and
+it sent the investigation after the wrong suspect twice. The screen and
+the pen are taken once, at startup, and kept.
+
+What this still cannot do: if the content under a strip changed while
+the frame was up, the pixels put back are the old ones. In practice the
+snap that follows repaints everything, and a drag that ends in no zone
+never had the frame up over the moving window - verified both ways.
+
 ## The divider: status
 
 Implemented across the three layers, and now confirmed end to end.
