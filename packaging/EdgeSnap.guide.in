@@ -200,10 +200,4 @@ with window transparency on, that is exactly the report worth having:
 The same place holds the source, the design notes and what was learned
 the hard way on each system.
 
-Prior art worth naming, because EdgeSnap is not the first to move
-windows about on these systems: @{b}ZapperNG@{ub} and
-@{b}WinAction@{ub} both arrange windows by hotkey. What EdgeSnap adds
-is the drag - the edge itself is the target - and a library any
-program can call.
-
 @endnode
