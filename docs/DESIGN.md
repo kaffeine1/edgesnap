@@ -83,6 +83,42 @@ is a shared library in `LIBS:` plus a commodity:
   snapping; a typo inside a list value (ZONES=left,rihgt) fails the
   whole value instead of silently disabling half the zones.
 
+## Why a library, and not just a commodity
+
+A fair question, and the phase name "library kernel" invites it: everything
+phase 1 delivers - state machine, snap registry, restore, error model,
+host-tested header contract - is portable C that a single executable could
+just as well contain. Testability and one-engine-behind-two-frontends come
+from the portable core in `core/`, not from the shared library, and this
+repo proves it against itself: both preferences programs link
+`core/config.c` statically and never open `edgesnap.library`. Those are
+therefore not arguments for the library, and should not be offered as such.
+
+The case for the library form rests on two things:
+
+1. **The state is about the desktop, not about the program.** Where a
+   window sat before it was snapped, and which two windows share a seam,
+   are facts about the whole screen. Fused into one commodity, only that
+   commodity can restore a window or answer "is this one snapped?", and a
+   second program that moved windows would keep a second registry with its
+   own idea of where things were before - whichever restores first wins,
+   and the user's window lands somewhere it never was. A shared library is
+   how these systems give such state exactly one owner. It is why
+   `commodities.library` exists instead of every program keeping its own
+   input-handler bookkeeping.
+
+2. **On these systems, a system service is a library.** The stated goal is
+   that the OS4 and MorphOS maintainers could adopt this. Adoption means
+   the code is already in the shape they would take. Fused into a
+   commodity it would have to be pulled apart first, by them - which is
+   the same as not being adoptable.
+
+The cost, stated plainly: a published library is a promise not to break its
+ABI, and today its only clients are the reference commodity and
+`esnaptest`. The third-party benefit is potential, not realised. If the API
+still has no outside client by 1.0, the honest reading is that reason 1
+alone did not require a shared library and the split was made too early.
+
 ## Architectural rule #1: input handler != logic
 
 The only clean, portable way to see events before Intuition is a
@@ -576,8 +612,11 @@ belong in this document, not in the script's comments.
 
 - **Phase 0 - spike** (this repo, `spike/`): validate drag detection and
   foreign ChangeWindowBox on both OSes. Feasibility gate.
-- **Phase 1 - library kernel**: shared state machine, snap registry, restore,
-  capability/error model, and the first host-tested public-header contract.
+- **Phase 1 - portable kernel**: shared state machine, snap registry,
+  restore, capability/error model, and the first host-tested
+  public-header contract. This phase is portable C, not yet the shared
+  library; for why the shipping form is a library at all, see "Why a
+  library, and not just a commodity" above.
   *Status 2026-08-26: kernel landed in `core/` (engine.c = the validated
   spike behavior as a pure state machine, registry.c = stale-safe restore),
   host-tested under `-std=c89 -pedantic -Werror`; portable constants in
