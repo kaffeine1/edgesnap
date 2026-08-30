@@ -1,15 +1,3 @@
 build/
 *.o
 .DS_Store
-
-# Private LLM working files and session notes - never commit
-# (same convention as the other kaffeine projects: local operating rules,
-# AI guidance, handoffs and diaries stay out of the repo).
-docs/LLM_GUIDANCE.md
-CLAUDE.md
-CLAUDE.local.md
-AGENTS.md
-.claude/
-.codex*/
-*.local.md
-PROMPT-*.md
