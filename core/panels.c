@@ -53,6 +53,22 @@ int es_panel_classify(const ESRect *scr, const ESRect *b)
     }
 }
 
+const char *es_panel_edge_name(int edge)
+{
+    switch (edge) {
+    case ES_PEDGE_LEFT:
+        return "dock:left";
+    case ES_PEDGE_RIGHT:
+        return "dock:right";
+    case ES_PEDGE_TOP:
+        return "dock:top";
+    case ES_PEDGE_BOTTOM:
+        return "dock:bottom";
+    default:
+        return "no-reserve";
+    }
+}
+
 static int es_max(int a, int b)
 {
     return a > b ? a : b;

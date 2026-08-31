@@ -12,7 +12,8 @@ TARGET ?= build/morphos/EdgeSnap
 # The commodity no longer links the library body: it OPENS
 # edgesnap.library. It keeps only what a frontend needs -
 # zone names for its log, and the preferences parser.
-SRC := commodity/edgesnap_cx.c core/zones.c core/engine.c core/config.c
+SRC := commodity/edgesnap_cx.c core/zones.c core/panels.c core/engine.c \
+       core/config.c
 
 .PHONY: all clean
 

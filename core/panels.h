@@ -52,6 +52,11 @@ typedef struct ESInsets {
 /* Which edge does this box reserve, if any? Exposed for diagnostics. */
 int es_panel_classify(const ESRect *screen, const ESRect *box);
 
+/* "left"/"top"/"right"/"bottom", or "no-reserve" for ES_PEDGE_NONE.
+ * For diagnostics: a dump that names the edge saves the reader from
+ * guessing which window ate the usable area. */
+const char *es_panel_edge_name(int edge);
+
 /*
  * The same policy one box at a time, so a caller walking a window list
  * needs no array and therefore no fixed limit on how many panels a

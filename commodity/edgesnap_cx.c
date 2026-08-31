@@ -70,6 +70,7 @@
 #endif
 
 #include "zones.h"
+#include "panels.h"
 #include "engine.h"
 #include "registry.h"
 #include "config.h"
@@ -1456,6 +1457,23 @@ static void spike_engine_step(void)
  * systems: collect under LockIBase, print after unlocking.
  */
 
+/* How deep this box would reserve on the edge it claims, if any. */
+static int spike_panel_depth(const ESRect *scr, const ESRect *b)
+{
+    switch (es_panel_classify(scr, b)) {
+    case ES_PEDGE_LEFT:
+        return (b->x + b->w) - scr->x;
+    case ES_PEDGE_RIGHT:
+        return (scr->x + scr->w) - b->x;
+    case ES_PEDGE_TOP:
+        return (b->y + b->h) - scr->y;
+    case ES_PEDGE_BOTTOM:
+        return (scr->y + scr->h) - b->y;
+    default:
+        return 0;
+    }
+}
+
 #define ES_DUMP_MAX 24
 
 struct WinDumpItem {
@@ -1470,6 +1488,7 @@ static void spike_dump_windows(void)
     struct WinDumpItem items[ES_DUMP_MAX];
     ESRect usable;
     ESInsets ins;
+    ESRect scrrect;
     ULONG ilock;
     struct Screen *scr;
     struct Window *w;
@@ -1537,24 +1556,43 @@ static void spike_dump_windows(void)
         spike_out("edgesnap: dump: no active screen\n");
         return;
     }
+    scrrect.x = 0;
+    scrrect.y = 0;
+    scrrect.w = scrw;
+    scrrect.h = scrh;
     spike_out("edgesnap: --- window dump, screen %dx%d barheight %d ---\n",
            scrw, scrh, bar);
     for (i = 0; i < n; i++) {
         struct WinDumpItem *it = &items[i];
         const char *verdict;
+        int depth = 0;
 
-        /* Only facts here: whether a window IS a dock is the library's
-         * call, and its answer is the insets line below. */
+        /*
+         * The verdict per window, not just the total. A dump that says
+         * only "candidate" leaves the reader to guess which window ate
+         * the screen; es_panel_classify() is exposed for exactly this,
+         * so a single dump from a puzzled user is now conclusive.
+         */
         if (it->skipped == 1) {
             verdict = "ours";
         } else if (it->skipped == 2) {
             verdict = "skip:flags";
         } else {
-            verdict = "candidate";
+            verdict = es_panel_edge_name(es_panel_classify(&scrrect,
+                                                           &it->box));
+            depth = spike_panel_depth(&scrrect, &it->box);
         }
-        spike_out("edgesnap: %4d,%4d %4dx%4d flags %08lx %-10s \"%s\"\n",
-               it->box.x, it->box.y, it->box.w, it->box.h,
-               (unsigned long)it->flags, verdict, it->title);
+        if (depth > 0) {
+            spike_out("edgesnap: %4d,%4d %4dx%4d flags %08lx %-11s "
+                      "reserves %4d  \"%s\"\n",
+                      it->box.x, it->box.y, it->box.w, it->box.h,
+                      (unsigned long)it->flags, verdict, depth, it->title);
+        } else {
+            spike_out("edgesnap: %4d,%4d %4dx%4d flags %08lx %-11s "
+                      "              \"%s\"\n",
+                      it->box.x, it->box.y, it->box.w, it->box.h,
+                      (unsigned long)it->flags, verdict, it->title);
+        }
     }
     spike_out("edgesnap: insets l=%d t=%d r=%d b=%d -> usable %d,%d %dx%d\n",
            ins.l, ins.t, ins.r, ins.b,
