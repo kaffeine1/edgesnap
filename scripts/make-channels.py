@@ -149,6 +149,12 @@ def aminet_readme():
         # No Distribution: field. Its only legal values are restrictions,
         # and omitting it is what says "distribute freely". There is no
         # License: field on Aminet; MIT is stated in the body.
+        #
+        # 0.1 was the FIRST upload, so no Replaces:. Every release after
+        # it needs "Replaces: util/cdity/edgesnap.lha" here, and
+        # "replaces:utility/workbench/edgesnap.lha" in the OS4Depot
+        # header below, or the old entry survives next to the new one -
+        # and OS4Depot fails validation SILENTLY when it is missing.
         "",
     ]
     return head + body_lines()
