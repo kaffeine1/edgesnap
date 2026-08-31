@@ -597,6 +597,35 @@ static void spike_accent_free(void)
     }
 }
 
+/*
+ * Between drags: has the public screen been replaced under us, and do
+ * we still owe ourselves a proper pen? Both are cheap to answer and
+ * neither is safe to ask in the middle of a drag.
+ */
+static void spike_screen_changed(int replaced);
+
+static void spike_accent_recheck(void)
+{
+    struct Screen *scr = LockPubScreen(NULL);
+
+    if (scr == NULL) {
+        return;
+    }
+    if (scr != g_accent.scr) {
+        /* The old screen is gone and its colormap with it, so the pen
+         * is forgotten rather than released into freed memory. */
+        g_accent.ok = 0;
+        spike_accent_take(scr);
+        spike_screen_changed(1);
+    } else if (!g_accent.ok) {
+        /* We are on the FILLPEN fallback because ObtainBestPen failed
+         * mid-drag. No drag is in flight now: try again. */
+        spike_accent_take(scr);
+        spike_screen_changed(0);   /* same screen: keep what is drawn */
+    }
+    UnlockPubScreen(NULL, scr);
+}
+
 struct Preview {
     struct Window *bars[4];
     int visible;
@@ -757,33 +786,17 @@ static void spike_pf_discard(void)
 }
 
 /*
- * Between drags: has the public screen been replaced under us, and do
- * we still owe ourselves a proper pen? Both are cheap to answer and
- * neither is safe to ask in the middle of a drag.
+ * The screen was replaced: the pixels we saved came from a RastPort
+ * that no longer exists, so they are dropped rather than drawn back,
+ * and the frame follows the accent onto the new screen.
  */
-static void spike_accent_recheck(void)
+static void spike_screen_changed(int replaced)
 {
-    struct Screen *scr = LockPubScreen(NULL);
-
-    if (scr == NULL) {
-        return;
-    }
-    if (scr != g_accent.scr) {
-        /* The old screen is gone and its colormap with it, so the pen
-         * is forgotten rather than released, and anything we saved
-         * from that screen is dropped rather than drawn back. */
+    if (replaced) {
         spike_pf_discard();
-        g_accent.ok = 0;
-        spike_accent_take(scr);
         g_pf.scr = g_accent.scr;
-        g_pf.pen = g_accent.pen;
-    } else if (!g_accent.ok) {
-        /* We are running on the FILLPEN fallback because ObtainBestPen
-         * failed mid-drag. No drag is in flight now: try again. */
-        spike_accent_take(scr);
-        g_pf.pen = g_accent.pen;
     }
-    UnlockPubScreen(NULL, scr);
+    g_pf.pen = g_accent.pen;
 }
 
 /*
@@ -842,6 +855,15 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
     spike_pf_fill();
 }
 #endif /* __amigaos4__ */
+
+#ifndef __amigaos4__
+/* MorphOS draws its preview with borderless windows, which Intuition
+ * disposes of with the screen, so there is nothing of ours to drop. */
+static void spike_screen_changed(int replaced)
+{
+    (void)replaced;
+}
+#endif
 
 static int spike_is_preview_win(struct Window *w)
 {
