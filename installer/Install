@@ -66,6 +66,15 @@
        "Exchange enables, disables or removes it as with any "
        "commodity."))
 
+; Nothing here installs into @default-dest: the library, the commodity,
+; the preferences window and the template each go to an absolute
+; destination. But the Installer defaults @default-dest to the drawer
+; the script was started from, and it names that drawer in its own
+; closing message. Unpack into RAM:, run Install, and any implementation
+; that ignores our (quiet) tells the user EdgeSnap "is in RAM:" - which
+; is what a MorphOS user reported. Say where it really went instead.
+(set @default-dest "SYS:")
+
 (complete 0)
 (welcome #welcome)
 
