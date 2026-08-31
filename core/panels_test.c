@@ -190,6 +190,36 @@ static void test_panels_may_exceed_the_screen(void)
     CHECK(ins.t == 300);
 }
 
+/*
+ * The diagnostic pair: the dump attributes a reservation to a window,
+ * so the name and the depth must agree with what the insets end up
+ * being. If these drift, a user's dump starts lying.
+ */
+static void test_edge_name_and_depth_match_the_insets(void)
+{
+    ESRect p[1];
+    ESInsets ins;
+
+    p[0] = rect(490, 900, 300, 48);          /* floating bottom dock */
+    CHECK(es_panel_classify(&SCREEN, &p[0]) == ES_PEDGE_BOTTOM);
+    CHECK(es_panel_depth(&SCREEN, &p[0]) == 60);
+    es_panel_insets(&SCREEN, p, 1, 0, &ins);
+    CHECK(ins.b == es_panel_depth(&SCREEN, &p[0]));
+
+    p[0] = rect(0, 0, 60, 900);              /* left bar */
+    CHECK(es_panel_depth(&SCREEN, &p[0]) == 60);
+    p[0] = rect(1220, 0, 60, 900);           /* right bar */
+    CHECK(es_panel_depth(&SCREEN, &p[0]) == 60);
+    p[0] = rect(0, 0, 1280, 40);             /* top bar */
+    CHECK(es_panel_depth(&SCREEN, &p[0]) == 40);
+
+    p[0] = rect(600, 400, 80, 200);          /* mid-screen: nothing */
+    CHECK(es_panel_depth(&SCREEN, &p[0]) == 0);
+
+    CHECK(es_panel_edge_name(ES_PEDGE_BOTTOM)[0] == 'd');
+    CHECK(es_panel_edge_name(ES_PEDGE_NONE)[0] == 'n');
+}
+
 int main(void)
 {
     test_bottom_dock();
@@ -203,6 +233,7 @@ int main(void)
     test_thin_preview_bar_shape();
     test_many_panels_no_limit();
     test_panels_may_exceed_the_screen();
+    test_edge_name_and_depth_match_the_insets();
 
     if (g_failures == 0) {
         printf("panels_test: all tests passed\n");

@@ -1457,23 +1457,6 @@ static void spike_engine_step(void)
  * systems: collect under LockIBase, print after unlocking.
  */
 
-/* How deep this box would reserve on the edge it claims, if any. */
-static int spike_panel_depth(const ESRect *scr, const ESRect *b)
-{
-    switch (es_panel_classify(scr, b)) {
-    case ES_PEDGE_LEFT:
-        return (b->x + b->w) - scr->x;
-    case ES_PEDGE_RIGHT:
-        return (scr->x + scr->w) - b->x;
-    case ES_PEDGE_TOP:
-        return (b->y + b->h) - scr->y;
-    case ES_PEDGE_BOTTOM:
-        return (scr->y + scr->h) - b->y;
-    default:
-        return 0;
-    }
-}
-
 #define ES_DUMP_MAX 24
 
 struct WinDumpItem {
@@ -1580,7 +1563,7 @@ static void spike_dump_windows(void)
         } else {
             verdict = es_panel_edge_name(es_panel_classify(&scrrect,
                                                            &it->box));
-            depth = spike_panel_depth(&scrrect, &it->box);
+            depth = es_panel_depth(&scrrect, &it->box);
         }
         if (depth > 0) {
             spike_out("edgesnap: %4d,%4d %4dx%4d flags %08lx %-11s "

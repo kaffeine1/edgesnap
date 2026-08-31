@@ -57,6 +57,11 @@ int es_panel_classify(const ESRect *screen, const ESRect *box);
  * guessing which window ate the usable area. */
 const char *es_panel_edge_name(int edge);
 
+/* How deep this box reserves on the edge it claims, 0 if none. The
+ * inset arithmetic lives here once: es_panel_add() uses it, and so does
+ * any diagnostic that wants to attribute the reservation to a window. */
+int es_panel_depth(const ESRect *screen, const ESRect *box);
+
 /*
  * The same policy one box at a time, so a caller walking a window list
  * needs no array and therefore no fixed limit on how many panels a

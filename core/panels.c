@@ -79,20 +79,38 @@ void es_panel_begin(ESInsets *out)
     out->l = out->t = out->r = out->b = 0;
 }
 
-void es_panel_add(const ESRect *scr, const ESRect *b, ESInsets *out)
+int es_panel_depth(const ESRect *scr, const ESRect *b)
 {
     switch (es_panel_classify(scr, b)) {
     case ES_PEDGE_LEFT:
-        out->l = es_max(out->l, (b->x + b->w) - scr->x);
+        return (b->x + b->w) - scr->x;
+    case ES_PEDGE_RIGHT:
+        return (scr->x + scr->w) - b->x;
+    case ES_PEDGE_TOP:
+        return (b->y + b->h) - scr->y;
+    case ES_PEDGE_BOTTOM:
+        return (scr->y + scr->h) - b->y;
+    default:
+        return 0;
+    }
+}
+
+void es_panel_add(const ESRect *scr, const ESRect *b, ESInsets *out)
+{
+    int depth = es_panel_depth(scr, b);
+
+    switch (es_panel_classify(scr, b)) {
+    case ES_PEDGE_LEFT:
+        out->l = es_max(out->l, depth);
         break;
     case ES_PEDGE_RIGHT:
-        out->r = es_max(out->r, (scr->x + scr->w) - b->x);
+        out->r = es_max(out->r, depth);
         break;
     case ES_PEDGE_TOP:
-        out->t = es_max(out->t, (b->y + b->h) - scr->y);
+        out->t = es_max(out->t, depth);
         break;
     case ES_PEDGE_BOTTOM:
-        out->b = es_max(out->b, (scr->y + scr->h) - b->y);
+        out->b = es_max(out->b, depth);
         break;
     default:
         break;
