@@ -637,7 +637,15 @@ LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out)
     }
 
     if (!found) {
+        /* Leave nothing undefined for the caller: "no seam" used to
+         * return with strip/vertical untouched, and the commodity's
+         * debug line printed whatever was on its stack. */
         out->present = 0;
+        out->vertical = 0;
+        out->strip.x = 0;
+        out->strip.y = 0;
+        out->strip.w = 0;
+        out->strip.h = 0;
         out->windowA = NULL;
         out->windowB = NULL;
         return ES_OK;

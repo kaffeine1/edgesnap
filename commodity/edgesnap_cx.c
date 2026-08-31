@@ -522,12 +522,20 @@ static void spike_publish_ignored(void);
 
 /*
  * One accent colour for everything EdgeSnap draws - the preview frame
- * and the seam - obtained once, at startup, and held.
+ * and the seam - obtained once, at startup, and kept.
  *
  * Not per drawing: ObtainBestPen fails while Intuition is dragging a
  * window, and the fallback is FILLPEN, a grey almost identical to the
  * Workbench background. That is how the preview frame came to be drawn
  * and invisible for an afternoon.
+ *
+ * The pen is kept, but THE SCREEN IS NOT HELD. A locked public screen
+ * cannot be closed, and closing the Workbench screen is exactly what
+ * Intuition does to change its screenmode: holding the lock for our
+ * whole run made EdgeSnap block screenmode changes for as long as it
+ * was running (field report, 2026-08-31). We lock for the instants we
+ * need it and re-check, between drags, whether the screen under us was
+ * replaced - see spike_accent_recheck().
  */
 static struct Accent {
     struct Screen *scr;
@@ -536,13 +544,8 @@ static struct Accent {
     int ok;
 } g_accent;
 
-static int spike_accent_init(void)
+static void spike_accent_take(struct Screen *scr)
 {
-    struct Screen *scr = LockPubScreen(NULL);
-
-    if (scr == NULL) {
-        return 0;
-    }
     g_accent.scr = scr;
     g_accent.cm = scr->ViewPort.ColorMap;
     g_accent.pen = ObtainBestPen(g_accent.cm, 0x22222222UL, 0x88888888UL,
@@ -550,9 +553,12 @@ static int spike_accent_init(void)
                                  PRECISION_GUI, TAG_DONE);
     if (g_accent.pen != -1) {
         g_accent.ok = 1;
-    } else {
+        return;
+    }
+    {
         struct DrawInfo *dri = GetScreenDrawInfo(scr);
 
+        g_accent.ok = 0;
         g_accent.pen = 3;
         if (dri != NULL) {
             if (dri->dri_NumPens > FILLPEN) {
@@ -561,18 +567,33 @@ static int spike_accent_init(void)
             FreeScreenDrawInfo(scr, dri);
         }
     }
+}
+
+static int spike_accent_init(void)
+{
+    struct Screen *scr = LockPubScreen(NULL);
+
+    if (scr == NULL) {
+        return 0;
+    }
+    spike_accent_take(scr);
+    UnlockPubScreen(NULL, scr);
     return 1;
 }
 
 static void spike_accent_free(void)
 {
-    if (g_accent.ok) {
+    struct Screen *scr = LockPubScreen(NULL);
+
+    /* Release only into the colormap we actually took the pen from: if
+     * the screen was replaced while we ran, that colormap is gone. */
+    if (g_accent.ok && scr != NULL && scr == g_accent.scr) {
         ReleasePen(g_accent.cm, (ULONG)g_accent.pen);
-        g_accent.ok = 0;
     }
-    if (g_accent.scr != NULL) {
-        UnlockPubScreen(NULL, g_accent.scr);
-        g_accent.scr = NULL;
+    g_accent.ok = 0;
+    g_accent.scr = NULL;
+    if (scr != NULL) {
+        UnlockPubScreen(NULL, scr);
     }
 }
 
@@ -714,6 +735,55 @@ static void spike_pf_hide(void)
         }
     }
     g_pf.drawn = 0;
+}
+
+/*
+ * Forget the saved pixels instead of restoring them. Used when the
+ * screen they were read from has been replaced: writing them back
+ * would blit into a RastPort that no longer exists.
+ */
+static void spike_pf_discard(void)
+{
+    int i;
+
+    for (i = 0; i < g_pf.strips; i++) {
+        if (g_pf.saved[i] != NULL) {
+            FreeVec(g_pf.saved[i]);
+            g_pf.saved[i] = NULL;
+        }
+    }
+    g_pf.strips = 0;
+    g_pf.drawn = 0;
+}
+
+/*
+ * Between drags: has the public screen been replaced under us, and do
+ * we still owe ourselves a proper pen? Both are cheap to answer and
+ * neither is safe to ask in the middle of a drag.
+ */
+static void spike_accent_recheck(void)
+{
+    struct Screen *scr = LockPubScreen(NULL);
+
+    if (scr == NULL) {
+        return;
+    }
+    if (scr != g_accent.scr) {
+        /* The old screen is gone and its colormap with it, so the pen
+         * is forgotten rather than released, and anything we saved
+         * from that screen is dropped rather than drawn back. */
+        spike_pf_discard();
+        g_accent.ok = 0;
+        spike_accent_take(scr);
+        g_pf.scr = g_accent.scr;
+        g_pf.pen = g_accent.pen;
+    } else if (!g_accent.ok) {
+        /* We are running on the FILLPEN fallback because ObtainBestPen
+         * failed mid-drag. No drag is in flight now: try again. */
+        spike_accent_take(scr);
+        g_pf.pen = g_accent.pen;
+    }
+    UnlockPubScreen(NULL, scr);
 }
 
 /*
@@ -1093,10 +1163,6 @@ static void spike_divider_sync(void)
     {
         LONG rc = ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d);
 
-        spike_log("edgesnap: divider rc=%ld present=%ld %d,%d %dx%d\n",
-                  (long)rc, (long)(rc == ES_OK ? d.present : 0),
-                  (int)d.strip.x, (int)d.strip.y,
-                  (int)d.strip.w, (int)d.strip.h);
         if (rc != ES_OK || !d.present) {
             spike_divider_close();
             return;
@@ -1312,6 +1378,11 @@ static void spike_apply_report(const struct ESnapReport *r)
             spike_log("edgesnap: snap %p refused (%ld)\n",
                       (void *)r->snapWindow, (long)r->snapResult);
         }
+    }
+    if (g_drag_active != r->dragActive) {
+        /* Entering a drag: never draw on a screen that has been
+         * replaced. Leaving one: a good pen can be had again. */
+        spike_accent_recheck();
     }
     g_drag_active = r->dragActive;
 }
