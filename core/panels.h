@@ -53,6 +53,17 @@ typedef struct ESInsets {
 int es_panel_classify(const ESRect *screen, const ESRect *box);
 
 /*
+ * The same policy one box at a time, so a caller walking a window list
+ * needs no array and therefore no fixed limit on how many panels a
+ * desktop may have. Start from es_panel_begin(), call es_panel_add()
+ * for every candidate, then es_panel_end() to add the breathing room.
+ * es_panel_insets() below is these three over an array.
+ */
+void es_panel_begin(ESInsets *out);
+void es_panel_add(const ESRect *screen, const ESRect *box, ESInsets *out);
+void es_panel_end(ESInsets *out, int margin_px);
+
+/*
  * screen: full screen rectangle. boxes/count: candidate window boxes,
  * pre-filtered by the caller as described above. margin_px: breathing
  * room added to every non-zero inset (ES_PANEL_MARGIN_PX is the

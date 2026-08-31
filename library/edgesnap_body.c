@@ -45,7 +45,6 @@
 #define ESB_IBASE ((struct IntuitionBase *)IntuitionBase)
 
 #define ESB_EXCLUDE_SLOTS 16
-#define ESB_PANEL_SCAN_MAX 16
 
 static struct SignalSemaphore g_sem;
 static ESConfig g_cfg;
@@ -142,23 +141,49 @@ void esb_ignore_windows(struct Window **wins, int count)
     }
 }
 
+/*
+ * The usable rect for one set of insets. Returns 0 when the insets ate
+ * the screen, which is the caller's cue to trust them less.
+ */
+static int esb_usable_from(struct Screen *scr, const ESInsets *ins,
+                           ESRect *out)
+{
+    int top = scr->BarHeight + 1;
+
+    if (ins->t > top) {
+        top = ins->t;
+    }
+    out->x = ins->l;
+    out->y = top;
+    out->w = scr->Width - ins->l - ins->r;
+    out->h = scr->Height - top - ins->b;
+    return out->w > 0 && out->h > 0;
+}
+
 static void esb_usable_area_locked(struct Screen *scr, struct Window *skip,
                                    ESRect *out_usable, ESInsets *out_ins)
 {
     ESRect scrrect;
-    ESRect panels[ESB_PANEL_SCAN_MAX];
     ESInsets ins;
     struct Window *w;
-    int n = 0;
-    int top;
 
     scrrect.x = 0;
     scrrect.y = 0;
     scrrect.w = scr->Width;
     scrrect.h = scr->Height;
-    for (w = scr->FirstWindow;
-         g_cfg.panel_detect && w != NULL && n < ESB_PANEL_SCAN_MAX;
+
+    /*
+     * Every window, not the first sixteen. The insets are accumulated
+     * as the list is walked, so a desktop may carry as many docks as it
+     * likes. The version this replaces filled a 16-entry array first
+     * and stopped collecting there, so on a crowded screen every dock
+     * past the sixteenth reserved nothing at all.
+     */
+    es_panel_begin(&ins);
+    for (w = scr->FirstWindow; g_cfg.panel_detect && w != NULL;
          w = w->NextWindow) {
+        ESRect box;
+
         if (w == skip || esb_is_ignored(w)) {
             continue;
         }
@@ -168,27 +193,36 @@ static void esb_usable_area_locked(struct Screen *scr, struct Window *skip,
                          WFLG_BACKDROP)) != 0) {
             continue;
         }
-        panels[n].x = w->LeftEdge;
-        panels[n].y = w->TopEdge;
-        panels[n].w = w->Width;
-        panels[n].h = w->Height;
-        n++;
+        box.x = w->LeftEdge;
+        box.y = w->TopEdge;
+        box.w = w->Width;
+        box.h = w->Height;
+        es_panel_add(&scrrect, &box, &ins);
     }
-    es_panel_insets(&scrrect, panels, n, g_cfg.panel_margin, &ins);
+    es_panel_end(&ins, g_cfg.panel_margin);
 
     ins.l += g_cfg.margin.l;
     ins.r += g_cfg.margin.r;
     ins.t += g_cfg.margin.t;
     ins.b += g_cfg.margin.b;
 
-    top = scr->BarHeight + 1;
-    if (ins.t > top) {
-        top = ins.t;
+    if (!esb_usable_from(scr, &ins, out_usable)) {
+        /*
+         * Panels plus margins left nothing to snap into. Something was
+         * mistaken for a dock, or the margins are absurd; either way a
+         * degenerate rect would make every zone derived from it
+         * nonsense. Give up our own guesses first - the user's margins
+         * are an explicit choice, so they outlive our panel detection.
+         */
+        ins = g_cfg.margin;
+        if (!esb_usable_from(scr, &ins, out_usable)) {
+            ins.l = 0;
+            ins.t = 0;
+            ins.r = 0;
+            ins.b = 0;
+            (void)esb_usable_from(scr, &ins, out_usable);
+        }
     }
-    out_usable->x = ins.l;
-    out_usable->y = top;
-    out_usable->w = scr->Width - ins.l - ins.r;
-    out_usable->h = scr->Height - top - ins.b;
     if (out_ins != NULL) {
         *out_ins = ins;
     }
@@ -486,43 +520,43 @@ LONG esb_set_options(const struct TagItem *tags)
         v = (LONG)ti->ti_Data;
         switch (ti->ti_Tag) {
         case ES_OPT_EdgePx:
-            if (v < 1 || v > 200) {
+            if (v < ES_EDGE_PX_MIN || v > ES_EDGE_PX_MAX) {
                 return ES_ERR_BAD_ARGS;
             }
             cfg.engine.edge_px = (int)v;
             break;
         case ES_OPT_CornerDiv:
-            if (v < 2 || v > 16) {
+            if (v < ES_CORNER_DIV_MIN || v > ES_CORNER_DIV_MAX) {
                 return ES_ERR_BAD_ARGS;
             }
             cfg.engine.corner_div = (int)v;
             break;
         case ES_OPT_DragMinPx:
-            if (v < 1 || v > 200) {
+            if (v < ES_DRAG_MIN_PX_MIN || v > ES_DRAG_MIN_PX_MAX) {
                 return ES_ERR_BAD_ARGS;
             }
             cfg.engine.drag_min_px = (int)v;
             break;
         case ES_OPT_MarginLeft:
-            if (v < 0) {
+            if (v < ES_MARGIN_MIN || v > ES_MARGIN_MAX) {
                 return ES_ERR_BAD_ARGS;
             }
             cfg.margin.l = (int)v;
             break;
         case ES_OPT_MarginTop:
-            if (v < 0) {
+            if (v < ES_MARGIN_MIN || v > ES_MARGIN_MAX) {
                 return ES_ERR_BAD_ARGS;
             }
             cfg.margin.t = (int)v;
             break;
         case ES_OPT_MarginRight:
-            if (v < 0) {
+            if (v < ES_MARGIN_MIN || v > ES_MARGIN_MAX) {
                 return ES_ERR_BAD_ARGS;
             }
             cfg.margin.r = (int)v;
             break;
         case ES_OPT_MarginBottom:
-            if (v < 0) {
+            if (v < ES_MARGIN_MIN || v > ES_MARGIN_MAX) {
                 return ES_ERR_BAD_ARGS;
             }
             cfg.margin.b = (int)v;
@@ -531,7 +565,8 @@ LONG esb_set_options(const struct TagItem *tags)
             cfg.panel_detect = v ? 1 : 0;
             break;
         case ES_OPT_PanelMargin:
-            if (v < 0 || v > 200) {
+            if (v < ES_PANEL_MARGIN_MIN ||
+                v > ES_PANEL_MARGIN_MAX) {
                 return ES_ERR_BAD_ARGS;
             }
             cfg.panel_margin = (int)v;

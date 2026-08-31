@@ -86,6 +86,25 @@ typedef struct ESSetting {
     const char *const *choices;   /* ES_SET_CHOICE, NULL-terminated   */
 } ESSetting;
 
+/*
+ * The legal range of every numeric setting, in ONE place. There are
+ * three doors into the configuration - the preferences file parser, the
+ * settings table the GUIs are built from, and the library's public tag
+ * interface - and until they shared these, the tag door let through
+ * margins the parser rejected.
+ */
+#define ES_EDGE_PX_MIN        1
+#define ES_EDGE_PX_MAX      200
+#define ES_CORNER_DIV_MIN     2
+#define ES_CORNER_DIV_MAX    16
+#define ES_DRAG_MIN_PX_MIN    1
+#define ES_DRAG_MIN_PX_MAX  200
+#define ES_PANEL_MARGIN_MIN   0
+#define ES_PANEL_MARGIN_MAX 200
+/* A margin wider than any screen is a typo, not a preference. */
+#define ES_MARGIN_MIN         0
+#define ES_MARGIN_MAX      2000
+
 /* The whole vocabulary, in the order a preferences window should show
  * it. `count` receives the number of entries. */
 const ESSetting *es_settings(int *count);

@@ -230,61 +230,56 @@ int es_config_set(ESConfig *cfg, const char *key, const char *value)
         return ES_ERR_BAD_ARGS;
     }
     if (es_key_eq(key, "edgepx")) {
-        if (!es_parse_int(value, &iv) || iv < 1 || iv > 200) {
+        if (!es_parse_int(value, &iv) ||
+            iv < ES_EDGE_PX_MIN || iv > ES_EDGE_PX_MAX) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->engine.edge_px = iv;
         return ES_OK;
     }
     if (es_key_eq(key, "cornerdiv")) {
-        if (!es_parse_int(value, &iv) || iv < 2 || iv > 16) {
+        if (!es_parse_int(value, &iv) ||
+            iv < ES_CORNER_DIV_MIN || iv > ES_CORNER_DIV_MAX) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->engine.corner_div = iv;
         return ES_OK;
     }
     if (es_key_eq(key, "dragminpx")) {
-        if (!es_parse_int(value, &iv) || iv < 1 || iv > 200) {
+        if (!es_parse_int(value, &iv) ||
+            iv < ES_DRAG_MIN_PX_MIN || iv > ES_DRAG_MIN_PX_MAX) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->engine.drag_min_px = iv;
         return ES_OK;
     }
     if (es_key_eq(key, "marginleft")) {
-        /* An upper bound so the setting means the same thing to the
-         * preferences window as it does to this parser: a margin
-         * wider than any screen is a typo, not a preference. */
-        if (!es_parse_int(value, &iv) || iv < 0 || iv > 2000) {
+        if (!es_parse_int(value, &iv) ||
+            iv < ES_MARGIN_MIN || iv > ES_MARGIN_MAX) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->margin.l = iv;
         return ES_OK;
     }
     if (es_key_eq(key, "margintop")) {
-        /* An upper bound so the setting means the same thing to the
-         * preferences window as it does to this parser: a margin
-         * wider than any screen is a typo, not a preference. */
-        if (!es_parse_int(value, &iv) || iv < 0 || iv > 2000) {
+        if (!es_parse_int(value, &iv) ||
+            iv < ES_MARGIN_MIN || iv > ES_MARGIN_MAX) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->margin.t = iv;
         return ES_OK;
     }
     if (es_key_eq(key, "marginright")) {
-        /* An upper bound so the setting means the same thing to the
-         * preferences window as it does to this parser: a margin
-         * wider than any screen is a typo, not a preference. */
-        if (!es_parse_int(value, &iv) || iv < 0 || iv > 2000) {
+        if (!es_parse_int(value, &iv) ||
+            iv < ES_MARGIN_MIN || iv > ES_MARGIN_MAX) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->margin.r = iv;
         return ES_OK;
     }
     if (es_key_eq(key, "marginbottom")) {
-        /* An upper bound so the setting means the same thing to the
-         * preferences window as it does to this parser: a margin
-         * wider than any screen is a typo, not a preference. */
-        if (!es_parse_int(value, &iv) || iv < 0 || iv > 2000) {
+        if (!es_parse_int(value, &iv) ||
+            iv < ES_MARGIN_MIN || iv > ES_MARGIN_MAX) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->margin.b = iv;
@@ -298,7 +293,8 @@ int es_config_set(ESConfig *cfg, const char *key, const char *value)
         return ES_OK;
     }
     if (es_key_eq(key, "panelmargin")) {
-        if (!es_parse_int(value, &iv) || iv < 0 || iv > 200) {
+        if (!es_parse_int(value, &iv) ||
+            iv < ES_PANEL_MARGIN_MIN || iv > ES_PANEL_MARGIN_MAX) {
             return ES_ERR_BAD_ARGS;
         }
         cfg->panel_margin = iv;
@@ -409,13 +405,13 @@ static const ESSetting es_setting_table[] = {
       ES_SET_ZONES, 0, 0, 0 },
     { "EDGEPX", "Edge distance",
       "How close to an edge the pointer must come, in pixels.",
-      ES_SET_INT, 1, 200, 0 },
+      ES_SET_INT, ES_EDGE_PX_MIN, ES_EDGE_PX_MAX, 0 },
     { "CORNERDIV", "Corner size",
       "Corner length is the usable height divided by this.",
-      ES_SET_INT, 2, 16, 0 },
+      ES_SET_INT, ES_CORNER_DIV_MIN, ES_CORNER_DIV_MAX, 0 },
     { "DRAGMINPX", "Drag threshold",
       "How far the pointer must travel before it counts as a drag.",
-      ES_SET_INT, 1, 200, 0 },
+      ES_SET_INT, ES_DRAG_MIN_PX_MIN, ES_DRAG_MIN_PX_MAX, 0 },
     { "PREVIEW", "Show the preview frame",
       "Outline where the window will land while dragging.",
       ES_SET_BOOL, 0, 0, 0 },
@@ -424,19 +420,19 @@ static const ESSetting es_setting_table[] = {
       ES_SET_BOOL, 0, 0, 0 },
     { "PANELMARGIN", "Space around a dock",
       "Breathing room left around a detected dock, in pixels.",
-      ES_SET_INT, 0, 200, 0 },
+      ES_SET_INT, ES_PANEL_MARGIN_MIN, ES_PANEL_MARGIN_MAX, 0 },
     { "MARGINLEFT", "Margin: left",
       "Extra space left free at the left edge.",
-      ES_SET_INT, 0, 2000, 0 },
+      ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
     { "MARGINTOP", "Margin: top",
       "Extra space left free at the top edge.",
-      ES_SET_INT, 0, 2000, 0 },
+      ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
     { "MARGINRIGHT", "Margin: right",
       "Extra space left free at the right edge.",
-      ES_SET_INT, 0, 2000, 0 },
+      ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
     { "MARGINBOTTOM", "Margin: bottom",
       "Extra space left free at the bottom edge.",
-      ES_SET_INT, 0, 2000, 0 },
+      ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
     { "BYPASSQUAL", "Hold to ignore zones",
       "Qualifier that lets a window be dragged past the zones.",
       ES_SET_CHOICE, 0, 0, es_qual_choices }

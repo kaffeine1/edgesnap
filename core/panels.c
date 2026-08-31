@@ -58,33 +58,33 @@ static int es_max(int a, int b)
     return a > b ? a : b;
 }
 
-void es_panel_insets(const ESRect *scr, const ESRect *boxes, int count,
-                     int margin_px, ESInsets *out)
+void es_panel_begin(ESInsets *out)
 {
-    int i;
-
     out->l = out->t = out->r = out->b = 0;
-    for (i = 0; i < count; i++) {
-        const ESRect *b = &boxes[i];
+}
 
-        switch (es_panel_classify(scr, b)) {
-        case ES_PEDGE_LEFT:
-            out->l = es_max(out->l, (b->x + b->w) - scr->x);
-            break;
-        case ES_PEDGE_RIGHT:
-            out->r = es_max(out->r, (scr->x + scr->w) - b->x);
-            break;
-        case ES_PEDGE_TOP:
-            out->t = es_max(out->t, (b->y + b->h) - scr->y);
-            break;
-        case ES_PEDGE_BOTTOM:
-            out->b = es_max(out->b, (scr->y + scr->h) - b->y);
-            break;
-        default:
-            break;
-        }
+void es_panel_add(const ESRect *scr, const ESRect *b, ESInsets *out)
+{
+    switch (es_panel_classify(scr, b)) {
+    case ES_PEDGE_LEFT:
+        out->l = es_max(out->l, (b->x + b->w) - scr->x);
+        break;
+    case ES_PEDGE_RIGHT:
+        out->r = es_max(out->r, (scr->x + scr->w) - b->x);
+        break;
+    case ES_PEDGE_TOP:
+        out->t = es_max(out->t, (b->y + b->h) - scr->y);
+        break;
+    case ES_PEDGE_BOTTOM:
+        out->b = es_max(out->b, (scr->y + scr->h) - b->y);
+        break;
+    default:
+        break;
     }
+}
 
+void es_panel_end(ESInsets *out, int margin_px)
+{
     /* breathing room: snapped windows never sit glued to a panel */
     if (out->l > 0) {
         out->l += margin_px;
@@ -98,4 +98,16 @@ void es_panel_insets(const ESRect *scr, const ESRect *boxes, int count,
     if (out->b > 0) {
         out->b += margin_px;
     }
+}
+
+void es_panel_insets(const ESRect *scr, const ESRect *boxes, int count,
+                     int margin_px, ESInsets *out)
+{
+    int i;
+
+    es_panel_begin(out);
+    for (i = 0; i < count; i++) {
+        es_panel_add(scr, &boxes[i], out);
+    }
+    es_panel_end(out, margin_px);
 }
