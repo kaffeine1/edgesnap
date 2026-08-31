@@ -193,6 +193,17 @@ static void es_close_classes(void)
 static void es_add_child(Object *layout, Object *child, const char *label,
                          int fill);
 
+/* Same group as the section already open? The table keeps a section's
+ * settings together, so a change of string is a change of section. */
+static int es_same_group(const char *a, const char *b)
+{
+    while (*a != '\0' && *a == *b) {
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
 /* The table's label with a colon, in storage that lives as long as the
  * window does. */
 static const char *es_label(struct ESPrefsGui *gui, int index,
@@ -337,31 +348,53 @@ static Object *es_build_window(struct ESPrefsGui *gui)
         count = ES_MAX_SETTINGS;
     }
 
+    /*
+     * One framed section per group, in table order. Four margins under
+     * a "Margins" title read better than four labels each repeating the
+     * word, and the sections come from the shared settings table, so
+     * this window, the MorphOS one and the manual all show the same
+     * ones.
+     */
     rows = VLayoutObject,
         LAYOUT_SpaceOuter, TRUE,
-        LAYOUT_BevelStyle, BVS_GROUP,
-        LAYOUT_Label, "Snapping",
     End;
     if (rows == NULL) {
         return NULL;
     }
-    for (i = 0; i < count; i++) {
-        gui->field[i] = es_widget(gui, &t[i], i);
-        if (gui->field[i] == NULL) {
-            continue;
-        }
-        /*
-         * A checkbox carries its own text, on its right, which is where
-         * the style guide puts it. Everything else gets a label in the
-         * column to its left.
-         */
-        if (t[i].kind == ES_SET_BOOL) {
-            SetAttrs(gui->field[i],
-                     GA_Text, es_label(gui, i, t[i].label), TAG_END);
-            es_add_child(rows, gui->field[i], NULL, 0);
-        } else {
-            es_add_child(rows, gui->field[i], es_label(gui, i, t[i].label),
-                         0);
+    {
+        Object *sect = NULL;
+        const char *open = NULL;
+
+        for (i = 0; i < count; i++) {
+            if (open == NULL || !es_same_group(t[i].group, open)) {
+                sect = VLayoutObject,
+                    LAYOUT_SpaceOuter, TRUE,
+                    LAYOUT_BevelStyle, BVS_GROUP,
+                    LAYOUT_Label, t[i].group,
+                End;
+                if (sect == NULL) {
+                    break;
+                }
+                es_add_child(rows, sect, NULL, 0);
+                open = t[i].group;
+            }
+            gui->field[i] = es_widget(gui, &t[i], i);
+            if (gui->field[i] == NULL) {
+                continue;
+            }
+            /*
+             * A checkbox carries its own text, on its right, which is
+             * where the style guide puts it. Everything else gets a
+             * label in the column to its left.
+             */
+            if (t[i].kind == ES_SET_BOOL) {
+                SetAttrs(gui->field[i],
+                         GA_Text, es_label(gui, i, t[i].label), TAG_END);
+                es_add_child(sect, gui->field[i], NULL, 0);
+            } else {
+                es_add_child(sect, gui->field[i],
+                             es_label(gui, i, t[i].label), 0);
+            }
         }
     }
 

@@ -400,42 +400,42 @@ static const char *const es_qual_choices[] = {
 };
 
 static const ESSetting es_setting_table[] = {
-    { "ZONES", "Zones that react",
+    { "ZONES", "Zones", "Which corners and edges react",
       "Which screen edges and corners snap a window.",
       ES_SET_ZONES, 0, 0, 0 },
-    { "EDGEPX", "Edge distance",
+    { "BYPASSQUAL", "Zones", "Hold to ignore zones",
+      "Qualifier that lets a window be dragged past the zones.",
+      ES_SET_CHOICE, 0, 0, es_qual_choices },
+    { "EDGEPX", "Sensitivity", "Edge distance",
       "How close to an edge the pointer must come, in pixels.",
       ES_SET_INT, ES_EDGE_PX_MIN, ES_EDGE_PX_MAX, 0 },
-    { "CORNERDIV", "Corner size",
+    { "CORNERDIV", "Sensitivity", "Corner size",
       "Corner length is the usable height divided by this.",
       ES_SET_INT, ES_CORNER_DIV_MIN, ES_CORNER_DIV_MAX, 0 },
-    { "DRAGMINPX", "Drag threshold",
+    { "DRAGMINPX", "Sensitivity", "Drag threshold",
       "How far the pointer must travel before it counts as a drag.",
       ES_SET_INT, ES_DRAG_MIN_PX_MIN, ES_DRAG_MIN_PX_MAX, 0 },
-    { "PREVIEW", "Show the preview frame",
+    { "PREVIEW", "Look", "Show the preview frame",
       "Outline where the window will land while dragging.",
       ES_SET_BOOL, 0, 0, 0 },
-    { "PANELDETECT", "Keep clear of docks",
+    { "PANELDETECT", "Docks", "Keep clear of docks",
       "Detect docks and panels, and never cover them.",
       ES_SET_BOOL, 0, 0, 0 },
-    { "PANELMARGIN", "Space around a dock",
+    { "PANELMARGIN", "Docks", "Space around a dock",
       "Breathing room left around a detected dock, in pixels.",
       ES_SET_INT, ES_PANEL_MARGIN_MIN, ES_PANEL_MARGIN_MAX, 0 },
-    { "MARGINLEFT", "Margin: left",
+    { "MARGINLEFT", "Margins", "Left",
       "Extra space left free at the left edge.",
       ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
-    { "MARGINTOP", "Margin: top",
+    { "MARGINTOP", "Margins", "Top",
       "Extra space left free at the top edge.",
       ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
-    { "MARGINRIGHT", "Margin: right",
+    { "MARGINRIGHT", "Margins", "Right",
       "Extra space left free at the right edge.",
       ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
-    { "MARGINBOTTOM", "Margin: bottom",
+    { "MARGINBOTTOM", "Margins", "Bottom",
       "Extra space left free at the bottom edge.",
-      ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
-    { "BYPASSQUAL", "Hold to ignore zones",
-      "Qualifier that lets a window be dragged past the zones.",
-      ES_SET_CHOICE, 0, 0, es_qual_choices }
+      ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 }
 };
 
 #define ES_SETTING_COUNT \
@@ -454,21 +454,54 @@ int es_setting_value(const ESConfig *cfg, int index)
     if (cfg == 0 || index < 0 || index >= ES_SETTING_COUNT) {
         return 0;
     }
-    switch (index) {
-    case 0:  return (int)cfg->engine.zones_mask;
-    case 1:  return cfg->engine.edge_px;
-    case 2:  return cfg->engine.corner_div;
-    case 3:  return cfg->engine.drag_min_px;
-    case 4:  return cfg->preview;
-    case 5:  return cfg->panel_detect;
-    case 6:  return cfg->panel_margin;
-    case 7:  return cfg->margin.l;
-    case 8:  return cfg->margin.t;
-    case 9:  return cfg->margin.r;
-    case 10: return cfg->margin.b;
-    case 11: return cfg->bypass_qual;
-    default: return 0;
+    /*
+     * By key, not by position. This used to be a switch on the index,
+     * which meant the table could not be reordered without silently
+     * handing the preferences window the wrong field: grouping the
+     * settings into sections moved four rows and broke it at once. The
+     * parser above already dispatches on the key; so does this.
+     */
+    {
+        const char *key = es_setting_table[index].key;
+
+        if (es_key_eq(key, "zones")) {
+            return (int)cfg->engine.zones_mask;
+        }
+        if (es_key_eq(key, "bypassqual")) {
+            return cfg->bypass_qual;
+        }
+        if (es_key_eq(key, "edgepx")) {
+            return cfg->engine.edge_px;
+        }
+        if (es_key_eq(key, "cornerdiv")) {
+            return cfg->engine.corner_div;
+        }
+        if (es_key_eq(key, "dragminpx")) {
+            return cfg->engine.drag_min_px;
+        }
+        if (es_key_eq(key, "preview")) {
+            return cfg->preview;
+        }
+        if (es_key_eq(key, "paneldetect")) {
+            return cfg->panel_detect;
+        }
+        if (es_key_eq(key, "panelmargin")) {
+            return cfg->panel_margin;
+        }
+        if (es_key_eq(key, "marginleft")) {
+            return cfg->margin.l;
+        }
+        if (es_key_eq(key, "margintop")) {
+            return cfg->margin.t;
+        }
+        if (es_key_eq(key, "marginright")) {
+            return cfg->margin.r;
+        }
+        if (es_key_eq(key, "marginbottom")) {
+            return cfg->margin.b;
+        }
     }
+    return 0;
 }
 
 /* Whole numbers only, and no sprintf: this is C89 that also has to

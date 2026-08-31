@@ -220,27 +220,33 @@ static const char *es_label(struct ESPrefsGui *gui, int index,
     return out;
 }
 
-static Object *es_settings_group(struct ESPrefsGui *gui)
+/* Same group as the previous row? The table keeps a section's settings
+ * together, so a change of string is a change of section. */
+static int es_same_group(const char *a, const char *b)
+{
+    while (*a != '\0' && *a == *b) {
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
+/* One framed section, rows [first..last] of the table. */
+static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
+                          int first, int last)
 {
     struct TagItem tags[4 + ES_MAX_SETTINGS * 2 + 1];
-    const ESSetting *t;
-    int count = 0;
     int n = 0;
     int i;
-
-    t = es_settings(&count);
-    if (count > ES_MAX_SETTINGS) {
-        count = ES_MAX_SETTINGS;
-    }
 
     tags[n].ti_Tag = MUIA_Frame;
     tags[n++].ti_Data = MUIV_Frame_Group;
     tags[n].ti_Tag = MUIA_FrameTitle;
-    tags[n++].ti_Data = (ULONG)"Snapping";
+    tags[n++].ti_Data = (ULONG)t[first].group;
     tags[n].ti_Tag = MUIA_Group_Columns;
     tags[n++].ti_Data = 2;
 
-    for (i = 0; i < count; i++) {
+    for (i = first; i <= last; i++) {
         Object *widget;
         Object *label;
 
@@ -255,9 +261,9 @@ static Object *es_settings_group(struct ESPrefsGui *gui)
         }
         /*
          * A checkmark's label belongs on its RIGHT: that is the style
-         * guide, and it is what the zone row above already does. Every
-         * other kind keeps the label in the left column, where it lines
-         * up with the rest.
+         * guide, and it is what the zone grid already does. Every other
+         * kind keeps its label in the left column, lined up with the
+         * rest of the section.
          */
         if (t[i].kind == ES_SET_BOOL) {
             label = Label((char *)es_label(gui, i, t[i].label));
@@ -276,6 +282,44 @@ static Object *es_settings_group(struct ESPrefsGui *gui)
         }
         tags[n].ti_Tag = MUIA_Group_Child;
         tags[n++].ti_Data = (ULONG)widget;
+    }
+    tags[n].ti_Tag = TAG_DONE;
+    tags[n].ti_Data = 0;
+    return MUI_NewObjectA(MUIC_Group, tags);
+}
+
+/*
+ * The window is one framed section per group, in table order. Four
+ * margins under a "Margins" title read better than four labels each
+ * repeating the word, which is what a MorphOS user pointed out about
+ * 0.1, and the sections come from the shared table so the AmigaOS 4
+ * window and the manual show the same ones.
+ */
+static Object *es_settings_group(struct ESPrefsGui *gui)
+{
+    struct TagItem tags[ES_MAX_SETTINGS + 2];
+    const ESSetting *t;
+    int count = 0;
+    int n = 0;
+    int first = 0;
+    int i;
+
+    t = es_settings(&count);
+    if (count > ES_MAX_SETTINGS) {
+        count = ES_MAX_SETTINGS;
+    }
+    for (i = 1; i <= count; i++) {
+        Object *sect;
+
+        if (i < count && es_same_group(t[i].group, t[first].group)) {
+            continue;
+        }
+        sect = es_section(gui, t, first, i - 1);
+        if (sect != NULL) {
+            tags[n].ti_Tag = MUIA_Group_Child;
+            tags[n++].ti_Data = (ULONG)sect;
+        }
+        first = i;
     }
     tags[n].ti_Tag = TAG_DONE;
     tags[n].ti_Data = 0;

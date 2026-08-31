@@ -78,6 +78,15 @@ typedef enum ESSettingKind {
 
 typedef struct ESSetting {
     const char *key;              /* EDGEPX - as written in the file  */
+    /*
+     * The section this setting belongs to. Entries sharing a group sit
+     * next to each other in the table, so a window builds its frames by
+     * starting a new one whenever this string changes, and the manual
+     * takes the same headings. It is what lets four margins be "Left",
+     * "Top", "Right", "Bottom" under one "Margins" title instead of
+     * repeating the word four times.
+     */
+    const char *group;
     const char *label;            /* "Edge distance" - for the GUI    */
     const char *help;             /* one line, for a help bubble      */
     int kind;                     /* ESSettingKind                    */

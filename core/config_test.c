@@ -287,6 +287,43 @@ static void test_settings_table(void)
     CHECK(es_setting_apply(&cfg, count, 0) == ES_ERR_BAD_ARGS);
 }
 
+static int es_str_eq(const char *a, const char *b)
+{
+    while (*a != '\0' && *a == *b) {
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
+/*
+ * The windows build their frames by starting a new section whenever the
+ * group changes as they walk the table, and the manual takes the same
+ * headings. That only works if entries sharing a group sit together: a
+ * stray row would open a second frame with a title already used.
+ */
+static void test_groups_are_named_and_contiguous(void)
+{
+    const ESSetting *t;
+    int count = 0;
+    int i, j;
+
+    t = es_settings(&count);
+    for (i = 0; i < count; i++) {
+        CHECK(t[i].group != 0);
+        CHECK(t[i].group[0] != '\0');
+    }
+    /* every run of a group must be the only run of that group */
+    for (i = 1; i < count; i++) {
+        if (es_str_eq(t[i].group, t[i - 1].group)) {
+            continue;                      /* still inside the section */
+        }
+        for (j = 0; j < i - 1; j++) {      /* a section reopened? */
+            CHECK(!es_str_eq(t[j].group, t[i].group));
+        }
+    }
+}
+
 int main(void)
 {
     test_defaults();
@@ -297,6 +334,7 @@ int main(void)
     test_booleans();
     test_zones();
     test_bypass_qualifier();
+    test_groups_are_named_and_contiguous();
 
     if (g_failures == 0) {
         test_settings_table();

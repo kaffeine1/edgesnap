@@ -25,6 +25,15 @@ static void print_zone_values(void)
            "silently disable half\n    the zones.\n");
 }
 
+static int es_same_group(const char *a, const char *b)
+{
+    while (*a != '\0' && *a == *b) {
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
 int main(void)
 {
     const ESSetting *t;
@@ -46,6 +55,11 @@ int main(void)
     for (i = 0; i < count; i++) {
         int d = es_setting_value(&def, i);
 
+        /* The same sections the preferences windows show: the grouping
+         * lives in the settings table, so all three agree. */
+        if (i == 0 || !es_same_group(t[i].group, t[i - 1].group)) {
+            printf("@{b}%s@{ub}\n\n", t[i].group);
+        }
         printf("@{b}%s@{ub} - %s\n", t[i].key, t[i].label);
         printf("    %s\n", t[i].help);
         switch (t[i].kind) {
