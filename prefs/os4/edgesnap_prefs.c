@@ -78,6 +78,11 @@ struct ESPrefsGui {
     Object *field[ES_MAX_SETTINGS];      /* one gadget per setting    */
     Object *zone[ES_ZONE_COUNT + 1];     /* checkboxes for the mask   */
     ESConfig cfg;
+    /* label.image keeps the pointer we give it rather than copying the
+     * text, so these have to outlive the call that builds the window.
+     * The table's labels carry no colon: they also feed the AmigaGuide
+     * manual, where one would read badly. The window adds it. */
+    char label[ES_MAX_SETTINGS][40];
 };
 
 /*
@@ -188,13 +193,38 @@ static void es_close_classes(void)
 static void es_add_child(Object *layout, Object *child, const char *label,
                          int fill);
 
-/* The zone mask gets a row of checkboxes rather than a cryptic number. */
+/* The table's label with a colon, in storage that lives as long as the
+ * window does. */
+static const char *es_label(struct ESPrefsGui *gui, int index,
+                            const char *text)
+{
+    char *out = gui->label[index];
+    int n = 0;
+
+    while (text[n] != '\0' && n < 38) {
+        out[n] = text[n];
+        n++;
+    }
+    out[n++] = ':';
+    out[n] = '\0';
+    return out;
+}
+
+/*
+ * The zone mask gets checkboxes rather than a cryptic number, laid out
+ * three to a row. As one long row they set a minimum width the window
+ * could never go below, which is what stopped the MorphOS window from
+ * being resized; the same layout was here.
+ */
+#define ES_ZONES_PER_ROW 3
+
 static Object *es_zone_group(struct ESPrefsGui *gui)
 {
     Object *group;
+    Object *row = NULL;
     int i;
 
-    group = HLayoutObject,
+    group = VLayoutObject,
         LAYOUT_SpaceOuter, FALSE,
     End;
     if (group == NULL) {
@@ -204,13 +234,22 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
         int zone = es_zone_order[i];
         int on = (gui->cfg.engine.zones_mask & ES_ZONEBIT(zone)) != 0;
 
+        if ((i % ES_ZONES_PER_ROW) == 0) {
+            row = HLayoutObject,
+                LAYOUT_SpaceOuter, FALSE,
+            End;
+            if (row == NULL) {
+                return group;
+            }
+            es_add_child(group, row, NULL, 0);
+        }
         gui->zone[i] = CheckBoxObject,
             GA_ID, GID_ZONE + zone,
             GA_RelVerify, TRUE,
             GA_Text, es_zone_label[i],
             GA_Selected, on ? TRUE : FALSE,
         End;
-        es_add_child(group, gui->zone[i], NULL, 1);
+        es_add_child(row, gui->zone[i], NULL, 1);
     }
     return group;
 }
@@ -311,7 +350,19 @@ static Object *es_build_window(struct ESPrefsGui *gui)
         if (gui->field[i] == NULL) {
             continue;
         }
-        es_add_child(rows, gui->field[i], t[i].label, 0);
+        /*
+         * A checkbox carries its own text, on its right, which is where
+         * the style guide puts it. Everything else gets a label in the
+         * column to its left.
+         */
+        if (t[i].kind == ES_SET_BOOL) {
+            SetAttrs(gui->field[i],
+                     GA_Text, es_label(gui, i, t[i].label), TAG_END);
+            es_add_child(rows, gui->field[i], NULL, 0);
+        } else {
+            es_add_child(rows, gui->field[i], es_label(gui, i, t[i].label),
+                         0);
+        }
     }
 
     buttons = HLayoutObject,

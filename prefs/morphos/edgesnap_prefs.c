@@ -37,6 +37,11 @@ static const char es_version_cookie[] __attribute__((used)) =
 
 #define ES_MAX_SETTINGS 24
 #define ES_ZONE_COUNT   7
+/* Six columns is three zones per row, a zone being a checkmark and its
+ * label. The labels are short ("Top left", "Bottom right"), so three
+ * sit comfortably and the block is two rows deep instead of one very
+ * wide one. */
+#define ES_ZONE_COLS    6
 
 /* The zones in the order a person reads them, not the order the bits
  * happen to sit in. Kept identical to the AmigaOS 4 window. */
@@ -64,6 +69,12 @@ struct ESPrefsGui {
     Object *win;
     Object *field[ES_MAX_SETTINGS];
     Object *zone[ES_ZONE_COUNT];
+    /* MUI keeps the pointer we hand it, it does not copy the text, so
+     * the labels have to outlive the call that builds them. The table's
+     * own labels have no colon: they also feed the AmigaGuide manual,
+     * where "Edge distance: - Distance from..." would read badly. The
+     * style guide wants one here, so the window adds it. */
+    char label[ES_MAX_SETTINGS][40];
 };
 
 struct Library *MUIMasterBase;
@@ -132,12 +143,20 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
 /* The zone mask gets a row of checkmarks rather than a cryptic number. */
 static Object *es_zone_group(struct ESPrefsGui *gui)
 {
-    struct TagItem tags[2 + ES_ZONE_COUNT * 2 + 1];
+    struct TagItem tags[2 + ES_ZONE_COUNT * 2 + ES_ZONE_COLS + 1];
     int n = 0;
+    int cells = 0;
     int i;
 
-    tags[n].ti_Tag = MUIA_Group_Horiz;
-    tags[n++].ti_Data = TRUE;
+    /*
+     * A grid, not one long row. As a single horizontal group the seven
+     * zones set a minimum width the window could never go below, which
+     * is what stopped it from being resized (reported by a MorphOS user
+     * against 0.1). Each pair is checkmark then label, so the label
+     * sits on the right where the style guide wants it.
+     */
+    tags[n].ti_Tag = MUIA_Group_Columns;
+    tags[n++].ti_Data = ES_ZONE_COLS;
     for (i = 0; i < ES_ZONE_COUNT; i++) {
         int zone = es_zone_order[i];
         int on = (gui->cfg.engine.zones_mask & ES_ZONEBIT(zone)) != 0;
@@ -152,10 +171,27 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
         set(check, MUIA_CycleChain, 1);
         tags[n].ti_Tag = MUIA_Group_Child;
         tags[n++].ti_Data = (ULONG)check;
+        cells++;
         if (label != NULL) {
             tags[n].ti_Tag = MUIA_Group_Child;
             tags[n++].ti_Data = (ULONG)label;
+            cells++;
         }
+    }
+    /*
+     * A column group wants whole rows: seven zones are fourteen cells,
+     * which does not divide by six. Fill the remainder with empty space
+     * rather than leaving MUI to make sense of half a row.
+     */
+    while ((cells % ES_ZONE_COLS) != 0) {
+        Object *gap = MUI_NewObject(MUIC_Rectangle, TAG_DONE);
+
+        if (gap == NULL) {
+            break;
+        }
+        tags[n].ti_Tag = MUIA_Group_Child;
+        tags[n++].ti_Data = (ULONG)gap;
+        cells++;
     }
     tags[n].ti_Tag = TAG_DONE;
     tags[n].ti_Data = 0;
@@ -167,6 +203,23 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
  * are handed to MUI_NewObjectA as a tag array because how many there
  * are is the table's business, not this file's.
  */
+/* The table's label with a colon, in storage that lives as long as the
+ * window does. */
+static const char *es_label(struct ESPrefsGui *gui, int index,
+                            const char *text)
+{
+    char *out = gui->label[index];
+    int n = 0;
+
+    while (text[n] != '\0' && n < 38) {
+        out[n] = text[n];
+        n++;
+    }
+    out[n++] = ':';
+    out[n] = '\0';
+    return out;
+}
+
 static Object *es_settings_group(struct ESPrefsGui *gui)
 {
     struct TagItem tags[4 + ES_MAX_SETTINGS * 2 + 1];
@@ -200,7 +253,23 @@ static Object *es_settings_group(struct ESPrefsGui *gui)
         if (widget == NULL) {
             continue;
         }
-        label = Label2((char *)t[i].label);
+        /*
+         * A checkmark's label belongs on its RIGHT: that is the style
+         * guide, and it is what the zone row above already does. Every
+         * other kind keeps the label in the left column, where it lines
+         * up with the rest.
+         */
+        if (t[i].kind == ES_SET_BOOL) {
+            label = Label((char *)es_label(gui, i, t[i].label));
+            tags[n].ti_Tag = MUIA_Group_Child;
+            tags[n++].ti_Data = (ULONG)widget;
+            if (label != NULL) {
+                tags[n].ti_Tag = MUIA_Group_Child;
+                tags[n++].ti_Data = (ULONG)label;
+            }
+            continue;
+        }
+        label = Label2((char *)es_label(gui, i, t[i].label));
         if (label != NULL) {
             tags[n].ti_Tag = MUIA_Group_Child;
             tags[n++].ti_Data = (ULONG)label;
