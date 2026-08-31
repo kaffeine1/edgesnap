@@ -74,7 +74,7 @@ first gesture is the drag.
   MorphOS-specific CxCustom gate.
 - **Phase 1 (portable core): done.** The validated spike behavior lives
   as a portable, host-tested core: `core/engine.c` (drag/snap state
-  machine), `core/registry.c` (stale-safe snap registry + restore),
+  machine), `core/registry.c` (stale-resistant snap registry + restore),
   `include/edgesnap_types.h` (zones, errors, capabilities). The draft
   public contract is `include/edgesnap.h`.
 - **Phase 2 (reference commodity): ported.** `commodity/edgesnap_cx.c`

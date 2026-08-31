@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  *
  * registry_test.c - executable specification of the snap registry and
- * its stale-safe restore contract.
+ * its stale-resistant restore contract.
  */
 
 #include <stdio.h>

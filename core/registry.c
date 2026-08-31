@@ -2,7 +2,15 @@
  * Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
  * SPDX-License-Identifier: MIT
  *
- * registry.c - snap registry with stale-safe restore.
+ * registry.c - snap registry with stale-resistant restore.
+ *
+ * Resistant, not safe, and the word is chosen: restore acts only if the
+ * window still sits on the geometry it was snapped to, which defuses a
+ * reused reference in every case that matters - but a new window at the
+ * same address AND within the tolerance would still match. A library
+ * outside Intuition cannot do better than that; only window identity
+ * owned by the system could. Claiming "safe" would promise what we
+ * cannot keep.
  */
 
 #include "registry.h"

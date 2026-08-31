@@ -623,7 +623,7 @@ belong in this document, not in the script's comments.
   library; for why the shipping form is a library at all, see "Why a
   library, and not just a commodity" above.
   *Status 2026-08-26: the core landed in `core/` (engine.c = the validated
-  spike behavior as a pure state machine, registry.c = stale-safe restore),
+  spike behavior as a pure state machine, registry.c = stale-resistant restore),
   host-tested under `-std=c89 -pedantic -Werror`; portable constants in
   `include/edgesnap_types.h`; draft platform contract in
   `include/edgesnap.h`. The spike still runs its own inline logic and gets
@@ -675,6 +675,83 @@ belong in this document, not in the script's comments.
   large window it may well look worse than the honest jump. Measure
   before offering it, and ship it switched off unless it is clearly
   better.
+
+## Release stages toward 1.0
+
+Where the work goes after the 0.1 beta. This list came out of a
+reviewer's analysis (2026-08-31) plus the first field reports; items
+marked *verified* were checked against the code rather than taken on
+trust, and one of the reviewer's points is corrected below where the
+code says otherwise.
+
+### 0.2 - what the field reported
+
+- **The AmigaOS 4 defect still open from the 0.1 video**: a drag that
+  reaches a zone shows the preview but does not complete the snap, and
+  leaves frame segments on the desktop. Ask for `ctrl alt d` output
+  before guessing - it prints every window taken for a panel and the
+  insets reserved, which is exactly what is in doubt on a desktop
+  covered in docks.
+- **Remove the fixed panel-scan limit.** *Verified*: `ESB_PANEL_SCAN_MAX`
+  is 16. The walk does cover every window - it stops *collecting* after
+  16 candidates, not after 16 windows - but on a dock-heavy desktop the
+  docks past the sixteenth are invisible and reserve nothing. Accumulate
+  the insets while walking instead of filling an array first: no limit,
+  no allocation, less code.
+- **Guard the usable area.** *Verified*: the width and height are
+  computed as `scr->Width - ins.l - ins.r` and friends with nothing
+  checking the result is positive. Enough recognised panels, or large
+  enough margins, and the usable rect goes degenerate - and every zone
+  derived from it with it.
+- **One validation table for both entry points.** The preferences parser
+  bounds margins at 2000; the public tag path still accepts any positive
+  value. The two should not disagree about what is legal.
+- **Reconsider `ES_PANEL_MIN_LEN_PCT` (15).** A window that is thin and
+  as long as 15% of an edge is taken for a panel. On a crowded desktop
+  that is not only a capacity question but a false-positive one: an
+  ordinary window classified as a dock eats the usable area.
+
+### Before the ABI freeze
+
+Four structural changes. Each one moves a public signature, which is why
+1.0 cannot come first.
+
+1. **Per work area, not per Screen.** MorphOS 3.20 lets the Workbench
+   screen span several displays, so `ESnap_QueryScreenArea(struct Screen
+   *)` no longer describes one surface with four edges: the virtual
+   screen's right edge is not the right edge of the monitor the window
+   sits on, and a half-screen snap across two displays straddles the
+   bezel, which is the opposite of what the user asked for. Screens,
+   work areas and layout groups need identities the API can name.
+2. **Divider tokens.** `QueryDivider` reports one global seam and
+   `MoveDivider` takes only a position, then re-finds the first pair it
+   can. With more than one work area that does not hold. A token must
+   name one pair and become invalid when either window changes or goes.
+3. **Frontend ownership.** The engine, registry, configuration, ignore
+   list and enable state are one global set: two frontends would
+   overwrite each other, and any client at all can disable the service
+   for everyone. Register one frontend that owns the interactive engine
+   and leave SnapWindow / UnsnapWindow / QueryWindow open to every
+   caller.
+4. **Exclusions that cannot be inherited.** *Verified, with a
+   correction*: `g_ignored[]` holds bare `struct Window *`, so a reused
+   pointer would inherit an exclusion. The reviewer read this as the
+   body breaking a documented promise; the header promises nothing of
+   the sort, so it is a latent hazard rather than a broken contract -
+   but it must not survive into a frozen ABI.
+
+### 1.0
+
+The ABI frozen, and an SDK archive: headers, `.fd`, inlines, autodocs
+and a worked example. With it **a second real client** - an ARexx port,
+or a shell command someone would actually use - because `esnaptest` is a
+test tool, and a library whose only client is its own commodity invites
+exactly the question a reviewer put to phase 1.
+
+Only then the maintainers, with three options open rather than one:
+ship the package as an official commodity, take the portable core into
+Intuition behind a system frontend, or adopt the library and its API.
+Any of the three is EdgeSnap being adopted.
 
 ## Asked for, and out of scope
 
