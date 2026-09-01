@@ -622,126 +622,216 @@ static int esb_same_box(const ESRect *a, const ESRect *b)
            dw <= ES_RESTORE_SLACK_PX && dh <= ES_RESTORE_SLACK_PX;
 }
 
+/*
+ * A remembered seam is not a real one: any window on it may have been
+ * moved, resized or closed since. Check them all against the live
+ * geometry and report no seam when they no longer line up.
+ *
+ * What this must NOT do is forget them on a mismatch. ChangeWindowBox()
+ * places a window asynchronously, so a query made immediately after a
+ * snap sees it still at its old size, a mismatch that lasts a few
+ * milliseconds. Forgetting on that transient destroyed the pair
+ * permanently and the seam then never appeared at all. Only a window
+ * that is GONE is forgotten; a geometry mismatch just means "no seam
+ * right now".
+ */
+static int esb_seam_alive(const ESSeam *seam)
+{
+    const ESSeamSide *side[2];
+    int gone = 0;
+    int mismatch = 0;
+    int k, i;
+
+    side[0] = &seam->a;
+    side[1] = &seam->b;
+    for (k = 0; k < 2; k++) {
+        for (i = 0; i < side[k]->n; i++) {
+            struct ESBSnap sn;
+            struct Window *w = (struct Window *)side[k]->ref[i];
+
+            if (!esb_sample(w, &sn)) {
+                ObtainSemaphore(&g_sem);
+                es_registry_forget(&g_registry, (void *)w);
+                ReleaseSemaphore(&g_sem);
+                gone = 1;
+            } else if (!esb_same_box(&sn.box, &side[k]->box[i])) {
+                mismatch = 1;
+            }
+        }
+    }
+    return !gone && !mismatch;
+}
+
+static void esb_seam_report(const ESSeam *seam, struct ESnapDivider *out)
+{
+    out->present = 1;
+    out->vertical = seam->vertical;
+    out->strip.x = seam->rect.x;
+    out->strip.y = seam->rect.y;
+    out->strip.w = seam->rect.w;
+    out->strip.h = seam->rect.h;
+    out->position = seam->pos;
+    out->minPosition = seam->min_pos;
+    out->maxPosition = seam->max_pos;
+    out->windowCount = seam->a.n + seam->b.n;
+    out->windowA = (struct Window *)seam->a.ref[0];
+    out->windowB = (struct Window *)seam->b.ref[0];
+}
+
+static void esb_no_seam(struct ESnapDivider *out)
+{
+    out->present = 0;
+    out->vertical = 0;
+    out->strip.x = 0;
+    out->strip.y = 0;
+    out->strip.w = 0;
+    out->strip.h = 0;
+    out->position = 0;
+    out->minPosition = 0;
+    out->maxPosition = 0;
+    out->windowCount = 0;
+    out->windowA = NULL;
+    out->windowB = NULL;
+}
+
+/* Distance from a point to a rectangle, 0 when inside. */
+static int esb_box_distance(const ESRect *r, int px, int py)
+{
+    int dx = 0, dy = 0;
+
+    if (px < r->x) {
+        dx = r->x - px;
+    } else if (px >= r->x + r->w) {
+        dx = px - (r->x + r->w - 1);
+    }
+    if (py < r->y) {
+        dy = r->y - py;
+    } else if (py >= r->y + r->h) {
+        dy = py - (r->y + r->h - 1);
+    }
+    return dx > dy ? dx : dy;
+}
+
 LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out)
 {
     ESSeam seam;
     int found;
 
-    if (out == NULL) {
-        return ES_ERR_BAD_ARGS;
-    }
-    if (thickness < 2 || thickness > 64) {
+    if (out == NULL || thickness < 2 || thickness > 64) {
         return ES_ERR_BAD_ARGS;
     }
     ObtainSemaphore(&g_sem);
     found = es_gutter_find(&g_registry, (int)thickness, &seam);
     ReleaseSemaphore(&g_sem);
-
-    /*
-     * A remembered pair is not a real one: either window may have been
-     * moved, resized or closed since. Check both against the live
-     * geometry and report no seam when they no longer line up.
-     *
-     * What this must NOT do is forget them. ChangeWindowBox() places a
-     * window asynchronously, so a query made immediately after a snap
-     * sees the window still at its old size - a mismatch that lasts a
-     * few milliseconds. Forgetting on that transient destroyed the
-     * pair permanently, and the seam then never appeared at all. Only
-     * a window that is gone is forgotten; everything else is simply
-     * re-checked next time.
-     */
-    if (found) {
-        struct ESBSnap sa, sb;
-        int a_alive = esb_sample((struct Window *)seam.ref_a, &sa);
-        int b_alive = esb_sample((struct Window *)seam.ref_b, &sb);
-
-        if (!a_alive || !b_alive) {
-            ObtainSemaphore(&g_sem);
-            if (!a_alive) {
-                es_registry_forget(&g_registry, (void *)seam.ref_a);
-            }
-            if (!b_alive) {
-                es_registry_forget(&g_registry, (void *)seam.ref_b);
-            }
-            ReleaseSemaphore(&g_sem);
-            found = 0;
-        } else if (!esb_same_box(&sa.box, &seam.box_a) ||
-                   !esb_same_box(&sb.box, &seam.box_b)) {
-            found = 0;
-        }
+    if (found && esb_seam_alive(&seam)) {
+        esb_seam_report(&seam, out);
+    } else {
+        esb_no_seam(out);
     }
-
-    if (!found) {
-        /* Leave nothing undefined for the caller: "no seam" used to
-         * return with strip/vertical untouched, and the commodity's
-         * debug line printed whatever was on its stack. */
-        out->present = 0;
-        out->vertical = 0;
-        out->strip.x = 0;
-        out->strip.y = 0;
-        out->strip.w = 0;
-        out->strip.h = 0;
-        out->windowA = NULL;
-        out->windowB = NULL;
-        return ES_OK;
-    }
-    out->present = 1;
-    out->vertical = seam.vertical;
-    out->strip.x = seam.rect.x;
-    out->strip.y = seam.rect.y;
-    out->strip.w = seam.rect.w;
-    out->strip.h = seam.rect.h;
-    out->position = seam.pos;
-    out->minPosition = seam.min_pos;
-    out->maxPosition = seam.max_pos;
-    out->windowA = (struct Window *)seam.ref_a;
-    out->windowB = (struct Window *)seam.ref_b;
     return ES_OK;
 }
 
-LONG esb_move_divider(LONG position)
+LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
+                          struct ESnapDivider *out)
 {
-    ESSeam seam;
-    ESRect ra, rb;
-    struct ESBSnap sa, sb;
-    struct Window *wa;
-    struct Window *wb;
-    int found;
+    ESSeam seams[ES_SEAM_MAX];
+    int n, i, best = -1, best_d = 0;
+
+    if (out == NULL || thickness < 2 || thickness > 64) {
+        return ES_ERR_BAD_ARGS;
+    }
+    ObtainSemaphore(&g_sem);
+    n = es_gutter_find_all(&g_registry, (int)thickness, seams, ES_SEAM_MAX);
+    ReleaseSemaphore(&g_sem);
+
+    for (i = 0; i < n; i++) {
+        int d = esb_box_distance(&seams[i].rect, (int)x, (int)y);
+
+        if (best < 0 || d < best_d) {
+            best = i;
+            best_d = d;
+        }
+    }
+    if (best >= 0 && esb_seam_alive(&seams[best])) {
+        esb_seam_report(&seams[best], out);
+    } else {
+        esb_no_seam(out);
+    }
+    return ES_OK;
+}
+
+LONG esb_move_divider(LONG vertical, LONG line, LONG position)
+{
+    ESSeam seams[ES_SEAM_MAX];
+    ESRect ra[ES_SEAM_SIDE_MAX], rb[ES_SEAM_SIDE_MAX];
+    struct ESBSnap snap_a[ES_SEAM_SIDE_MAX], snap_b[ES_SEAM_SIDE_MAX];
+    const ESSeam *seam = NULL;
+    int n, i, d;
 
     ObtainSemaphore(&g_sem);
-    found = es_gutter_find(&g_registry, 8, &seam);
+    n = es_gutter_find_all(&g_registry, 8, seams, ES_SEAM_MAX);
     ReleaseSemaphore(&g_sem);
-    if (!found) {
+
+    /* The seam is named by its line: a layout can hold several, and
+     * moving "the first one" would resize windows nobody grabbed. */
+    for (i = 0; i < n; i++) {
+        if (seams[i].vertical != (vertical ? 1 : 0)) {
+            continue;
+        }
+        d = seams[i].pos - (int)line;
+        if (d < 0) {
+            d = -d;
+        }
+        if (d <= ES_SEAM_TOUCH_TOL) {
+            seam = &seams[i];
+            break;
+        }
+    }
+    if (seam == NULL) {
         return ES_ERR_UNSUPPORTED;
     }
 
-    wa = (struct Window *)seam.ref_a;
-    wb = (struct Window *)seam.ref_b;
-
-    /* Both windows must still be there: a divider with one window
-     * gone is not a divider, and dropping the state is better than
-     * resizing a stranger that inherited the address. */
-    if (!esb_sample(wa, &sa) || !esb_sample(wb, &sb)) {
-        ObtainSemaphore(&g_sem);
-        es_registry_forget(&g_registry, wa);
-        es_registry_forget(&g_registry, wb);
-        ReleaseSemaphore(&g_sem);
-        return ES_ERR_STALE;
+    /* Every window on it must still be there: a seam with one gone is
+     * not a seam, and dropping the state beats resizing a stranger
+     * that inherited the address. */
+    for (i = 0; i < seam->a.n; i++) {
+        if (!esb_sample((struct Window *)seam->a.ref[i], &snap_a[i])) {
+            return ES_ERR_STALE;
+        }
+    }
+    for (i = 0; i < seam->b.n; i++) {
+        if (!esb_sample((struct Window *)seam->b.ref[i], &snap_b[i])) {
+            return ES_ERR_STALE;
+        }
     }
 
-    es_gutter_apply(&seam, (int)position, &ra, &rb);
+    es_gutter_apply(seam, (int)position, ra, rb);
 
     ObtainSemaphore(&g_sem);
     /* the registry must follow, or the next drag would start from the
      * geometry the windows had before this one */
-    es_registry_remember(&g_registry, wa, &sa.box, &ra,
-                         es_registry_zone(&g_registry, wa));
-    es_registry_remember(&g_registry, wb, &sb.box, &rb,
-                         es_registry_zone(&g_registry, wb));
+    for (i = 0; i < seam->a.n; i++) {
+        struct Window *w = (struct Window *)seam->a.ref[i];
+
+        es_registry_remember(&g_registry, w, &snap_a[i].box, &ra[i],
+                             es_registry_zone(&g_registry, w));
+    }
+    for (i = 0; i < seam->b.n; i++) {
+        struct Window *w = (struct Window *)seam->b.ref[i];
+
+        es_registry_remember(&g_registry, w, &snap_b[i].box, &rb[i],
+                             es_registry_zone(&g_registry, w));
+    }
     ReleaseSemaphore(&g_sem);
 
-    ChangeWindowBox(wa, ra.x, ra.y, ra.w, ra.h);
-    ChangeWindowBox(wb, rb.x, rb.y, rb.w, rb.h);
+    for (i = 0; i < seam->a.n; i++) {
+        ChangeWindowBox((struct Window *)seam->a.ref[i],
+                        ra[i].x, ra[i].y, ra[i].w, ra[i].h);
+    }
+    for (i = 0; i < seam->b.n; i++) {
+        ChangeWindowBox((struct Window *)seam->b.ref[i],
+                        rb[i].x, rb[i].y, rb[i].w, rb[i].h);
+    }
     return ES_OK;
 }
 

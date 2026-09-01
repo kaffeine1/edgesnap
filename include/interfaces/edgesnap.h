@@ -66,7 +66,13 @@ struct EdgeSnapIFace
                                        ULONG thickness,
                                        struct ESnapDivider *divider);
     LONG APICALL (*ESnap_MoveDivider)(struct EdgeSnapIFace *Self,
+                                      LONG vertical, LONG line,
                                       LONG position);
+
+    /* --- appended for 2.3: seams are lines, and there may be several */
+    LONG APICALL (*ESnap_QueryDividerAt)(struct EdgeSnapIFace *Self,
+                                         ULONG thickness, LONG x, LONG y,
+                                         struct ESnapDivider *divider);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

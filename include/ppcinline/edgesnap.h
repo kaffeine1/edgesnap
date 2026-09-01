@@ -81,9 +81,16 @@
         ULONG, thickness, d0, struct ESnapDivider *, divider, a0, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
-#define ESnap_MoveDivider(position) \
-    LP1(0x66, LONG, ESnap_MoveDivider, \
-        LONG, position, d0, \
+#define ESnap_MoveDivider(vertical, line, position) \
+    LP3(0x66, LONG, ESnap_MoveDivider, \
+        LONG, vertical, a0, LONG, line, a1, LONG, position, d0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
+/* appended for 2.3: never moved, only added to the end */
+#define ESnap_QueryDividerAt(thickness, x, y, divider) \
+    LP4(0x6c, LONG, ESnap_QueryDividerAt, \
+        ULONG, thickness, d0, LONG, x, d1, LONG, y, d2, \
+        struct ESnapDivider *, divider, a0, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
 #endif /* PPCINLINE_EDGESNAP_H */

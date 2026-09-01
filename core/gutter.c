@@ -62,84 +62,177 @@ static int es_overlap_h(const ESRect *a, const ESRect *b, int *from, int *to)
     return 1;
 }
 
-static void es_seam_fill(ESSeam *out, int vertical, int thickness,
-                         const ESRegistryEntry *a, const ESRegistryEntry *b,
-                         int from, int to)
+/*
+ * Collect the windows whose edge lies on `line` and build the seam
+ * there. A side is every window touching the line from that direction,
+ * so one window facing two stacked ones gives a side of 1 and a side
+ * of 2, and all three move together.
+ *
+ * The strip spans only where windows actually face each other: the
+ * union of the overlaps, not the union of the windows, so a seam does
+ * not stretch past the region it can act on.
+ */
+static int es_seam_at(const ESRegistry *reg, int vertical, int line,
+                      int thickness, ESSeam *out)
 {
     int half = thickness / 2;
+    int from = 0, to = 0, have_span = 0;
+    int i, j;
 
-    out->valid = 1;
+    out->valid = 0;
     out->vertical = vertical;
-    out->ref_a = a->ref;
-    out->ref_b = b->ref;
-    out->box_a = a->snapped;
-    out->box_b = b->snapped;
+    out->a.n = 0;
+    out->b.n = 0;
+
+    for (i = 0; i < ES_REGISTRY_SLOTS; i++) {
+        const ESRegistryEntry *e = &reg->slot[i];
+        const ESRect *r;
+        int near_a, near_b;
+
+        if (!e->used) {
+            continue;
+        }
+        r = &e->snapped;
+        near_a = vertical ? es_near(r->x + r->w, line) : es_near(r->y + r->h, line);
+        near_b = vertical ? es_near(r->x, line) : es_near(r->y, line);
+        if (near_a && out->a.n < ES_SEAM_SIDE_MAX) {
+            out->a.ref[out->a.n] = e->ref;
+            out->a.box[out->a.n] = *r;
+            out->a.n++;
+        } else if (near_b && out->b.n < ES_SEAM_SIDE_MAX) {
+            out->b.ref[out->b.n] = e->ref;
+            out->b.box[out->b.n] = *r;
+            out->b.n++;
+        }
+    }
+    if (out->a.n == 0 || out->b.n == 0) {
+        return 0;
+    }
+
+    /* Only the stretches where a window on one side truly faces one on
+     * the other count as seam: that is what the handle can act on. */
+    for (i = 0; i < out->a.n; i++) {
+        for (j = 0; j < out->b.n; j++) {
+            int lo, hi;
+            int ok = vertical
+                ? es_overlap_v(&out->a.box[i], &out->b.box[j], &lo, &hi)
+                : es_overlap_h(&out->a.box[i], &out->b.box[j], &lo, &hi);
+
+            if (!ok) {
+                continue;
+            }
+            if (!have_span) {
+                from = lo;
+                to = hi;
+                have_span = 1;
+            } else {
+                if (lo < from) {
+                    from = lo;
+                }
+                if (hi > to) {
+                    to = hi;
+                }
+            }
+        }
+    }
+    if (!have_span) {
+        return 0;
+    }
+
+    out->pos = line;
     if (vertical) {
-        out->pos = b->snapped.x;
-        out->rect.x = out->pos - half;
+        out->rect.x = line - half;
         out->rect.y = from;
         out->rect.w = thickness;
         out->rect.h = to - from;
-        out->min_pos = a->snapped.x + ES_SEAM_MIN_SIDE;
-        out->max_pos = b->snapped.x + b->snapped.w - ES_SEAM_MIN_SIDE;
     } else {
-        out->pos = b->snapped.y;
         out->rect.x = from;
-        out->rect.y = out->pos - half;
+        out->rect.y = line - half;
         out->rect.w = to - from;
         out->rect.h = thickness;
-        out->min_pos = a->snapped.y + ES_SEAM_MIN_SIDE;
-        out->max_pos = b->snapped.y + b->snapped.h - ES_SEAM_MIN_SIDE;
+    }
+
+    /* Every window keeps its floor, so the tightest one decides. */
+    out->min_pos = -0x7FFF;
+    out->max_pos = 0x7FFF;
+    for (i = 0; i < out->a.n; i++) {
+        int lim = vertical
+            ? out->a.box[i].x + ES_SEAM_MIN_SIDE
+            : out->a.box[i].y + ES_SEAM_MIN_SIDE;
+
+        if (lim > out->min_pos) {
+            out->min_pos = lim;
+        }
+    }
+    for (i = 0; i < out->b.n; i++) {
+        int lim = vertical
+            ? out->b.box[i].x + out->b.box[i].w - ES_SEAM_MIN_SIDE
+            : out->b.box[i].y + out->b.box[i].h - ES_SEAM_MIN_SIDE;
+
+        if (lim < out->max_pos) {
+            out->max_pos = lim;
+        }
     }
     if (out->min_pos > out->max_pos) {
-        /* the pair is too small to be divided sensibly */
-        out->valid = 0;
+        return 0;              /* too small to be divided sensibly */
     }
+    out->valid = 1;
+    return 1;
+}
+
+/* Has a seam on this line already been written? Boundaries are found
+ * once per window that touches them, so the same line comes up twice. */
+static int es_seam_seen(const ESSeam *seams, int n, int vertical, int line)
+{
+    int i;
+
+    for (i = 0; i < n; i++) {
+        if (seams[i].vertical == vertical && es_near(seams[i].pos, line)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int es_gutter_find_all(const ESRegistry *reg, int thickness_px,
+                       ESSeam *out, int max)
+{
+    int n = 0;
+    int i, pass;
+
+    for (pass = 0; pass < 2 && n < max; pass++) {
+        int vertical = (pass == 0);
+
+        for (i = 0; i < ES_REGISTRY_SLOTS && n < max; i++) {
+            const ESRegistryEntry *e = &reg->slot[i];
+            int line;
+
+            if (!e->used) {
+                continue;
+            }
+            /* Every window's leading edge is a candidate boundary. */
+            line = vertical ? e->snapped.x : e->snapped.y;
+            if (es_seam_seen(out, n, vertical, line)) {
+                continue;
+            }
+            if (es_seam_at(reg, vertical, line, thickness_px, &out[n])) {
+                n++;
+            }
+        }
+    }
+    return n;
 }
 
 int es_gutter_find(const ESRegistry *reg, int thickness_px, ESSeam *out)
 {
-    int i, j;
-
-    out->valid = 0;
-    for (i = 0; i < ES_REGISTRY_SLOTS; i++) {
-        const ESRegistryEntry *a = &reg->slot[i];
-
-        if (!a->used) {
-            continue;
-        }
-        for (j = 0; j < ES_REGISTRY_SLOTS; j++) {
-            const ESRegistryEntry *b = &reg->slot[j];
-            int from, to;
-
-            if (i == j || !b->used) {
-                continue;
-            }
-            /* a on the left, b on the right */
-            if (es_near(a->snapped.x + a->snapped.w, b->snapped.x) &&
-                es_overlap_v(&a->snapped, &b->snapped, &from, &to)) {
-                es_seam_fill(out, 1, thickness_px, a, b, from, to);
-                if (out->valid) {
-                    return 1;
-                }
-            }
-            /* a on top, b below */
-            if (es_near(a->snapped.y + a->snapped.h, b->snapped.y) &&
-                es_overlap_h(&a->snapped, &b->snapped, &from, &to)) {
-                es_seam_fill(out, 0, thickness_px, a, b, from, to);
-                if (out->valid) {
-                    return 1;
-                }
-            }
-        }
-    }
-    return 0;
+    return es_gutter_find_all(reg, thickness_px, out, 1) == 1;
 }
 
 void es_gutter_apply(const ESSeam *seam, int new_pos,
                      ESRect *out_a, ESRect *out_b)
 {
     int pos = new_pos;
+    int i;
 
     if (pos < seam->min_pos) {
         pos = seam->min_pos;
@@ -147,22 +240,27 @@ void es_gutter_apply(const ESSeam *seam, int new_pos,
     if (pos > seam->max_pos) {
         pos = seam->max_pos;
     }
+    for (i = 0; i < seam->a.n; i++) {
+        out_a[i] = seam->a.box[i];
+        if (seam->vertical) {
+            out_a[i].w = pos - seam->a.box[i].x;
+        } else {
+            out_a[i].h = pos - seam->a.box[i].y;
+        }
+    }
+    for (i = 0; i < seam->b.n; i++) {
+        int far = seam->vertical
+            ? seam->b.box[i].x + seam->b.box[i].w
+            : seam->b.box[i].y + seam->b.box[i].h;
 
-    *out_a = seam->box_a;
-    *out_b = seam->box_b;
-
-    if (seam->vertical) {
-        int b_right = seam->box_b.x + seam->box_b.w;
-
-        out_a->w = pos - seam->box_a.x;
-        out_b->x = pos;
-        out_b->w = b_right - pos;
-    } else {
-        int b_bottom = seam->box_b.y + seam->box_b.h;
-
-        out_a->h = pos - seam->box_a.y;
-        out_b->y = pos;
-        out_b->h = b_bottom - pos;
+        out_b[i] = seam->b.box[i];
+        if (seam->vertical) {
+            out_b[i].x = pos;
+            out_b[i].w = far - pos;
+        } else {
+            out_b[i].y = pos;
+            out_b[i].h = far - pos;
+        }
     }
 }
 

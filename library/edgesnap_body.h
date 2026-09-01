@@ -76,7 +76,9 @@ LONG esb_query_screen_area(struct Screen *scr, struct ESnapArea *out);
 
 /* The divider between two snapped windows. */
 LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out);
-LONG esb_move_divider(LONG position);
+LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
+                          struct ESnapDivider *out);
+LONG esb_move_divider(LONG vertical, LONG line, LONG position);
 
 int esb_enabled(void);
 

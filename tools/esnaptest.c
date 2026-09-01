@@ -122,7 +122,8 @@ int main(void)
                    (long)d.strip.x, (long)d.strip.y, (long)d.strip.w,
                    (long)d.strip.h, (long)d.position,
                    (long)d.minPosition, (long)d.maxPosition);
-            rc = IEdgeSnap->ESnap_MoveDivider(d.position + 300);
+            rc = IEdgeSnap->ESnap_MoveDivider(d.vertical, d.position,
+                                              d.position + 300);
             printf("esnaptest: ESnap_MoveDivider(+300) -> %s\n",
                    rcname(rc));
             Delay(75L);

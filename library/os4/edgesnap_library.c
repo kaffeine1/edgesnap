@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 2
-#define ES_LIB_IDSTRING "edgesnap.library 2.2 (28.8.2026) Michele Dipace"
+#define ES_LIB_REVISION 3
+#define ES_LIB_IDSTRING "edgesnap.library 2.3 (1.9.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -304,10 +304,19 @@ static LONG _ESnap_QueryDivider(struct EdgeSnapIFace *Self, ULONG thickness,
     return esb_query_divider(thickness, divider);
 }
 
-static LONG _ESnap_MoveDivider(struct EdgeSnapIFace *Self, LONG position)
+static LONG _ESnap_MoveDivider(struct EdgeSnapIFace *Self, LONG vertical,
+                               LONG line, LONG position)
 {
     (void)Self;
-    return esb_move_divider(position);
+    return esb_move_divider(vertical, line, position);
+}
+
+static LONG _ESnap_QueryDividerAt(struct EdgeSnapIFace *Self, ULONG thickness,
+                                  LONG x, LONG y,
+                                  struct ESnapDivider *divider)
+{
+    (void)Self;
+    return esb_query_divider_at(thickness, x, y, divider);
 }
 
 /* Order is ABI. Append only, never reorder, never remove. */
@@ -329,6 +338,7 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_QueryScreenArea,
     (APTR)_ESnap_QueryDivider,
     (APTR)_ESnap_MoveDivider,
+    (APTR)_ESnap_QueryDividerAt,
     (APTR)-1
 };
 

@@ -35,8 +35,8 @@
 
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  2
-#define ES_LIB_REVISION 2
-#define ES_LIB_IDSTRING "edgesnap.library 2.2 (28.8.2026) Michele Dipace\r\n"
+#define ES_LIB_REVISION 3
+#define ES_LIB_IDSTRING "edgesnap.library 2.3 (1.9.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -240,7 +240,13 @@ static LONG G_QueryDivider(void)
 
 static LONG G_MoveDivider(void)
 {
-    return esb_move_divider((LONG)REG_D0);
+    return esb_move_divider((LONG)REG_A0, (LONG)REG_A1, (LONG)REG_D0);
+}
+
+static LONG G_QueryDividerAt(void)
+{
+    return esb_query_divider_at((ULONG)REG_D0, (LONG)REG_D1, (LONG)REG_D2,
+                                (struct ESnapDivider *)REG_A0);
 }
 
 #define ES_GATE(name, fn) \
@@ -264,6 +270,7 @@ ES_GATE(GATE_IgnoreWindows, G_IgnoreWindows);
 ES_GATE(GATE_QueryScreenArea, G_QueryScreenArea);
 ES_GATE(GATE_QueryDivider, G_QueryDivider);
 ES_GATE(GATE_MoveDivider, G_MoveDivider);
+ES_GATE(GATE_QueryDividerAt, G_QueryDividerAt);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -284,6 +291,7 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_QueryScreenArea,
     (APTR)&GATE_QueryDivider,
     (APTR)&GATE_MoveDivider,
+    (APTR)&GATE_QueryDividerAt,
     (APTR)-1
 };
 

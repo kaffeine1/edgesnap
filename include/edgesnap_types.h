@@ -29,6 +29,10 @@
  *       IgnoreWindows, QueryScreenArea)
  *   2 - adds the divider between snapped windows (QueryDivider,
  *       MoveDivider)
+ *   2.3 - a seam is a LINE, not a pair: it may join more than two
+ *       windows, a layout may hold several, and MoveDivider now names
+ *       which one. QueryDividerAt appended for "what is under the
+ *       pointer".  Methods appended, never moved.
  */
 #define ES_API_VERSION       2
 

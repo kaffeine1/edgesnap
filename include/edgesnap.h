@@ -188,8 +188,9 @@ struct ESnapDivider {
     LONG position;             /* current seam coordinate            */
     LONG minPosition;          /* how far it may be dragged          */
     LONG maxPosition;
-    struct Window *windowA;    /* left/top window                    */
-    struct Window *windowB;    /* right/bottom window                */
+    LONG windowCount;          /* how many windows this seam moves   */
+    struct Window *windowA;    /* first window on the left/top side  */
+    struct Window *windowB;    /* first on the right/bottom side     */
 };
 
 /*
@@ -200,13 +201,30 @@ struct ESnapDivider {
 LONG ESnap_QueryDivider(ULONG thickness, struct ESnapDivider *divider);
 
 /*
- * Drag the divider to a screen coordinate: both windows are resized,
- * the value is clamped so neither can be squeezed away. Window
- * references are re-validated first, as everywhere else.
- *   ES_OK / ES_ERR_BAD_ARGS / ES_ERR_STALE (one of the two windows is
- *   gone: the divider no longer exists) / ES_ERR_UNSUPPORTED (no pair).
+ * The divider nearest a point, which is how a frontend asks "what is
+ * the pointer on?". A layout can hold several: one window facing two
+ * stacked ones has a vertical seam moving all three and a horizontal
+ * seam moving only the two, and four quadrants have one of each. Pass
+ * the pointer position in screen coordinates; present is 0 when
+ * nothing is within reach.
+ *   ES_OK / ES_ERR_BAD_ARGS.
  */
-LONG ESnap_MoveDivider(LONG position);
+LONG ESnap_QueryDividerAt(ULONG thickness, LONG x, LONG y,
+                          struct ESnapDivider *divider);
+
+/*
+ * Drag a divider to a screen coordinate: every window on it is
+ * resized, and the value is clamped so none can be squeezed away.
+ * Window references are re-validated first, as everywhere else.
+ *
+ * The seam is named by the line it sits on - `vertical` and the
+ * coordinate reported as `position` by a query - because a layout can
+ * hold more than one and "the divider" would be ambiguous. A seam that
+ * has stopped existing is not moved.
+ *   ES_OK / ES_ERR_BAD_ARGS / ES_ERR_STALE (a window on the seam is
+ *   gone) / ES_ERR_UNSUPPORTED (no seam on that line).
+ */
+LONG ESnap_MoveDivider(LONG vertical, LONG line, LONG position);
 
 /* ------------------------------------------------------- functions */
 

@@ -48,6 +48,7 @@
 #include <libraries/commodities.h>
 #include <intuition/intuition.h>
 #include <intuition/pointerclass.h>   /* POINTERTYPE_* for the seam    */
+#include <graphics/layers.h>          /* LAYERS_NOBACKFILL             */
 #include <intuition/intuitionbase.h>
 #include <intuition/screens.h> /* DrawInfo pens for the preview frame */
 #ifdef __amigaos4__
@@ -1082,7 +1083,21 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
 
 static struct Window *g_divider;
 static int g_divider_vertical;
+/* Which seam the strip is on. A layout can hold several - one window
+ * facing two stacked ones has a vertical seam moving all three and a
+ * horizontal one moving only the two - so the library is told which by
+ * the line it sits on. */
+static int g_divider_line;
 static int g_divider_dragging;
+/* Is the strip painted right now? It opens invisible and lights up when
+ * the pointer comes to it. */
+static int g_divider_hot;
+
+/* How near the pointer must come for the seam to show itself, and how
+ * far it must go for the seam to disappear again. The two differ so a
+ * pointer resting on the boundary does not blink. */
+#define ES_SEAM_SHOW_PX  3
+#define ES_SEAM_HIDE_PX 14
 
 static void spike_divider_close(void)
 {
@@ -1106,10 +1121,17 @@ static void spike_divider_close(void)
  *
  * So it is drawn, in the same accent colour as the preview frame, and
  * it is ten pixels wide: a line you can see and a target you can hit.
- * The reason it could be left invisible before - that painting leaves
- * residue - is handled by never moving it while painted: when the seam
- * moves the window is closed and a new one opened, which damages the
- * area and lets the windows underneath repaint it themselves.
+ *
+ * But drawn ONLY when it is wanted. A permanent bar across the screen
+ * reads as damage rather than as a control, so the strip opens with
+ * LAYERS_NOBACKFILL and paints nothing: what shows is the two window
+ * edges that were there anyway. It lights up when the pointer comes
+ * within ES_SEAM_SHOW_PX of it, which is the feedback Intuition will
+ * not give us - it shows the ACTIVE window's pointer, so our double
+ * arrow cannot appear on hover, only once the strip has been clicked.
+ * Going out again is done by closing and reopening the strip: that
+ * damages the area and the windows underneath repaint it, which is the
+ * same trick used when the seam moves.
  */
 static void spike_divider_paint(void)
 {
@@ -1177,6 +1199,62 @@ static void spike_divider_pointer(void)
                      TAG_DONE);
 }
 
+/*
+ * Distance from the pointer to the strip, 0 when it is inside it. The
+ * strip is a thin rectangle, so this is the usual box distance with the
+ * two axes taken separately.
+ */
+static int spike_divider_distance(void)
+{
+    struct Screen *scr;
+    int px, py, dx = 0, dy = 0;
+
+    if (g_divider == NULL) {
+        return 0x7FFF;
+    }
+    scr = g_divider->WScreen;
+    px = (int)scr->MouseX;
+    py = (int)scr->MouseY;
+    if (px < g_divider->LeftEdge) {
+        dx = g_divider->LeftEdge - px;
+    } else if (px >= g_divider->LeftEdge + g_divider->Width) {
+        dx = px - (g_divider->LeftEdge + g_divider->Width - 1);
+    }
+    if (py < g_divider->TopEdge) {
+        dy = g_divider->TopEdge - py;
+    } else if (py >= g_divider->TopEdge + g_divider->Height) {
+        dy = py - (g_divider->TopEdge + g_divider->Height - 1);
+    }
+    return dx > dy ? dx : dy;
+}
+
+static void spike_divider_sync(void);
+
+/*
+ * Light the seam up when the pointer arrives, put it out when it
+ * leaves. Called on pointer movement while nothing is being dragged.
+ */
+static void spike_divider_hover(void)
+{
+    int d;
+
+    if (g_divider == NULL || g_divider_dragging) {
+        return;
+    }
+    d = spike_divider_distance();
+    if (!g_divider_hot && d <= ES_SEAM_SHOW_PX) {
+        spike_divider_paint();
+        g_divider_hot = 1;
+        return;
+    }
+    if (g_divider_hot && d >= ES_SEAM_HIDE_PX) {
+        /* Reopening is what erases it: closing damages the area and the
+         * two windows underneath draw themselves back. */
+        spike_divider_close();
+        spike_divider_sync();
+    }
+}
+
 /* Ask the library where the seam is and put the handle there. */
 static void spike_divider_sync(void)
 {
@@ -1184,8 +1262,21 @@ static void spike_divider_sync(void)
     struct Screen *scr;
 
     {
-        LONG rc = ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d);
+        /*
+         * The seam NEAREST THE POINTER, not the first one in the
+         * layout: with several seams on screen the one the user means
+         * is the one they are reaching for.
+         */
+        struct Screen *ps = LockPubScreen(NULL);
+        LONG px = 0, py = 0;
+        LONG rc;
 
+        if (ps != NULL) {
+            px = (LONG)ps->MouseX;
+            py = (LONG)ps->MouseY;
+            UnlockPubScreen(NULL, ps);
+        }
+        rc = ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, px, py, &d);
         if (rc != ES_OK || !d.present) {
             spike_divider_close();
             return;
@@ -1229,13 +1320,25 @@ static void spike_divider_sync(void)
                                WA_Top, (int)d.strip.y,
                                WA_Width, (int)d.strip.w,
                                WA_Height, (int)d.strip.h,
+                               /*
+                                * SIMPLE_REFRESH, not SMART: a smart
+                                * window owns a bitmap, and NOBACKFILL
+                                * would leave that bitmap uncleared,
+                                * which is garbage rather than
+                                * transparency. A simple layer with no
+                                * backfill leaves the screen pixels
+                                * alone, so an unpainted strip shows the
+                                * two window edges that were already
+                                * there.
+                                */
                                WA_Flags, WFLG_BORDERLESS |
-                                         WFLG_SMART_REFRESH |
+                                         WFLG_SIMPLE_REFRESH |
                                          WFLG_NOCAREREFRESH |
                                          WFLG_REPORTMOUSE | WFLG_RMBTRAP,
                                WA_IDCMP, IDCMP_MOUSEBUTTONS |
                                          IDCMP_MOUSEMOVE,
                                WA_Activate, FALSE,
+                               WA_BackFill, LAYERS_NOBACKFILL,
                                TAG_DONE);
     UnlockPubScreen(NULL, scr);
     if (g_divider == NULL) {
@@ -1245,7 +1348,8 @@ static void spike_divider_sync(void)
     spike_log("edgesnap: divider handle open\n");
     WindowToFront(g_divider);
     g_divider_vertical = d.vertical;
-    spike_divider_paint();
+    g_divider_line = (int)d.position;
+    g_divider_hot = 0;          /* opens invisible: see the note above */
     spike_divider_pointer();
     spike_publish_ignored();
 }
@@ -1310,7 +1414,7 @@ static void spike_divider_events(void)
                     Delay(10L);
                     spike_divider_sync();
                     if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) ==
-                            ES_OK) {
+                            ES_OK && d.present) {
                         spike_divider_pass_focus(&d);
                     }
                 }
@@ -1329,7 +1433,8 @@ static void spike_divider_events(void)
             LONG pos = g_divider_vertical ?
                 (LONG)g_divider->WScreen->MouseX :
                 (LONG)g_divider->WScreen->MouseY;
-            LONG rc = ES_CALL(ESnap_MoveDivider)(pos);
+            LONG rc = ES_CALL(ESnap_MoveDivider)((LONG)g_divider_vertical,
+                                                 (LONG)g_divider_line, pos);
 
             if (rc == ES_OK) {
                 /*
@@ -1429,6 +1534,9 @@ static void spike_engine_step(void)
 
     if (g_drag_active) {
         spike_preview_refresh();
+    }
+    if (new_move && !g_drag_active) {
+        spike_divider_hover();
     }
 
     /*
