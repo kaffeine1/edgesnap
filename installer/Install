@@ -55,21 +55,29 @@
        "time. The line can be removed later by editing "
        "S:User-Startup.\n\n"))
 
-; Say where the files went, in so many words. Nothing is installed
-; into the drawer this script was launched from, but an Installer that
-; names that drawer in a message of its own leaves the user believing
-; otherwise - reported from MorphOS. Our own text should settle it.
-(set #done
+(set #guide-prompt "Where should the manual go?")
+(set #guide-help
+  (cat "EdgeSnap.guide is the manual: what the zones are, what every "
+       "setting does, and how another program can use the library. It "
+       "is the only part of the package that is not placed for you, "
+       "because there is no one right drawer for documentation on "
+       "these systems.\n\n"))
+
+; The closing text is built LATER, once the manual's drawer is known:
+; see the end of this script. Saying "nothing was installed into the
+; drawer you ran this from" while the manual lived only there was how
+; users came to delete their own documentation.
+(set #done-head
   (cat "EdgeSnap " #app-version " is installed.\n"
        "by Michele Dipace <michele.dipace@kaffeine.net>\n\n"
        "Where it went:\n"
        "    LIBS:edgesnap.library\n"
        "    C:EdgeSnap\n"
        "    SYS:Prefs/EdgeSnap\n"
-       "    one line in S:User-Startup\n\n"
-       "Nothing was installed into the drawer you ran this from: it "
-       "can be deleted.\n\n"
-       "EdgeSnap starts with the system at every boot. To start it by "
+       "    one line in S:User-Startup\n"))
+
+(set #done-tail
+  (cat "\nEdgeSnap starts with the system at every boot. To start it by "
        "hand at any time:\n\n"
        "    Run >NIL: C:EdgeSnap\n\n"
        "The settings are in SYS:Prefs/EdgeSnap - open it, change what "
@@ -208,6 +216,32 @@
         (dest "ENVARC:"))
       (protect "ENVARC:EdgeSnap.prefs" "+rwed")))
 
+; --- the manual -----------------------------------------------------
+;
+; The only piece with no obviously right home: these systems have no
+; agreed drawer for documentation, and EdgeSnap has no application
+; drawer of its own because its parts live in LIBS:, C: and Prefs. So
+; the user chooses, with a sensible default, and the closing text says
+; where it went - otherwise the manual stays in the unpacked drawer and
+; is thrown away with it.
+(set #guide-dest
+  (askdir
+    (prompt #guide-prompt)
+    (help #guide-help)
+    (default (if (= (exists "SYS:Documentation" (noreq)) 2)
+                 "SYS:Documentation"
+                 "SYS:"))))
+
+(if (exists (tackon #guide-dest "EdgeSnap.guide") (noreq))
+    (protect (tackon #guide-dest "EdgeSnap.guide") "+rwed"))
+
+(copyfiles
+  (source "EdgeSnap.guide")
+  (dest #guide-dest)
+  (infos))
+
+(protect (tackon #guide-dest "EdgeSnap.guide") "+rwed")
+
 (complete 95)
 
 ; What actually stands between an update and the new version running is
@@ -238,4 +272,9 @@
 ; (quiet): our own closing text says what happened - the Installer's
 ; standard one would add that EdgeSnap "is in Work:", which is not
 ; where any of it went.
-(exit #done (quiet))
+(exit (cat #done-head
+           "    " (tackon #guide-dest "EdgeSnap.guide") "\n\n"
+           "Nothing else was installed into the drawer you ran this "
+           "from, so it can be deleted.\n"
+           #done-tail)
+      (quiet))
