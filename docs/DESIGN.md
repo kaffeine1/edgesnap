@@ -486,6 +486,31 @@ The script uses paths relative to itself, so from a Shell it wants the
 package as the current directory: `CD <volume>:` then
 `Installer Install`. Double-clicking the icon does that for you.
 
+### "It says it installed into the drawer I ran it from"
+
+A MorphOS user reported this against 0.1, and it survived two fixes, so
+here is the state of it rather than a third guess.
+
+Nothing in the script installs into the drawer it was launched from.
+Every destination is absolute - `LIBS:`, `C:`, `SYS:Prefs`, `ENVARC:` -
+and the startup line is `Run >NIL: C:EdgeSnap`. What was missing was
+`@default-dest`, which the Installer defaults to the drawer holding the
+script and then names in a closing message of its own; we suppress that
+message with `(quiet)`, but an implementation free to ignore `(quiet)`
+will announce that EdgeSnap "is in RAM:" to anyone who unpacked the
+archive there. Setting it to `SYS:` fixed the wording on AmigaOS 4.
+
+On MorphOS the impression remains, so it comes from that Installer's own
+presentation rather than from anything the script says. Our closing
+panel now lists the four places the installation touched and states that
+the launch drawer can be deleted, which is as far as a script can go.
+
+What would make this a real defect instead of a cosmetic one is the
+files not arriving: `LIBS:edgesnap.library` and `C:EdgeSnap` after an
+install is the check that tells the two apart. Note that the commodity
+opens the library by name, so anyone who has seen EdgeSnap run at all
+has it in `LIBS:`.
+
 ### Why it does not reboot, and what it does instead
 
 The obvious way to make an update take effect is to restart the machine,
