@@ -246,8 +246,16 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
         int on = (gui->cfg.engine.zones_mask & ES_ZONEBIT(zone)) != 0;
 
         if ((i % ES_ZONES_PER_ROW) == 0) {
+            /*
+             * EvenSize gives the row three cells of equal width. Without
+             * it each row divides the space by its own labels, so "Left,
+             * Right, Top left" and "Top right, Bottom left, Bottom
+             * right" put their checkboxes at different places and the
+             * columns visibly drift.
+             */
             row = HLayoutObject,
                 LAYOUT_SpaceOuter, FALSE,
+                LAYOUT_EvenSize, TRUE,
             End;
             if (row == NULL) {
                 return group;
@@ -261,6 +269,21 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
             GA_Selected, on ? TRUE : FALSE,
         End;
         es_add_child(row, gui->zone[i], NULL, 1);
+    }
+    /*
+     * Seven zones do not fill the last row of three, and a row of one
+     * would stretch that one cell across the whole width, pulling its
+     * checkbox out of column. Empty layouts hold the missing cells.
+     */
+    for (i = ES_ZONE_COUNT; (i % ES_ZONES_PER_ROW) != 0; i++) {
+        Object *pad = HLayoutObject,
+            LAYOUT_SpaceOuter, FALSE,
+        End;
+
+        if (pad == NULL) {
+            break;
+        }
+        es_add_child(row, pad, NULL, 1);
     }
     return group;
 }

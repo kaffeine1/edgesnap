@@ -55,11 +55,22 @@
        "time. The line can be removed later by editing "
        "S:User-Startup.\n\n"))
 
+; Say where the files went, in so many words. Nothing is installed
+; into the drawer this script was launched from, but an Installer that
+; names that drawer in a message of its own leaves the user believing
+; otherwise - reported from MorphOS. Our own text should settle it.
 (set #done
   (cat "EdgeSnap " #app-version " is installed.\n"
        "by Michele Dipace <michele.dipace@kaffeine.net>\n\n"
-       "It starts with the system at every boot. To start it by hand "
-       "at any time:\n\n"
+       "Where it went:\n"
+       "    LIBS:edgesnap.library\n"
+       "    C:EdgeSnap\n"
+       "    SYS:Prefs/EdgeSnap\n"
+       "    one line in S:User-Startup\n\n"
+       "Nothing was installed into the drawer you ran this from: it "
+       "can be deleted.\n\n"
+       "EdgeSnap starts with the system at every boot. To start it by "
+       "hand at any time:\n\n"
        "    Run >NIL: C:EdgeSnap\n\n"
        "The settings are in SYS:Prefs/EdgeSnap - open it, change what "
        "you like, and EdgeSnap follows without being restarted. "

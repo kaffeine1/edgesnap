@@ -161,7 +161,7 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
         int zone = es_zone_order[i];
         int on = (gui->cfg.engine.zones_mask & ES_ZONEBIT(zone)) != 0;
         Object *check = MUI_MakeObject(MUIO_Checkmark, NULL);
-        Object *label = Label((char *)es_zone_label[i]);
+        Object *label = LLabel((char *)es_zone_label[i]);
 
         gui->zone[i] = check;
         if (check == NULL) {
@@ -266,7 +266,15 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
          * rest of the section.
          */
         if (t[i].kind == ES_SET_BOOL) {
-            label = Label((char *)es_label(gui, i, t[i].label));
+            /*
+             * LLabel, not Label: MUI's Label() is right aligned by
+             * design, because it belongs in the column to the LEFT of
+             * its gadget. Used as a checkmark's own text it drags the
+             * words to the far edge of the window, which is what a
+             * MorphOS user saw. A checkmark's label reads from the box
+             * outwards, so it is left aligned.
+             */
+            label = LLabel((char *)es_label(gui, i, t[i].label));
             tags[n].ti_Tag = MUIA_Group_Child;
             tags[n++].ti_Data = (ULONG)widget;
             if (label != NULL) {
