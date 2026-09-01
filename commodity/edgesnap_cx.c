@@ -1714,19 +1714,53 @@ static void spike_dump_windows(void)
 
 /* --------------------------------------------- the library we drive */
 
+/*
+ * Something went wrong badly enough that EdgeSnap will not run, and the
+ * user has to be told SOMEWHERE.
+ *
+ * The startup line is "Run >NIL: C:EdgeSnap", which is right - nobody
+ * wants a console at boot - but it also throws away every word we
+ * write. A MorphOS user reported EdgeSnap simply doing nothing after an
+ * install, with no way to find out why, and there was none: every
+ * failure path here printed to a console that was not there.
+ *
+ * A requester is intrusive, which is exactly what is wanted for a
+ * program that has decided not to start. It appears once, never during
+ * normal use.
+ */
+static void spike_fatal(const char *text)
+{
+    struct EasyStruct es;
+
+    spike_out("edgesnap: %s\n", text);
+    if (IntuitionBase == NULL) {
+        return;                 /* too early: nothing to draw on */
+    }
+    es.es_StructSize = sizeof(es);
+    es.es_Flags = 0;
+    es.es_Title = (CONST_STRPTR)"EdgeSnap";
+    es.es_TextFormat = (CONST_STRPTR)"%s";
+    es.es_GadgetFormat = (CONST_STRPTR)"OK";
+    EasyRequestArgs(NULL, &es, NULL, (APTR)&text);
+}
+
 static int spike_open_edgesnap(void)
 {
     EdgeSnapBase = OpenLibrary("edgesnap.library", ES_API_VERSION);
     if (EdgeSnapBase == NULL) {
-        spike_out("edgesnap: cannot open edgesnap.library - is it in "
-                  "LIBS:?\n");
+        spike_fatal("edgesnap.library could not be opened.\n\n"
+                    "It belongs in LIBS:. If EdgeSnap was installed and "
+                    "this still happens, the installation did not "
+                    "finish.");
         return 0;
     }
 #ifdef __amigaos4__
     IEdgeSnap = (struct EdgeSnapIFace *)
         GetInterface(EdgeSnapBase, "main", 1, NULL);
     if (IEdgeSnap == NULL) {
-        spike_out("edgesnap: edgesnap.library has no main interface\n");
+        spike_fatal("edgesnap.library is there but has no main "
+                    "interface.\n\nIt is probably an older version than "
+                    "this EdgeSnap needs: install the package again.");
         CloseLibrary(EdgeSnapBase);
         EdgeSnapBase = NULL;
         return 0;
@@ -2029,8 +2063,14 @@ int main(int argc, char **argv)
     }
 
     if (broker == NULL) {
-        spike_out("edgesnap: CxBroker failed (%ld)%s\n", (long)broker_err,
-               broker_err == CBERR_DUP ? " - already running" : "");
+        if (broker_err != CBERR_DUP) {
+            spike_fatal("EdgeSnap could not register itself with "
+                        "Commodities.\n\nIt will not run. Exchange and "
+                        "commodities.library are what it needs.");
+        } else {
+            spike_out("edgesnap: CxBroker failed (%ld) - already "
+                      "running\n", (long)broker_err);
+        }
         /*
          * Finding ourselves already running is the intended outcome of
          * a second launch, not a failure - and returning one made every
