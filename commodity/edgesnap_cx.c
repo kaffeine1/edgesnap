@@ -271,6 +271,20 @@ static int g_quiet;
  * on I/O.
  */
 
+/*
+ * Second lesson, paid for a year's worth of confusion in one day
+ * (2026-09-01): a log that floods DESTROYS the evidence. A diagnostic
+ * line left in the divider path filled these 64 slots, so the lines
+ * that mattered - "drag detected", "zone -> right", "snap ..." - were
+ * dropped, and a field video read as "the engine never sees the drag"
+ * when the engine was working perfectly. A whole investigation went
+ * after dock detection because of it.
+ *
+ * The rule that follows: nothing on a path that repeats logs by
+ * default. If a line cannot justify appearing once per mouse release,
+ * it does not belong here at all.
+ */
+
 #define ES_LOG_LINES 64
 #define ES_LOG_CHARS 160
 
