@@ -295,10 +295,11 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
  * belongs, and the layout class follows it. That is the DSI this
  * program died with on its first run.
  */
+/* fill: 0 fixed height, 1 free, 2 fixed in both directions. */
 static void es_add_child(Object *layout, Object *child, const char *label,
                          int fill)
 {
-    struct TagItem tags[3];
+    struct TagItem tags[4];
     Object *lab = NULL;
     int n = 0;
 
@@ -314,8 +315,14 @@ static void es_add_child(Object *layout, Object *child, const char *label,
             tags[n++].ti_Data = (ULONG)lab;
         }
     }
-    if (!fill) {
+    if (fill != 1) {
         tags[n].ti_Tag = CHILD_WeightedHeight;
+        tags[n++].ti_Data = 0;
+    }
+    if (fill == 2) {
+        /* a checkbox is its own size: do not stretch it across the
+         * column, or it stops lining up with the sliders below */
+        tags[n].ti_Tag = CHILD_WeightedWidth;
         tags[n++].ti_Data = 0;
     }
     tags[n].ti_Tag = TAG_END;
@@ -406,18 +413,16 @@ static Object *es_build_window(struct ESPrefsGui *gui)
                 continue;
             }
             /*
-             * A checkbox carries its own text, on its right, which is
-             * where the style guide puts it. Everything else gets a
-             * label in the column to its left.
+             * Inside a section every row reads "label: widget", so a
+             * checkbox keeps that shape too: its own text on the right
+             * would break the column the sliders line up in. It also
+             * gets no width weight, or the layout would stretch the box
+             * across the column instead of leaving it at the left edge
+             * where the sliders start.
              */
-            if (t[i].kind == ES_SET_BOOL) {
-                SetAttrs(gui->field[i],
-                         GA_Text, es_label(gui, i, t[i].label), TAG_END);
-                es_add_child(sect, gui->field[i], NULL, 0);
-            } else {
-                es_add_child(sect, gui->field[i],
-                             es_label(gui, i, t[i].label), 0);
-            }
+            es_add_child(sect, gui->field[i],
+                         es_label(gui, i, t[i].label),
+                         t[i].kind == ES_SET_BOOL ? 2 : 0);
         }
     }
 

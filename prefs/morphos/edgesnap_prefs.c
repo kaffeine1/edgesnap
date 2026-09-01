@@ -231,6 +231,26 @@ static int es_same_group(const char *a, const char *b)
     return *a == *b;
 }
 
+/*
+ * A checkmark left aligned in its column. On its own MUI centres it in
+ * the cell, so it floats away from the sliders underneath; followed by
+ * empty space it sits at the left edge of the widget column, in line
+ * with them.
+ */
+static Object *es_left_aligned(Object *o)
+{
+    Object *gap = MUI_NewObject(MUIC_Rectangle, TAG_DONE);
+
+    if (o == NULL || gap == NULL) {
+        return o;
+    }
+    return MUI_NewObject(MUIC_Group,
+                         MUIA_Group_Horiz, TRUE,
+                         MUIA_Group_Child, (ULONG)o,
+                         MUIA_Group_Child, (ULONG)gap,
+                         TAG_DONE);
+}
+
 /* One framed section, rows [first..last] of the table. */
 static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
                           int first, int last)
@@ -260,30 +280,18 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
             continue;
         }
         /*
-         * A checkmark's label belongs on its RIGHT: that is the style
-         * guide, and it is what the zone grid already does. Every other
-         * kind keeps its label in the left column, lined up with the
-         * rest of the section.
+         * Inside a section every row reads "label: widget", so a
+         * checkmark keeps that shape too: its label on the right would
+         * break the column the sliders line up in. The zone GRID is the
+         * exception and keeps its labels beside the boxes, because
+         * there the pairs ARE the layout.
          */
         if (t[i].kind == ES_SET_BOOL) {
-            /*
-             * LLabel, not Label: MUI's Label() is right aligned by
-             * design, because it belongs in the column to the LEFT of
-             * its gadget. Used as a checkmark's own text it drags the
-             * words to the far edge of the window, which is what a
-             * MorphOS user saw. A checkmark's label reads from the box
-             * outwards, so it is left aligned.
-             */
-            label = LLabel((char *)es_label(gui, i, t[i].label));
-            tags[n].ti_Tag = MUIA_Group_Child;
-            tags[n++].ti_Data = (ULONG)widget;
-            if (label != NULL) {
-                tags[n].ti_Tag = MUIA_Group_Child;
-                tags[n++].ti_Data = (ULONG)label;
-            }
-            continue;
+            widget = es_left_aligned(widget);
         }
-        label = Label2((char *)es_label(gui, i, t[i].label));
+        label = (t[i].kind == ES_SET_BOOL)
+            ? Label1((char *)es_label(gui, i, t[i].label))
+            : Label2((char *)es_label(gui, i, t[i].label));
         if (label != NULL) {
             tags[n].ti_Tag = MUIA_Group_Child;
             tags[n++].ti_Data = (ULONG)label;
