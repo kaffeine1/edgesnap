@@ -4,8 +4,8 @@
 @(c) "Copyright (c) 2026 Michele Dipace - MIT licence"
 @wordwrap
 
-@node MAIN "EdgeSnap 0.1 beta"
-@{b}EdgeSnap 0.1 beta@{ub}
+@node MAIN "EdgeSnap 0.2 beta"
+@{b}EdgeSnap 0.2 beta@{ub}
 Window snapping for AmigaOS 4.x and MorphOS
 by Michele Dipace <michele.dipace@kaffeine.net>
 

@@ -71,7 +71,7 @@ Short:        Drag windows to screen edges to tile them
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/wb
-Version:      0.1 (beta)
+Version:      0.2 (beta)
 Architecture: ppc-amigaos >= 4.0; ppc-morphos >= 3.0
 Distribution: Aminet
 License:      MIT

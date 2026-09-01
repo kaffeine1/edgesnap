@@ -55,13 +55,14 @@
 
 #include "prefs_io.h"
 #include "zones.h"
+#include "edgesnap_version.h"
 
 /* ReAction's call chains are deep and the preferences file is read
  * into a buffer of its own: ask for room rather than find out. */
 static const char es_stack_cookie[] __attribute__((used)) =
     "$STACK:65536";
 static const char es_version_cookie[] __attribute__((used)) =
-    "$VER: EdgeSnapPrefs 0.1 (29.8.2026) Michele Dipace";
+    "$VER: EdgeSnapPrefs " ES_VERSION " (" ES_VERSION_DATE ") Michele Dipace";
 
 #define ES_MAX_SETTINGS 32
 #define ES_ZONE_COUNT   7

@@ -27,7 +27,7 @@ import sys
 import textwrap
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = sys.argv[1] if len(sys.argv) > 1 else "0.1"
+VERSION = sys.argv[1] if len(sys.argv) > 1 else "0.2"
 ARCHIVE = os.path.join(ROOT, "build", "EdgeSnap-%s.lha" % VERSION)
 OUT = os.path.join(ROOT, "build", "channels")
 
@@ -46,6 +46,29 @@ SHORT = "Tile windows by dragging them to an edge"
 # does no formatting of its own.
 
 BODY = [
+    ("WHAT IS NEW IN %s" % VERSION, """
+The seam between tiled windows is a LINE, not a pair. One window filling
+half the screen, faced by two stacked in the other half, shares a single
+seam with both: dragging it moves all three. Four quadrants share one
+seam down the middle and one across, and a split that exists on only one
+side moves just the windows on that side.
+
+The seam stays out of sight until the pointer reaches it, then lights up
+and can be dragged.
+
+The preferences windows follow the style guide now: settings are grouped
+into sections, labels take a colon, and the window can be resized. The
+zone checkboxes are a grid instead of one long row.
+
+Dock detection no longer stops after the sixteenth dock, and the usable
+area can never collapse to nothing however many panels are found. Press
+ctrl alt d and the dump names which window reserved which edge.
+
+EdgeSnap no longer holds the Workbench screen open, which used to stop
+Intuition from changing its screenmode for as long as EdgeSnap ran. And
+when it cannot start at all it now says so instead of disappearing in
+silence.
+"""),
     ("WHAT IT IS", """
 EdgeSnap gives AmigaOS 4.x and MorphOS the window snapping that Windows
 and macOS users reach for without thinking. Drag a window against a
@@ -60,11 +83,12 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is a first public release. It does what it says on two
-machines - one AmigaOS 4.1 Final Edition and one MorphOS 3.20 - and
-nowhere else yet. If it covers your dock, misses your seam, or draws
-something odd with window transparency switched on, that is exactly the
-report worth having.
+Version %s is still a beta. It has been used on AmigaOS 4.1 Final
+Edition and on MorphOS 3.20, on real machines and not only in emulation,
+but the interface below 1.0 is not frozen and your setup is certainly
+not one of the ones it was tried on. If it covers your dock, misses your
+seam, or draws something odd with window transparency switched on, that
+is exactly the report worth having.
 
 Report it here, or to the address at the top of this file:
 
@@ -150,11 +174,10 @@ def aminet_readme():
         # and omitting it is what says "distribute freely". There is no
         # License: field on Aminet; MIT is stated in the body.
         #
-        # 0.1 was the FIRST upload, so no Replaces:. Every release after
-        # it needs "Replaces: util/cdity/edgesnap.lha" here, and
-        # "replaces:utility/workbench/edgesnap.lha" in the OS4Depot
-        # header below, or the old entry survives next to the new one -
-        # and OS4Depot fails validation SILENTLY when it is missing.
+        # From the second release on this is not optional: without it
+        # the old entry survives beside the new one, and OS4Depot fails
+        # validation SILENTLY when it is missing.
+        "Replaces:     util/cdity/edgesnap.lha",
         "",
     ]
     return head + body_lines()
@@ -177,7 +200,7 @@ def os4depot_readme():
         # Their enum has no MIT: Other is the honest slot, and the real
         # licence is named in the body and shipped in the archive.
         "license:Other",
-        # replaces: belongs here only when updating an existing entry.
+        "replaces:utility/workbench/edgesnap.lha",
         "distribute:yes",
         "minosversion:4.0",
         "hend:",

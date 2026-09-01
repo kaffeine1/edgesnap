@@ -75,6 +75,7 @@
 #include "engine.h"
 #include "registry.h"
 #include "config.h"
+#include "edgesnap_version.h"
 #include "edgesnap.h"
 
 /*
@@ -143,7 +144,7 @@ unsigned long __stack = 65536UL;
 static const char es_stack_cookie[] __attribute__((used)) =
     "$STACK:65536";
 static const char es_version_cookie[] __attribute__((used)) =
-    "$VER: EdgeSnap 0.1 (29.8.2026) Michele Dipace";
+    "$VER: EdgeSnap " ES_VERSION " (" ES_VERSION_DATE ") Michele Dipace";
 
 /* ----------------------------------------- input handler <-> main task */
 
@@ -2028,7 +2029,7 @@ int main(int argc, char **argv)
     memset(&nb, 0, sizeof(nb));
     nb.nb_Version = NB_VERSION;
     nb.nb_Name = (STRPTR)"EdgeSnap";
-    nb.nb_Title = (STRPTR)"EdgeSnap 0.1 by Michele Dipace";
+    nb.nb_Title = (STRPTR)"EdgeSnap " ES_VERSION " by Michele Dipace";
     nb.nb_Descr = (STRPTR)"Drag windows to screen edges to tile them";
     nb.nb_Unique = NBU_UNIQUE | NBU_NOTIFY;
     nb.nb_Pri = 0;
@@ -2120,7 +2121,7 @@ int main(int argc, char **argv)
 
     ActivateCxObj(broker, 1L);
 
-    spike_out("EdgeSnap 0.1 (build " __DATE__ " " __TIME__ ") "
+    spike_out("EdgeSnap " ES_VERSION " (build " __DATE__ " " __TIME__ ") "
            "running (commodity \"EdgeSnap\").\n");
     spike_out("  Copyright (c) 2026 Michele Dipace "
            "<michele.dipace@kaffeine.net>, MIT license.\n");

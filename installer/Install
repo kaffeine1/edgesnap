@@ -8,7 +8,7 @@
 
 (set #app "EdgeSnap")
 
-(set #app-version "0.1 beta")
+(set #app-version "0.2 beta")
 
 (set #welcome
   (cat "EdgeSnap " #app-version "\n"

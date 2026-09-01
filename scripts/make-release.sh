@@ -9,7 +9,31 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-VERSION="${1:-0.1}"
+VERSION="${1:-0.2}"
+
+# The version lives in include/edgesnap_version.h; the scripts and the
+# Installer cannot include a C header, so they are checked against it
+# here. A package that says one number on the tin and another in the
+# banner is a mistake nobody catches until a user reports it.
+HDR="$ROOT/include/edgesnap_version.h"
+HDR_VERSION=$(sed -n 's/^#define ES_VERSION  *"\([^"]*\)".*/\1/p' "$HDR")
+if [ "$HDR_VERSION" != "$VERSION" ]; then
+    echo "ERROR: building $VERSION but edgesnap_version.h says $HDR_VERSION" >&2
+    exit 1
+fi
+for pair in \
+    "installer/Install:(set #app-version \"$VERSION beta\")" \
+    "packaging/EdgeSnap.guide.in:EdgeSnap $VERSION beta" \
+    "scripts/stage-package.sh:Version:      $VERSION (beta)"
+do
+    f="${pair%%:*}"
+    want="${pair#*:}"
+    if ! grep -qF "$want" "$ROOT/$f"; then
+        echo "ERROR: $f does not carry version $VERSION" >&2
+        exit 1
+    fi
+done
+echo "version $VERSION agrees across header, installer, guide and staging"
 STAGE="$ROOT/build/release"
 OUT="$ROOT/build/EdgeSnap-$VERSION.lha"
 
