@@ -29,7 +29,14 @@ fi
 rm -rf "$DEST"
 mkdir -p "$DEST"
 
-"$ROOT/scripts/stage-package.sh" "$DEST"
+# Stage locally FIRST, then copy to the card: a copy can only be
+# verified against something, and staging straight onto the card leaves
+# nothing to compare it with.
+STAGE="$ROOT/build/swap-stage"
+rm -rf "$STAGE"
+mkdir -p "$STAGE"
+"$ROOT/scripts/stage-package.sh" "$STAGE"
+cp -R "$STAGE/." "$DEST/"
 cp "$ROOT/assets/EdgeSnapDrawer.info" "$CARD/EdgeSnap.info"
 
 # The archive as it will reach testers, next to the drawer it unpacks
@@ -44,6 +51,27 @@ find "$DEST" -name '._*' -delete 2>/dev/null || true
 dot_clean "$CARD" 2>/dev/null || true
 
 sync
+
+# Read every file back and compare it with the source. A CF card takes
+# a write into the host's cache and reports success long before the
+# flash has it, so "the copy finished" is not the same as "the card
+# holds it" - and the failure shows up as a truncated binary on the
+# real machine, an hour later, looking like a bug in the program.
+echo "verifying..."
+bad=0
+for f in $(cd "$STAGE" && find . -type f | sed 's|^\./||'); do
+    if ! cmp -s "$STAGE/$f" "$DEST/$f"; then
+        echo "MISMATCH: $f" >&2
+        bad=1
+    fi
+done
+if [ "$bad" != "0" ]; then
+    echo "ERROR: the card does not hold what was copied - do NOT trust it" >&2
+    exit 1
+fi
+echo "verified: every file on the card matches its source"
+rm -rf "$STAGE"
+
 echo "package on $DEST:"
 ls "$DEST"
 echo
