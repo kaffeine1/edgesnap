@@ -353,6 +353,49 @@ static void test_four_quadrants(void)
     CHECK(b[1].x == 1200 && b[1].w == 720);
 }
 
+/*
+ * A drag is not one move but a stream of them, and after each one the
+ * seam is somewhere else. Walking it across the screen must keep
+ * finding it: naming a seam by where it STARTED made the drag work for
+ * a dozen pixels and then stop dead, which is what a user saw.
+ */
+static void test_seam_can_be_walked_across_the_screen(void)
+{
+    ESRegistry reg;
+    ESSeam seams[ES_SEAM_MAX];
+    ESRect a[ES_SEAM_SIDE_MAX], b[ES_SEAM_SIDE_MAX];
+    ESRect pre = rect(100, 100, 400, 300);
+    int wa, wb;
+    int target;
+
+    halves(&reg, &wa, &wb);
+    for (target = 1000; target <= 1400; target += 100) {
+        int n = es_gutter_find_all(&reg, 8, seams, ES_SEAM_MAX);
+        int i, v = -1;
+
+        for (i = 0; i < n; i++) {
+            if (seams[i].vertical) {
+                v = i;
+            }
+        }
+        CHECK(v >= 0);
+        if (v < 0) {
+            return;
+        }
+        es_gutter_apply(&seams[v], target, a, b);
+        /* the registry follows, as the library makes it do */
+        es_registry_remember(&reg, &wa, &pre, &a[0], ES_ZONE_LEFT);
+        es_registry_remember(&reg, &wb, &pre, &b[0], ES_ZONE_RIGHT);
+        CHECK(a[0].w == target);
+    }
+    /* and it is still there at the end, at the last position asked */
+    {
+        int n = es_gutter_find_all(&reg, 8, seams, ES_SEAM_MAX);
+        CHECK(n >= 1);
+        CHECK(seams[0].pos == 1400);
+    }
+}
+
 int main(void)
 {
     test_finds_the_vertical_seam();
@@ -366,6 +409,7 @@ int main(void)
     test_one_window_faces_two();
     test_horizontal_seam_keeps_to_its_side();
     test_four_quadrants();
+    test_seam_can_be_walked_across_the_screen();
 
     if (g_failures == 0) {
         printf("gutter_test: all tests passed\n");

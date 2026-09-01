@@ -1438,6 +1438,13 @@ static void spike_divider_events(void)
 
             if (rc == ES_OK) {
                 /*
+                 * The seam has moved, so its NAME has changed with it:
+                 * keep the line up to date or the next call would be
+                 * asking for a seam that is no longer where it was, and
+                 * the drag would die a few pixels in.
+                 */
+                g_divider_line = (int)pos;
+                /*
                  * Follow the POINTER, not the seam. Asking the library
                  * where the seam is now would race the placement it
                  * has just asked for - ChangeWindowBox() returns before

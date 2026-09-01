@@ -772,19 +772,33 @@ LONG esb_move_divider(LONG vertical, LONG line, LONG position)
     n = es_gutter_find_all(&g_registry, 8, seams, ES_SEAM_MAX);
     ReleaseSemaphore(&g_sem);
 
-    /* The seam is named by its line: a layout can hold several, and
-     * moving "the first one" would resize windows nobody grabbed. */
-    for (i = 0; i < n; i++) {
-        if (seams[i].vertical != (vertical ? 1 : 0)) {
-            continue;
-        }
-        d = seams[i].pos - (int)line;
-        if (d < 0) {
-            d = -d;
-        }
-        if (d <= ES_SEAM_TOUCH_TOL) {
-            seam = &seams[i];
-            break;
+    /*
+     * The seam is named by its line: a layout can hold several, and
+     * moving "the first one" would resize windows nobody grabbed.
+     *
+     * NEAREST on the same axis, not "within a tolerance". A dragged
+     * seam moves away from where it was grabbed, so a fixed window of
+     * a few pixels stops matching as soon as the user has pulled
+     * further than that - which is a drag that works for a moment and
+     * then dies. The caller follows the seam it is moving, so nearest
+     * is both unambiguous and stable, and it still holds when the
+     * position is clamped and the pointer runs on past the limit.
+     */
+    {
+        int best = -1;
+
+        for (i = 0; i < n; i++) {
+            if (seams[i].vertical != (vertical ? 1 : 0)) {
+                continue;
+            }
+            d = seams[i].pos - (int)line;
+            if (d < 0) {
+                d = -d;
+            }
+            if (best < 0 || d < best) {
+                best = d;
+                seam = &seams[i];
+            }
         }
     }
     if (seam == NULL) {
