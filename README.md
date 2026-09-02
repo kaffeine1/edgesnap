@@ -68,6 +68,10 @@ first gesture is the drag.
 
 ## Status
 
+![The preferences window on MorphOS: settings grouped into sections, the zone grid, docks and margins](docs/screenshots/prefs-morphos.jpg)
+
+*The MorphOS preferences window (MUI), version 0.2. The AmigaOS 4 window is the same sections in ReAction: both are generated from one settings table.*
+
 - **Phase 0 (spike): validated on BOTH targets** - AmigaOS 4 (QEMU,
   2026-08-11) and real MorphOS hardware (2026-08-26): drag detection,
   snapping and the outline preview all work, including the
