@@ -144,7 +144,7 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
 /* The zone mask gets a row of checkmarks rather than a cryptic number. */
 static Object *es_zone_group(struct ESPrefsGui *gui)
 {
-    struct TagItem tags[2 + ES_ZONE_COUNT * 2 + ES_ZONE_COLS + 1];
+    struct TagItem tags[3 + ES_ZONE_COUNT * 2 + ES_ZONE_COLS + 1];
     int n = 0;
     int cells = 0;
     int i;
@@ -158,6 +158,16 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
      */
     tags[n].ti_Tag = MUIA_Group_Columns;
     tags[n++].ti_Data = ES_ZONE_COLS;
+    /*
+     * No horizontal weight: a column group hands extra width to the
+     * columns that hold something elastic, and the padding rectangles
+     * sit in the last four columns only - so "Top left" and "Bottom
+     * right" followed the window's right edge while the others stayed
+     * put (seen on MorphOS). At weight zero the grid keeps its natural
+     * width, and the empty space placed AFTER it below takes the slack.
+     */
+    tags[n].ti_Tag = MUIA_HorizWeight;
+    tags[n++].ti_Data = 0;
     for (i = 0; i < ES_ZONE_COUNT; i++) {
         int zone = es_zone_order[i];
         int on = (gui->cfg.engine.zones_mask & ES_ZONEBIT(zone)) != 0;
@@ -196,7 +206,19 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
     }
     tags[n].ti_Tag = TAG_DONE;
     tags[n].ti_Data = 0;
-    return MUI_NewObjectA(MUIC_Group, tags);
+    {
+        Object *grid = MUI_NewObjectA(MUIC_Group, tags);
+        Object *slack = MUI_NewObject(MUIC_Rectangle, TAG_DONE);
+
+        if (grid == NULL || slack == NULL) {
+            return grid;
+        }
+        return MUI_NewObject(MUIC_Group,
+                             MUIA_Group_Horiz, TRUE,
+                             MUIA_Group_Child, (ULONG)grid,
+                             MUIA_Group_Child, (ULONG)slack,
+                             TAG_DONE);
+    }
 }
 
 /*
@@ -264,6 +286,13 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
     tags[n++].ti_Data = MUIV_Frame_Group;
     tags[n].ti_Tag = MUIA_FrameTitle;
     tags[n++].ti_Data = (ULONG)t[first].group;
+    /* A frame title wants the group background under it: that is what
+     * clears the frame line behind the words. Without it, whether the
+     * title sits on the line or beside it depends on what happens to
+     * be painted underneath, which is why it looked different from one
+     * section to the next on MorphOS. */
+    tags[n].ti_Tag = MUIA_Background;
+    tags[n++].ti_Data = MUII_GroupBack;
     tags[n].ti_Tag = MUIA_Group_Columns;
     tags[n++].ti_Data = 2;
 
