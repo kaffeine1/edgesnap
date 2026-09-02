@@ -144,7 +144,7 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
 /* The zone mask gets a row of checkmarks rather than a cryptic number. */
 static Object *es_zone_group(struct ESPrefsGui *gui)
 {
-    struct TagItem tags[3 + ES_ZONE_COUNT * 2 + ES_ZONE_COLS + 1];
+    struct TagItem tags[5 + ES_ZONE_COUNT * 2 + ES_ZONE_COLS + 1];
     int n = 0;
     int cells = 0;
     int i;
@@ -168,6 +168,12 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
      */
     tags[n].ti_Tag = MUIA_HorizWeight;
     tags[n++].ti_Data = 0;
+    /* Packed left is right; packed TIGHT is not. Room between the
+     * columns, so a box and the next label are not one lump. */
+    tags[n].ti_Tag = MUIA_Group_HorizSpacing;
+    tags[n++].ti_Data = 16;
+    tags[n].ti_Tag = MUIA_Group_VertSpacing;
+    tags[n++].ti_Data = 4;
     for (i = 0; i < ES_ZONE_COUNT; i++) {
         int zone = es_zone_order[i];
         int on = (gui->cfg.engine.zones_mask & ES_ZONEBIT(zone)) != 0;
@@ -282,15 +288,17 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
     int n = 0;
     int i;
 
+    /*
+     * No MUIA_FrameTitle. The frame draws its title where it likes,
+     * through the top line, and nothing moves it up: on MorphOS the
+     * words sat on the line in some sections and beside it in others,
+     * and a group background did not settle it. So the title is a bold
+     * text ABOVE the framed group (see the wrapper below), which cannot
+     * be on the line by construction and reads the same in every
+     * section.
+     */
     tags[n].ti_Tag = MUIA_Frame;
     tags[n++].ti_Data = MUIV_Frame_Group;
-    tags[n].ti_Tag = MUIA_FrameTitle;
-    tags[n++].ti_Data = (ULONG)t[first].group;
-    /* A frame title wants the group background under it: that is what
-     * clears the frame line behind the words. Without it, whether the
-     * title sits on the line or beside it depends on what happens to
-     * be painted underneath, which is why it looked different from one
-     * section to the next on MorphOS. */
     tags[n].ti_Tag = MUIA_Background;
     tags[n++].ti_Data = MUII_GroupBack;
     tags[n].ti_Tag = MUIA_Group_Columns;
@@ -331,7 +339,21 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
     }
     tags[n].ti_Tag = TAG_DONE;
     tags[n].ti_Data = 0;
-    return MUI_NewObjectA(MUIC_Group, tags);
+    {
+        Object *body = MUI_NewObjectA(MUIC_Group, tags);
+        Object *title = MUI_NewObject(MUIC_Text,
+                                      MUIA_Text_Contents, (ULONG)t[first].group,
+                                      MUIA_Text_PreParse, (ULONG)"\33b",
+                                      TAG_DONE);
+
+        if (body == NULL || title == NULL) {
+            return body;
+        }
+        return MUI_NewObject(MUIC_Group,
+                             MUIA_Group_Child, (ULONG)title,
+                             MUIA_Group_Child, (ULONG)body,
+                             TAG_DONE);
+    }
 }
 
 /*
