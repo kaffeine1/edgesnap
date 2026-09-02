@@ -1,0 +1,74 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# AROS x86_64 lane. Built ON the hosted bench against the TRUNK
+# toolchain (scripts/build-aros.sh does the round trip): an x86_64 AROS
+# binary cross-built on the Mac links and then dies before main, a
+# lesson from a sibling project. Two binaries:
+#   EdgeSnap       the commodity with the core LINKED IN (ES_STATIC_CORE):
+#                  no edgesnap.library yet on AROS, and none needed for a
+#                  first milestone that people can run
+#   EdgeSnapPrefs  the preferences window on Zune, from the MUI source
+#
+# Own code is C89-style; no -std= forced, the SDK headers decide.
+# 64-bit: pointers never travel through ULONG (see ESTagData).
+
+ifdef AROS_TOOLCHAIN
+CC = $(AROS_TOOLCHAIN)/x86_64-aros-gcc
+OBJCOPY ?= $(AROS_TOOLCHAIN)/x86_64-aros-objcopy
+else
+CC ?= x86_64-aros-gcc
+OBJCOPY ?= x86_64-aros-objcopy
+endif
+
+CFLAGS ?= -Wall -Wextra -O2
+CFLAGS += -mcmodel=large -fno-asynchronous-unwind-tables -fno-unwind-tables \
+	-fno-reorder-blocks-and-partition -D__AROS__ \
+	-Icore -Iinclude -Ilibrary -Iprefs
+
+SDK_GCC_ROOT ?= $(AROS_TOOLCHAIN)/lib/gcc/x86_64-aros/10.5.0
+ifneq ($(AROS_SDK_ROOT),)
+CFLAGS += -isystem "$(SDK_GCC_ROOT)/include" \
+	-isystem "$(SDK_GCC_ROOT)/include-fixed" \
+	-I"$(AROS_SDK_ROOT)/include/aros/posixc" \
+	-I"$(AROS_SDK_ROOT)/include/aros/stdc" \
+	-I"$(AROS_SDK_ROOT)/include"
+LDFLAGS += -nostdlib -L"$(AROS_SDK_ROOT)/lib" -L"$(SDK_GCC_ROOT)"
+LDSTART := "$(AROS_SDK_ROOT)/lib/startup.o"
+LDLIBS += -lautoinit -lcrtprog -lcrt -lstdlib -lstdc.static \
+	-lamiga -laros -ldos -lexec -lutility -lgcc -lautoinit -lamiga
+endif
+
+OUT := build/aros-x86_64
+CX_SRC := commodity/edgesnap_cx.c library/edgesnap_body.c \
+	core/zones.c core/panels.c core/engine.c core/registry.c \
+	core/config.c core/gutter.c
+PREFS_SRC := prefs/morphos/edgesnap_prefs.c prefs/prefs_io.c \
+	core/config.c core/engine.c core/zones.c core/panels.c
+
+.PHONY: all clean
+
+all: $(OUT)/EdgeSnap $(OUT)/EdgeSnapPrefs
+
+# After linking: drop .got (the loader does not want it) and stamp the
+# ELF OS/ABI byte so AROS recognises its own binary. Both from the
+# sibling recipe that produced a binary that actually runs.
+define aros-link
+	mkdir -p "$(dir $@)"
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(1) $(LDFLAGS) $(LDSTART) -o "$@" $(2) $(LDLIBS)
+	$(OBJCOPY) -R .got "$@"
+	printf '\013' | dd of="$@" bs=1 seek=8 conv=notrunc 2>/dev/null
+	@strings "$@" | grep -F '$$VER: ' | head -1
+endef
+
+$(OUT)/EdgeSnap: $(CX_SRC)
+	$(call aros-link,-DES_STATIC_CORE,$(CX_SRC))
+
+# The varargs MUI_NewObject/MUI_MakeObject are not in muimaster.library
+# itself on AROS: they are link-time wrappers in libmui.a.
+$(OUT)/EdgeSnapPrefs: LDLIBS := -lmui $(LDLIBS)
+$(OUT)/EdgeSnapPrefs: $(PREFS_SRC)
+	$(call aros-link,,$(PREFS_SRC))
+
+clean:
+	rm -rf "$(OUT)"

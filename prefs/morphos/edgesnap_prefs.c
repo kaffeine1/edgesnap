@@ -80,6 +80,11 @@ struct ESPrefsGui {
 };
 
 struct Library *MUIMasterBase;
+#ifdef __AROS__
+/* MorphOS's startup opens Intuition for us; AROS's inline stubs want
+ * the base by name and nothing provides it, so it is ours to open. */
+struct IntuitionBase *IntuitionBase;
+#endif
 
 /* ------------------------------------------------------ the widgets */
 
@@ -474,6 +479,12 @@ int main(void)
     }
     esp_load(&gui.cfg);
 
+#ifdef __AROS__
+    IntuitionBase = (struct IntuitionBase *)OpenLibrary("intuition.library", 36);
+    if (IntuitionBase == NULL) {
+        return RETURN_FAIL;
+    }
+#endif
     MUIMasterBase = OpenLibrary(MUIMASTER_NAME, MUIMASTER_VMIN);
     if (MUIMasterBase == NULL) {
         Printf("EdgeSnapPrefs: muimaster.library %ld is needed\n",
@@ -510,6 +521,12 @@ int main(void)
     if (gui.app == NULL) {
         Printf("EdgeSnapPrefs: the window would not build\n");
         CloseLibrary(MUIMasterBase);
+#ifdef __AROS__
+    CloseLibrary((struct Library *)IntuitionBase);
+#endif
+#ifdef __AROS__
+        CloseLibrary((struct Library *)IntuitionBase);
+#endif
         return RETURN_FAIL;
     }
 

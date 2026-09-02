@@ -86,7 +86,11 @@
  * ppcinline stubs over the jump table - so every call is written once
  * as ES_CALL(name)(args).
  */
-#ifdef __amigaos4__
+#if defined(ES_STATIC_CORE)
+/* The body is linked in and called directly: no library to open. */
+#include "edgesnap_static.h"
+#define ES_CALL(fn) fn
+#elif defined(__amigaos4__)
 #include "interfaces/edgesnap.h"
 static struct Library *EdgeSnapBase;
 static struct EdgeSnapIFace *IEdgeSnap;
@@ -1088,9 +1092,14 @@ static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
  * The double arrow, under the name each system gives it: AmigaOS 4
  * points to the compass, MorphOS to the axis.
  */
-#ifdef __amigaos4__
+#if defined(__amigaos4__)
 #define ES_PTR_SEAM_VERTICAL   POINTERTYPE_EASTWESTRESIZE
 #define ES_PTR_SEAM_HORIZONTAL POINTERTYPE_NORTHSOUTHRESIZE
+#elif defined(__AROS__)
+/* AROS has no system pointer types to ask for (its pointerclass.h
+ * defines none). The strip lighting up under the pointer is the
+ * affordance anyway; a double arrow of our own is later work. */
+#define ES_PTR_SEAM_NONE 1
 #else
 #define ES_PTR_SEAM_VERTICAL   POINTERTYPE_HORIZONTALRESIZE
 #define ES_PTR_SEAM_HORIZONTAL POINTERTYPE_VERTICALRESIZE
@@ -1208,10 +1217,12 @@ static void spike_divider_pointer(void)
     if (g_divider == NULL) {
         return;
     }
+#ifndef ES_PTR_SEAM_NONE
     SetWindowPointer(g_divider,
                      WA_PointerType, g_divider_vertical ?
                          ES_PTR_SEAM_VERTICAL : ES_PTR_SEAM_HORIZONTAL,
                      TAG_DONE);
+#endif
 }
 
 /*
@@ -1746,6 +1757,24 @@ static void spike_fatal(const char *text)
     EasyRequestArgs(NULL, &es, NULL, (APTR)&text);
 }
 
+#if defined(ES_STATIC_CORE)
+static int spike_open_edgesnap(void)
+{
+    /* The body wants Intuition open, which the commodity has done by
+     * now, and its own init: the same two things the library glue
+     * does in LibOpen(). */
+    if (!esb_init()) {
+        spike_fatal("EdgeSnap could not initialise its snapping core.");
+        return 0;
+    }
+    return 1;
+}
+
+static void spike_close_edgesnap(void)
+{
+    esb_cleanup();
+}
+#else
 static int spike_open_edgesnap(void)
 {
     EdgeSnapBase = OpenLibrary("edgesnap.library", ES_API_VERSION);
@@ -1802,6 +1831,7 @@ static void spike_close_edgesnap(void)
         EdgeSnapBase = NULL;
     }
 }
+#endif /* ES_STATIC_CORE */
 
 /*
  * Preferences are a frontend concern (files, arguments, tooltypes), so
