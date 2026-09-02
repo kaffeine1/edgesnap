@@ -32,6 +32,7 @@
 #include "config.h"
 #include "prefs_io.h"
 #include "edgesnap_version.h"
+#include "edgesnap.h"
 
 static const char es_version_cookie[] __attribute__((used)) =
     "$VER: EdgeSnapPrefs " ES_VERSION " (" ES_VERSION_DATE ") Michele Dipace";
@@ -187,11 +188,11 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
         set(check, MUIA_Selected, on ? TRUE : FALSE);
         set(check, MUIA_CycleChain, 1);
         tags[n].ti_Tag = MUIA_Group_Child;
-        tags[n++].ti_Data = (ULONG)check;
+        tags[n++].ti_Data = (ESTagData)check;
         cells++;
         if (label != NULL) {
             tags[n].ti_Tag = MUIA_Group_Child;
-            tags[n++].ti_Data = (ULONG)label;
+            tags[n++].ti_Data = (ESTagData)label;
             cells++;
         }
     }
@@ -207,7 +208,7 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
             break;
         }
         tags[n].ti_Tag = MUIA_Group_Child;
-        tags[n++].ti_Data = (ULONG)gap;
+        tags[n++].ti_Data = (ESTagData)gap;
         cells++;
     }
     tags[n].ti_Tag = TAG_DONE;
@@ -221,8 +222,8 @@ static Object *es_zone_group(struct ESPrefsGui *gui)
         }
         return MUI_NewObject(MUIC_Group,
                              MUIA_Group_Horiz, TRUE,
-                             MUIA_Group_Child, (ULONG)grid,
-                             MUIA_Group_Child, (ULONG)slack,
+                             MUIA_Group_Child, (ESTagData)grid,
+                             MUIA_Group_Child, (ESTagData)slack,
                              TAG_DONE);
     }
 }
@@ -275,8 +276,8 @@ static Object *es_left_aligned(Object *o)
     }
     return MUI_NewObject(MUIC_Group,
                          MUIA_Group_Horiz, TRUE,
-                         MUIA_Group_Child, (ULONG)o,
-                         MUIA_Group_Child, (ULONG)gap,
+                         MUIA_Group_Child, (ESTagData)o,
+                         MUIA_Group_Child, (ESTagData)gap,
                          TAG_DONE);
 }
 
@@ -332,17 +333,17 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
             : Label2((char *)es_label(gui, i, t[i].label));
         if (label != NULL) {
             tags[n].ti_Tag = MUIA_Group_Child;
-            tags[n++].ti_Data = (ULONG)label;
+            tags[n++].ti_Data = (ESTagData)label;
         }
         tags[n].ti_Tag = MUIA_Group_Child;
-        tags[n++].ti_Data = (ULONG)widget;
+        tags[n++].ti_Data = (ESTagData)widget;
     }
     tags[n].ti_Tag = TAG_DONE;
     tags[n].ti_Data = 0;
     {
         Object *body = MUI_NewObjectA(MUIC_Group, tags);
         Object *title = MUI_NewObject(MUIC_Text,
-                                      MUIA_Text_Contents, (ULONG)t[first].group,
+                                      MUIA_Text_Contents, (ESTagData)t[first].group,
                                       MUIA_Text_PreParse, (ULONG)"\33b",
                                       TAG_DONE);
 
@@ -350,8 +351,8 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
             return body;
         }
         return MUI_NewObject(MUIC_Group,
-                             MUIA_Group_Child, (ULONG)title,
-                             MUIA_Group_Child, (ULONG)body,
+                             MUIA_Group_Child, (ESTagData)title,
+                             MUIA_Group_Child, (ESTagData)body,
                              TAG_DONE);
     }
 }
@@ -385,7 +386,7 @@ static Object *es_settings_group(struct ESPrefsGui *gui)
         sect = es_section(gui, t, first, i - 1);
         if (sect != NULL) {
             tags[n].ti_Tag = MUIA_Group_Child;
-            tags[n++].ti_Data = (ULONG)sect;
+            tags[n++].ti_Data = (ESTagData)sect;
         }
         first = i;
     }

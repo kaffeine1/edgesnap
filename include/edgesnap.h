@@ -67,6 +67,19 @@
 #include <utility/tagitem.h>
 #include <intuition/intuition.h>
 
+/*
+ * What fits in a TagItem's ti_Data. On AmigaOS 4 and MorphOS pointers
+ * are 32 bits and the field is a ULONG; on AROS x86_64 pointers are 64
+ * bits and the field is an IPTR. A pointer cast to ULONG on the latter
+ * loses its top half silently, which is how the first 64-bit port of
+ * anything usually fails. Cast tag data to this, never to ULONG.
+ */
+#if defined(__AROS__)
+typedef IPTR ESTagData;
+#else
+typedef ULONG ESTagData;
+#endif
+
 #include "edgesnap_types.h"
 
 /* ------------------------------------------------------------- tags */
