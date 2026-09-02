@@ -167,6 +167,10 @@ struct SpikeShared {
     volatile ULONG armed;   /* 0 = the action must do nothing at all */
     ULONG engine_sigmask;
     volatile ULONG presses;
+    /* diagnostics: how often the action ran, and which input classes
+     * it saw (index = ie_Class & 15); shown by the ctrl alt d dump */
+    volatile ULONG diag_calls;
+    volatile ULONG diag_class[16];
     volatile ULONG releases;
     volatile ULONG moves;
     volatile ULONG quals;   /* latest qualifier bits seen with the mouse */
@@ -187,11 +191,20 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
     if (!g_shared.armed) {
         return; /* shutting down: touch nothing */
     }
+    g_shared.diag_calls++;
     if (CxMsgType(msg) != CXM_IEVENT) {
         return;
     }
     ie = (struct InputEvent *)CxMsgData(msg);
-    if (ie == NULL || ie->ie_Class != IECLASS_RAWMOUSE) {
+    if (ie == NULL) {
+        return;
+    }
+    /* Diagnostics only: which classes reach us. Written so that a port
+     * where the mouse speaks another dialect (AROS with a USB tablet,
+     * 2026-09-03) shows its hand in the ctrl alt d dump instead of
+     * leaving 'drag not detected' to be guessed at. */
+    g_shared.diag_class[ie->ie_Class & 15]++;
+    if (ie->ie_Class != IECLASS_RAWMOUSE) {
         return;
     }
     g_shared.quals = ie->ie_Qualifier;
@@ -1722,6 +1735,19 @@ static void spike_dump_windows(void)
     spike_out("edgesnap: insets l=%d t=%d r=%d b=%d -> usable %d,%d %dx%d\n",
            ins.l, ins.t, ins.r, ins.b,
            usable.x, usable.y, usable.w, usable.h);
+    spike_out("edgesnap: input action calls %lu; classes seen:"
+              " raw-mouse %lu raw-key %lu newpointerpos %lu pointerpos %lu"
+              " other %lu\n",
+              (unsigned long)g_shared.diag_calls,
+              (unsigned long)g_shared.diag_class[IECLASS_RAWMOUSE & 15],
+              (unsigned long)g_shared.diag_class[IECLASS_RAWKEY & 15],
+              (unsigned long)g_shared.diag_class[IECLASS_NEWPOINTERPOS & 15],
+              (unsigned long)g_shared.diag_class[IECLASS_POINTERPOS & 15],
+              (unsigned long)(g_shared.diag_class[IECLASS_TIMER & 15] +
+                              g_shared.diag_class[IECLASS_GADGETDOWN & 15] +
+                              g_shared.diag_class[IECLASS_GADGETUP & 15] +
+                              g_shared.diag_class[IECLASS_MENULIST & 15] +
+                              g_shared.diag_class[IECLASS_DISKREMOVED & 15]));
     fflush(stdout);
 }
 
