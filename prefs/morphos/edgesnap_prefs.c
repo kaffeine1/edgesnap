@@ -344,7 +344,7 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
         Object *body = MUI_NewObjectA(MUIC_Group, tags);
         Object *title = MUI_NewObject(MUIC_Text,
                                       MUIA_Text_Contents, (ESTagData)t[first].group,
-                                      MUIA_Text_PreParse, (ULONG)"\33b",
+                                      MUIA_Text_PreParse, (ESTagData)"\33b",
                                       TAG_DONE);
 
         if (body == NULL || title == NULL) {
@@ -487,7 +487,7 @@ int main(void)
 
     gui.app = ApplicationObject,
         MUIA_Application_Title,       "EdgeSnap",
-        MUIA_Application_Version,     (ULONG)es_version_cookie,
+        MUIA_Application_Version,     (ESTagData)es_version_cookie,
         MUIA_Application_Copyright,   "(c) 2026 Michele Dipace",
         MUIA_Application_Author,      "Michele Dipace",
         MUIA_Application_Description, "Window snapping preferences",
@@ -514,14 +514,14 @@ int main(void)
     }
 
     DoMethod(gui.win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
-             (ULONG)gui.app, 2, MUIM_Application_ReturnID,
+             (ESTagData)gui.app, 2, MUIM_Application_ReturnID,
              MUIV_Application_ReturnID_Quit);
     DoMethod(save, MUIM_Notify, MUIA_Pressed, FALSE,
-             (ULONG)gui.app, 2, MUIM_Application_ReturnID, ES_ID_SAVE);
+             (ESTagData)gui.app, 2, MUIM_Application_ReturnID, ES_ID_SAVE);
     DoMethod(use, MUIM_Notify, MUIA_Pressed, FALSE,
-             (ULONG)gui.app, 2, MUIM_Application_ReturnID, ES_ID_USE);
+             (ESTagData)gui.app, 2, MUIM_Application_ReturnID, ES_ID_USE);
     DoMethod(cancel, MUIM_Notify, MUIA_Pressed, FALSE,
-             (ULONG)gui.app, 2, MUIM_Application_ReturnID, ES_ID_CANCEL);
+             (ESTagData)gui.app, 2, MUIM_Application_ReturnID, ES_ID_CANCEL);
 
     set(gui.win, MUIA_Window_Open, TRUE);
 
