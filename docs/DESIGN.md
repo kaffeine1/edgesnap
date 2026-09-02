@@ -698,18 +698,6 @@ belong in this document, not in the script's comments.
   MorphOS, and Aminet channels. Official adoption remains a maintainer
   decision, not a project assumption.
 
-- **Post-1.0 candidate - animated snap**: the window glides into its zone
-  instead of jumping. Recorded here so it is neither forgotten nor
-  promised. It arrived sideways: someone on Discord (2026-08-30) asked
-  for wobbly windows, which is out of scope (below), but the wish under
-  the joke is that the desktop feel alive, and that part is reachable.
-  It is within our powers because it is repeated ChangeWindowBox and
-  intercepts nobody's rendering. The open question is cost: every step
-  forces the application to redraw itself, so on real hardware with a
-  large window it may well look worse than the honest jump. Measure
-  before offering it, and ship it switched off unless it is clearly
-  better.
-
 ## Release stages toward 1.0
 
 Where the work goes after the 0.1 beta. This list came out of a
@@ -719,6 +707,8 @@ trust, and one of the reviewer's points is corrected below where the
 code says otherwise.
 
 ### 0.2 - what the field reported
+
+*Shipped 2026-09-02, library 2.4. Everything below landed.*
 
 - **The AmigaOS 4 defect still open from the 0.1 video**: a drag that
   reaches a zone shows the preview but does not complete the snap, and
@@ -744,6 +734,56 @@ code says otherwise.
   as long as 15% of an edge is taken for a panel. On a crowded desktop
   that is not only a capacity question but a false-positive one: an
   ordinary window classified as a dock eats the usable area.
+
+### 0.3 - AROS x86_64, as the stress test of the ABI
+
+A request from AROS users, taken on for a reason that goes beyond the
+request: a third platform is the best test the ABI can get before it is
+frozen. The assumptions hidden in the API - `struct Window *` as
+identity, geometry in `LONG`, pointers carried in tag data - only show
+themselves where pointers are 64 bits wide. Finding them now costs a
+fraction of finding them after 1.0, and "runs on three systems" weighs
+more with a maintainer than "runs on two".
+
+**x86_64 only.** The 32-bit AROS is being wound down according to the
+people who asked, and a lane nobody will run is a lane that rots. Not a
+judgement on i386 AROS, a decision not to spend time there.
+
+In stages, each one useful on its own:
+
+1. **64-bit cleanliness first** (2026-09-02: thirteen places, twelve in
+   the MUI preferences, put a pointer into a `ULONG` as tag data; on
+   x86_64 that truncates). `IPTR` throughout. Worth doing regardless.
+2. **Commodity with the core linked statically, plus the preferences
+   on Zune** - no shared library yet. The fastest first milestone, and
+   a live demonstration of the point made under "Why a library": the
+   value is in the portable core, the library is the shipping form.
+3. **The AROS library glue**, a third implementation of the same ABI,
+   only once the commodity holds up.
+
+Build and test on the hosted bench with the TRUNK toolchain: an x86_64
+AROS binary cross-built on the Mac links and then dies before `main`
+(a lesson from a sibling project, recorded there). The port needs a
+tester on a real installation, or it degrades in silence like every
+lane nobody runs.
+
+### 0.4 - candidates
+
+- **Animated snap**: the window glides into its zone
+  instead of jumping. Recorded here so it is neither forgotten nor
+  promised. It arrived sideways: someone on Discord (2026-08-30) asked
+  for wobbly windows, which is out of scope (below), but the wish under
+  the joke is that the desktop feel alive, and that part is reachable.
+  It is within our powers because it is repeated ChangeWindowBox and
+  intercepts nobody's rendering. The open question is cost: every step
+  forces the application to redraw itself, so on real hardware with a
+  large window it may well look worse than the honest jump. Measure
+  before offering it, and ship it switched off unless it is clearly
+  better.
+  Behind a setting that ships switched off - one row in the shared
+  settings table, so both preference windows and the manual get it for
+  free - and measured on real hardware, because in emulation the redraw
+  cost is not the real one.
 
 ### Before the ABI freeze
 
