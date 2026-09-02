@@ -6,7 +6,7 @@
  *
  * One source for AmigaOS 4.x and MorphOS. ALL drag/snap decisions live
  * in the portable core (core/engine.c state machine,
- * core/registry.c stale-safe restore): this file is glue, and must
+ * core/registry.c stale-resistant restore): this file is glue, and must
  * never grow a second snapping engine (docs/LLM_GUIDANCE.md). It:
  *
  *   - watches raw mouse events from a commodities CxCustom object
@@ -1448,8 +1448,9 @@ static void spike_divider_events(void)
             LONG pos = g_divider_vertical ?
                 (LONG)g_divider->WScreen->MouseX :
                 (LONG)g_divider->WScreen->MouseY;
-            LONG rc = ES_CALL(ESnap_MoveDivider)((LONG)g_divider_vertical,
-                                                 (LONG)g_divider_line, pos);
+            LONG rc = ES_CALL(ESnap_MoveDividerAt)((LONG)g_divider_vertical,
+                                                   (LONG)g_divider_line,
+                                                   pos);
 
             if (rc == ES_OK) {
                 /*

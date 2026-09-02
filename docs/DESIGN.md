@@ -191,6 +191,12 @@ zone, moved with ChangeWindowBox, placed just under the dragged window
 with `MoveWindowInFrontOf()`. OS4: `WA_Opaqueness` (needs compositing).
 MorphOS: verify the equivalent tag in the SDK. Mandatory fallback for
 non-composited screens: XOR rubber-band frame on the screen rastport.
+*Status 2026-08-30: the XOR fallback is retired on OS4. The frame is
+solid strips in the accent colour drawn on the screen's RastPort, with
+the pixels underneath saved with ReadPixelArray and put back with
+WritePixelArray, because COMPLEMENT inverted a picture backdrop into a
+different colour per pixel and could not be repaired once something
+painted over it. MorphOS keeps its borderless windows.*
 
 ## The divider ("internal cursor" after snapping)
 
@@ -287,6 +293,9 @@ commodity/  Exchange controller
   screen kept locked between draw and erase. Validated closed-loop on
   OS4 QEMU (monitor-driven drags + screendumps). Translucent fill stays
   a compositing-only upgrade for real hardware.
+  *Superseded 2026-08-30: XOR retired on OS4, see "The preview frame"
+  below - solid accent strips over saved pixels. The seam handle is a
+  separate story: invisible until the pointer comes near (2026-09-01).*
 - **Two OS4 field lessons (2026-08-26, closed-loop debugging session)**
   that are binding for the library phase:
   1. *The engine must never block on I/O.* The OS4 console handler
@@ -752,18 +761,29 @@ Four structural changes. Each one moves a public signature, which is why
    `MoveDivider` takes only a position, then re-finds the first pair it
    can. With more than one work area that does not hold. A token must
    name one pair and become invalid when either window changes or goes.
+   *Status 2026-09-01, library 2.3: a seam is a line and a layout may
+   hold several; `QueryDividerAt` and `MoveDividerAt` (a seam named by
+   its line) are APPENDED. The 2.2 `MoveDivider` vector keeps its
+   arguments and its meaning, because the major version is the
+   compatibility promise: a 2.x client works on every later 2.x. A
+   first cut at the token idea, not the final one - the line is a name
+   that survives a drag but not a re-layout.*
 3. **Frontend ownership.** The engine, registry, configuration, ignore
    list and enable state are one global set: two frontends would
    overwrite each other, and any client at all can disable the service
    for everyone. Register one frontend that owns the interactive engine
    and leave SnapWindow / UnsnapWindow / QueryWindow open to every
    caller.
-4. **Exclusions that cannot be inherited.** *Verified, with a
-   correction*: `g_ignored[]` holds bare `struct Window *`, so a reused
-   pointer would inherit an exclusion. The reviewer read this as the
-   body breaking a documented promise; the header promises nothing of
-   the sort, so it is a latent hazard rather than a broken contract -
-   but it must not survive into a frozen ABI.
+4. **Exclusions that cannot be inherited.** *Verified, and the
+   reviewer was right where I first said otherwise*: I had checked
+   `IgnoreWindows`, which promises nothing, but `ExcludeWindow` DID say
+   "the exclusion dies with the window" over a bare `struct Window *`
+   array, which a reused address inherits. For 2.3 the promise is
+   scaled down to what is true (held by address, dropped once the
+   window is found gone, re-include before closing) and dead entries
+   are swept whenever the list is touched. A form that cannot be
+   inherited at all needs window identity the library does not have,
+   and stays on this list.
 
 ### 1.0
 

@@ -30,9 +30,11 @@
  *   2 - adds the divider between snapped windows (QueryDivider,
  *       MoveDivider)
  *   2.3 - a seam is a LINE, not a pair: it may join more than two
- *       windows, a layout may hold several, and MoveDivider now names
- *       which one. QueryDividerAt appended for "what is under the
- *       pointer".  Methods appended, never moved.
+ *       windows and a layout may hold several. QueryDividerAt ("what
+ *       is under the pointer") and MoveDividerAt (move a NAMED seam)
+ *       appended; MoveDivider keeps its 2.2 arguments and moves the
+ *       first seam. Methods appended, never moved, never changed:
+ *       the major version is the compatibility promise.
  */
 #define ES_API_VERSION       2
 

@@ -414,7 +414,7 @@ LONG esb_query_window(struct Window *win, ULONG *zone_out)
     return rc;
 }
 
-LONG esb_exclude_window(struct Window *win, BOOL exclude)
+static LONG esb_exclude_window_inner(struct Window *win, BOOL exclude)
 {
     struct ESBSnap s;
     LONG rc = ES_OK;
@@ -760,7 +760,7 @@ LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
     return ES_OK;
 }
 
-LONG esb_move_divider(LONG vertical, LONG line, LONG position)
+LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
 {
     ESSeam seams[ES_SEAM_MAX];
     ESRect ra[ES_SEAM_SIDE_MAX], rb[ES_SEAM_SIDE_MAX];
@@ -1038,4 +1038,62 @@ void esb_input_reset(struct ESnapReport *out)
     es_engine_reset(&g_engine, &a);
     ReleaseSemaphore(&g_sem);
     esb_absorb(&a, out);
+}
+
+/*
+ * The 2.2 vector, kept with its 2.2 meaning: move whichever seam the
+ * layout walk finds first. A 2.x client compiled against 2.2 must keep
+ * working on every later 2.x, so this neither moves nor changes shape;
+ * anything that knows which seam it means calls esb_move_divider_at().
+ */
+LONG esb_move_divider(LONG position)
+{
+    ESSeam seam;
+    int found;
+
+    ObtainSemaphore(&g_sem);
+    found = es_gutter_find(&g_registry, 8, &seam);
+    ReleaseSemaphore(&g_sem);
+    if (!found) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    return esb_move_divider_at((LONG)seam.vertical, (LONG)seam.pos,
+                               position);
+}
+
+/*
+ * Exclusions are held by address (see the header for what that means
+ * for a caller). What the library CAN do from outside Intuition is drop
+ * an entry once its window is found gone, so that the list does not
+ * fill with corpses and a corpse's address is not carried longer than
+ * necessary. Done whenever the list is touched, outside the semaphore,
+ * because finding a window walks the screens under LockIBase.
+ */
+static void esb_exclusions_sweep(void)
+{
+    void *seen[ESB_EXCLUDE_SLOTS];
+    struct ESBSnap sn;
+    int i;
+
+    ObtainSemaphore(&g_sem);
+    for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
+        seen[i] = g_excluded[i];
+    }
+    ReleaseSemaphore(&g_sem);
+
+    for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
+        if (seen[i] != 0 && !esb_sample((struct Window *)seen[i], &sn)) {
+            ObtainSemaphore(&g_sem);
+            if (g_excluded[i] == seen[i]) {
+                g_excluded[i] = 0;
+            }
+            ReleaseSemaphore(&g_sem);
+        }
+    }
+}
+
+LONG esb_exclude_window(struct Window *win, BOOL exclude)
+{
+    esb_exclusions_sweep();
+    return esb_exclude_window_inner(win, exclude);
 }

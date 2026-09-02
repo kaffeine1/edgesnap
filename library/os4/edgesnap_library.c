@@ -304,11 +304,17 @@ static LONG _ESnap_QueryDivider(struct EdgeSnapIFace *Self, ULONG thickness,
     return esb_query_divider(thickness, divider);
 }
 
-static LONG _ESnap_MoveDivider(struct EdgeSnapIFace *Self, LONG vertical,
-                               LONG line, LONG position)
+static LONG _ESnap_MoveDivider(struct EdgeSnapIFace *Self, LONG position)
 {
     (void)Self;
-    return esb_move_divider(vertical, line, position);
+    return esb_move_divider(position);
+}
+
+static LONG _ESnap_MoveDividerAt(struct EdgeSnapIFace *Self, LONG vertical,
+                                 LONG line, LONG position)
+{
+    (void)Self;
+    return esb_move_divider_at(vertical, line, position);
 }
 
 static LONG _ESnap_QueryDividerAt(struct EdgeSnapIFace *Self, ULONG thickness,
@@ -339,6 +345,7 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_QueryDivider,
     (APTR)_ESnap_MoveDivider,
     (APTR)_ESnap_QueryDividerAt,
+    (APTR)_ESnap_MoveDividerAt,
     (APTR)-1
 };
 

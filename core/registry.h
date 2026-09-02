@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  *
  * registry.h - snap registry: pre-snap geometry per window, with the
- * stale-safety rules of the library contract.
+ * stale-resistance rules of the library contract.
  *
  * Pure C89, host-tested. Windows are opaque refs (never dereferenced);
  * on Amiga the glue uses the struct Window pointer as ref, which makes

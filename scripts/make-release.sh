@@ -34,6 +34,16 @@ do
     fi
 done
 echo "version $VERSION agrees across header, installer, guide and staging"
+
+# The host tests are the only proof the portable core has; a release
+# that skips them is a release that trusts the last person to have run
+# them. They take a second.
+if ! make -s -f "$ROOT/Makefile.host" -C "$ROOT" test >/dev/null 2>&1; then
+    echo "ERROR: host tests fail - not packaging" >&2
+    make -s -f "$ROOT/Makefile.host" -C "$ROOT" test 2>&1 | grep -v "passed" >&2
+    exit 1
+fi
+echo "host tests: all suites pass"
 STAGE="$ROOT/build/release"
 OUT="$ROOT/build/EdgeSnap-$VERSION.lha"
 
@@ -41,6 +51,55 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE/EdgeSnap"
 "$ROOT/scripts/stage-package.sh" "$STAGE/EdgeSnap"
 cp "$ROOT/assets/EdgeSnapDrawer.info" "$STAGE/EdgeSnap.info"
+
+# Every file the package promises, by name. 0.1 shipped once without
+# EdgeSnap.info, the icon the manual told people to put in WBStartup,
+# and nobody noticed until the archive was listed by hand: the staging
+# script copies what it finds, so a build that did not happen is a
+# file that is quietly not there. This list is the promise; a missing
+# entry stops the release.
+MANIFEST="
+EdgeSnap.info
+EdgeSnap/Install
+EdgeSnap/Install.info
+EdgeSnap/LICENSE
+EdgeSnap/EdgeSnap.guide
+EdgeSnap/EdgeSnap.guide.info
+EdgeSnap/EdgeSnap.readme
+EdgeSnap/EdgeSnap.readme.info
+EdgeSnap/EdgeSnap.prefs
+EdgeSnap/os4/EdgeSnap
+EdgeSnap/os4/EdgeSnap.info
+EdgeSnap/os4/edgesnap.library
+EdgeSnap/os4/esnaptest
+EdgeSnap/os4/EdgeSnapPrefs
+EdgeSnap/os4/EdgeSnapPrefs.info
+EdgeSnap/mos/EdgeSnap
+EdgeSnap/mos/EdgeSnap.info
+EdgeSnap/mos/edgesnap.library
+EdgeSnap/mos/esnaptest
+EdgeSnap/mos/EdgeSnapPrefs
+EdgeSnap/mos/EdgeSnapPrefs.info
+"
+missing=0
+for f in $MANIFEST; do
+    if [ ! -s "$STAGE/$f" ]; then
+        echo "ERROR: package is missing $f" >&2
+        missing=1
+    fi
+done
+extra=$(cd "$STAGE" && find . -type f | sed 's|^\./||' | sort)
+for f in $extra; do
+    case " $(echo $MANIFEST) " in
+        *" $f "*) ;;
+        *) echo "ERROR: package contains $f, which is not in the manifest" >&2
+           missing=1 ;;
+    esac
+done
+if [ "$missing" != "0" ]; then
+    exit 1
+fi
+echo "manifest: all $(echo $MANIFEST | wc -w | tr -d ' ') files present, nothing extra"
 
 # A real LhA encoder compresses (-lh5-); scripts/make-lha.py only stores
 # (-lh0-), which is fine for a GitHub download and wasteful for Aminet -

@@ -240,7 +240,12 @@ static LONG G_QueryDivider(void)
 
 static LONG G_MoveDivider(void)
 {
-    return esb_move_divider((LONG)REG_A0, (LONG)REG_A1, (LONG)REG_D0);
+    return esb_move_divider((LONG)REG_D0);
+}
+
+static LONG G_MoveDividerAt(void)
+{
+    return esb_move_divider_at((LONG)REG_A0, (LONG)REG_A1, (LONG)REG_D0);
 }
 
 static LONG G_QueryDividerAt(void)
@@ -271,6 +276,7 @@ ES_GATE(GATE_QueryScreenArea, G_QueryScreenArea);
 ES_GATE(GATE_QueryDivider, G_QueryDivider);
 ES_GATE(GATE_MoveDivider, G_MoveDivider);
 ES_GATE(GATE_QueryDividerAt, G_QueryDividerAt);
+ES_GATE(GATE_MoveDividerAt, G_MoveDividerAt);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -292,6 +298,7 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_QueryDivider,
     (APTR)&GATE_MoveDivider,
     (APTR)&GATE_QueryDividerAt,
+    (APTR)&GATE_MoveDividerAt,
     (APTR)-1
 };
 

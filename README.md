@@ -167,7 +167,8 @@ Suggested order for studying the code:
    CxCustom action (with the MorphOS 68k-ABI gate); the non-blocking
    log; window snapshotting under LockIBase (dock-aware usable area);
    the one shared snap path over the core registry; the preview
-   backends (window frame / OS4 XOR); the core glue that feeds
+   backends (MorphOS windows / OS4 strips over saved pixels); the
+   core glue that feeds
    ESEngine and executes its actions; the commodity plumbing in main().
 
 Key invariants to keep in mind while reading: the CxCustom action runs in

@@ -213,18 +213,31 @@ LONG ESnap_QueryDividerAt(ULONG thickness, LONG x, LONG y,
                           struct ESnapDivider *divider);
 
 /*
- * Drag a divider to a screen coordinate: every window on it is
+ * Drag the FIRST divider in the layout to a screen coordinate. Kept
+ * with the arguments it had in 2.2, because a library's major version
+ * is its compatibility promise and a 2.x client must keep working on
+ * every later 2.x: this vector is neither moved nor changed. With more
+ * than one seam on screen "the first" is whichever the layout walk
+ * finds first, so new code should say which seam it means and call
+ * ESnap_MoveDividerAt().
+ *   ES_OK / ES_ERR_STALE (a window on the seam is gone) /
+ *   ES_ERR_UNSUPPORTED (no seam).
+ */
+LONG ESnap_MoveDivider(LONG position);
+
+/*
+ * Drag a NAMED divider to a screen coordinate: every window on it is
  * resized, and the value is clamped so none can be squeezed away.
  * Window references are re-validated first, as everywhere else.
  *
  * The seam is named by the line it sits on - `vertical` and the
- * coordinate reported as `position` by a query - because a layout can
+ * coordinate a query reported as `position` - because a layout can
  * hold more than one and "the divider" would be ambiguous. A seam that
- * has stopped existing is not moved.
- *   ES_OK / ES_ERR_BAD_ARGS / ES_ERR_STALE (a window on the seam is
- *   gone) / ES_ERR_UNSUPPORTED (no seam on that line).
+ * has stopped existing is not moved. Appended in 2.3.
+ *   ES_OK / ES_ERR_STALE (a window on the seam is gone) /
+ *   ES_ERR_UNSUPPORTED (no seam on that line).
  */
-LONG ESnap_MoveDivider(LONG vertical, LONG line, LONG position);
+LONG ESnap_MoveDividerAt(LONG vertical, LONG line, LONG position);
 
 /* ------------------------------------------------------- functions */
 
@@ -264,7 +277,14 @@ LONG ESnap_QueryWindow(struct Window *win, ULONG *zone_out);
 /*
  * Exclude (TRUE) or re-include (FALSE) win from every EdgeSnap
  * behavior: drag snapping, hotkeys, programmatic ESnap_SnapWindow.
- * The exclusion dies with the window.
+ *
+ * The exclusion is held BY ADDRESS. It is dropped once the library
+ * notices the window has gone, but a window closed and another opened
+ * at the same address before that moment would inherit it - so a
+ * program that excludes its windows should re-include them before
+ * closing them. Below 1.0 this is the honest description of what the
+ * library can do from outside Intuition; a form that cannot be
+ * inherited is on the list for the ABI freeze.
  *   ES_OK / ES_ERR_STALE / ES_ERR_NO_MEMORY.
  */
 LONG ESnap_ExcludeWindow(struct Window *win, BOOL exclude);
