@@ -232,8 +232,14 @@
                  "SYS:Documentation"
                  "SYS:"))))
 
+; The icon too, before and after: it comes off the CD with the CD's
+; own bits, and an icon that cannot be deleted stops the next
+; installation dead. Found by installing 0.2 in the VM and listing the
+; result: the guide was ----rwed and its icon ----r-e-.
 (if (exists (tackon #guide-dest "EdgeSnap.guide") (noreq))
     (protect (tackon #guide-dest "EdgeSnap.guide") "+rwed"))
+(if (exists (tackon #guide-dest "EdgeSnap.guide.info") (noreq))
+    (protect (tackon #guide-dest "EdgeSnap.guide.info") "+rwed"))
 
 (copyfiles
   (source "EdgeSnap.guide")
@@ -241,6 +247,7 @@
   (infos))
 
 (protect (tackon #guide-dest "EdgeSnap.guide") "+rwed")
+(protect (tackon #guide-dest "EdgeSnap.guide.info") "+rwed")
 
 (complete 95)
 
