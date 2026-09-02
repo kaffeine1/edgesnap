@@ -1756,6 +1756,24 @@ static int spike_open_edgesnap(void)
                     "finish.");
         return 0;
     }
+    /*
+     * Version 2 is not enough: this commodity calls vectors appended
+     * after 2.2, and OpenLibrary() checks only the version. A library
+     * that is 2.x but older than the vectors we use would take the call
+     * into a jump table entry that is not there - on MorphOS a 68k
+     * illegal instruction at PC 0x4e, which is how an installer that
+     * replaced the commodity but kept a same-version library crashed
+     * on the first seam drag (2026-09-02).
+     */
+    if (EdgeSnapBase->lib_Revision < ES_LIB_MIN_REVISION) {
+        spike_fatal("edgesnap.library is older than this EdgeSnap "
+                    "needs.\n\nInstall the package again: the library "
+                    "in LIBS: must be replaced along with the "
+                    "commodity.");
+        CloseLibrary(EdgeSnapBase);
+        EdgeSnapBase = NULL;
+        return 0;
+    }
 #ifdef __amigaos4__
     IEdgeSnap = (struct EdgeSnapIFace *)
         GetInterface(EdgeSnapBase, "main", 1, NULL);

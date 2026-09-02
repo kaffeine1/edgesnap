@@ -31,12 +31,23 @@
  *       MoveDivider)
  *   2.3 - a seam is a LINE, not a pair: it may join more than two
  *       windows and a layout may hold several. QueryDividerAt ("what
- *       is under the pointer") and MoveDividerAt (move a NAMED seam)
- *       appended; MoveDivider keeps its 2.2 arguments and moves the
- *       first seam. Methods appended, never moved, never changed:
- *       the major version is the compatibility promise.
+ *       is under the pointer") appended. (This revision also changed
+ *       MoveDivider's arguments in place, which was a mistake and
+ *       lived only on the author's machines.)
+ *   2.4 - MoveDivider back to its 2.2 arguments and meaning (the first
+ *       seam); MoveDividerAt (move a NAMED seam) appended. A revision
+ *       of its own so that copylib replaces a 2.3, and so that a
+ *       client can tell the two apart: methods appended, never moved,
+ *       never changed - the major version is the compatibility
+ *       promise, and the revision says which appended vectors exist.
  */
 #define ES_API_VERSION       2
+/* A client that uses a vector appended after 2.2 must check that the
+ * library it opened is new enough to HAVE it: OpenLibrary() compares
+ * the version only, and a 2.x too old for the call would send it into
+ * a jump table entry that is not there. On MorphOS that is a 68k
+ * illegal instruction at PC 0x4e, seen in the field on 2026-09-02. */
+#define ES_LIB_MIN_REVISION  4
 
 /* ------------------------------------------------------------- zones */
 

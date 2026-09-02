@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 3
-#define ES_LIB_IDSTRING "edgesnap.library 2.3 (1.9.2026) Michele Dipace"
+#define ES_LIB_REVISION 4
+#define ES_LIB_IDSTRING "edgesnap.library 2.4 (2.9.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
