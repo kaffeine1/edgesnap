@@ -76,6 +76,30 @@
 #include "registry.h"
 #include "config.h"
 #include "edgesnap_version.h"
+
+/*
+ * Which preview frame. Two techniques exist because two families of
+ * Intuition exist. Where a window drag keeps the screen's layers
+ * locked until release - AmigaOS 4's ghost drag, and AROS's outline
+ * drag - a window opened during the drag only appears at release,
+ * when we are already closing it: the frame is drawn straight on the
+ * screen's RastPort over saved pixels. MorphOS moves windows solid and
+ * lets us open real borderless windows, which look after themselves.
+ */
+#if defined(__amigaos4__) || defined(__AROS__)
+#define ES_PREVIEW_PIXELS 1
+#else
+#define ES_PREVIEW_WINDOWS 1
+#endif
+
+/* The pixel array format the saved strips use, in each SDK's dialect. */
+#if defined(__AROS__)
+#include <cybergraphx/cybergraphics.h>
+#include <proto/cybergraphics.h>
+#define ES_PF_FORMAT RECTFMT_ARGB
+#else
+#define ES_PF_FORMAT PIXF_A8R8G8B8
+#endif
 #include "edgesnap.h"
 
 /*
@@ -116,6 +140,10 @@ struct Library *EdgeSnapBase;
 struct Library *IntuitionBase;
 #else
 struct IntuitionBase *IntuitionBase;
+#endif
+#ifdef __AROS__
+/* Read/WritePixelArray live in cybergraphics.library on AROS. */
+struct Library *CyberGfxBase;
 #endif
 #define ES_IBASE ((struct IntuitionBase *)IntuitionBase)
 
@@ -702,7 +730,7 @@ static void spike_publish_ignored(void)
     struct Window *mine[5];
     int n = 0;
 
-#ifndef __amigaos4__
+#ifdef ES_PREVIEW_WINDOWS
     int i;
 
     for (i = 0; i < 4; i++) {
@@ -713,7 +741,7 @@ static void spike_publish_ignored(void)
     ES_CALL(ESnap_IgnoreWindows)(mine, (ULONG)n);
 }
 
-#ifdef __amigaos4__
+#ifdef ES_PREVIEW_PIXELS
 /*
  * The frame on AmigaOS 4, and why it is drawn straight onto the screen.
  *
@@ -807,7 +835,7 @@ static void spike_pf_hide(void)
         if (g_pf.saved[i] != NULL) {
             WritePixelArray(g_pf.saved[i], 0, 0,
                             (ULONG)(g_pf.strip[i].w * ES_PF_BPP),
-                            PIXF_A8R8G8B8, &g_pf.scr->RastPort,
+                            ES_PF_FORMAT, &g_pf.scr->RastPort,
                             g_pf.strip[i].x, g_pf.strip[i].y,
                             (ULONG)g_pf.strip[i].w,
                             (ULONG)g_pf.strip[i].h);
@@ -900,15 +928,15 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
         ReadPixelArray(&g_pf.scr->RastPort, (ULONG)g_pf.strip[i].x,
                        (ULONG)g_pf.strip[i].y, g_pf.saved[i], 0, 0,
                        (ULONG)(g_pf.strip[i].w * ES_PF_BPP),
-                       PIXF_A8R8G8B8, (ULONG)g_pf.strip[i].w,
+                       ES_PF_FORMAT, (ULONG)g_pf.strip[i].w,
                        (ULONG)g_pf.strip[i].h);
     }
     g_pf.drawn = 1;
     spike_pf_fill();
 }
-#endif /* __amigaos4__ */
+#endif /* ES_PREVIEW_PIXELS */
 
-#ifndef __amigaos4__
+#ifdef ES_PREVIEW_WINDOWS
 /* MorphOS draws its preview with borderless windows, which Intuition
  * disposes of with the screen, so there is nothing of ours to drop. */
 static void spike_screen_changed(int replaced)
@@ -939,14 +967,14 @@ static int spike_is_preview_win(struct Window *w)
  */
 static void spike_preview_refresh(void)
 {
-#ifdef __amigaos4__
+#ifdef ES_PREVIEW_PIXELS
     spike_pf_fill();
 #endif
 }
 
 static void spike_preview_hide(void)
 {
-#ifdef __amigaos4__
+#ifdef ES_PREVIEW_PIXELS
     spike_pf_hide();
 #else
     int i;
@@ -969,7 +997,7 @@ static void spike_preview_hide(void)
 #endif
 }
 
-#ifndef __amigaos4__
+#ifdef ES_PREVIEW_WINDOWS
 static struct Window *spike_preview_bar(struct Screen *scr, LONG pen,
                                         int x, int y, int w, int h)
 {
@@ -991,11 +1019,11 @@ static struct Window *spike_preview_bar(struct Screen *scr, LONG pen,
     }
     return win;
 }
-#endif /* !__amigaos4__ */
+#endif /* ES_PREVIEW_WINDOWS */
 
 static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
 {
-#ifdef __amigaos4__
+#ifdef ES_PREVIEW_PIXELS
     spike_pf_show(dragscr, r);
 #else
     struct Screen *scr;
@@ -2040,6 +2068,12 @@ static void spike_close_libs(void)
         CxBase = NULL;
     }
     if (GfxBase != NULL) {
+#ifdef __AROS__
+        if (CyberGfxBase != NULL) {
+            CloseLibrary(CyberGfxBase);
+            CyberGfxBase = NULL;
+        }
+#endif
         CloseLibrary((struct Library *)GfxBase);
         GfxBase = NULL;
     }
@@ -2054,6 +2088,12 @@ static int spike_open_libs(void)
     IntuitionBase = (void *)OpenLibrary("intuition.library", 36);
     GfxBase = (void *)OpenLibrary("graphics.library", 36);
     CxBase = OpenLibrary("commodities.library", 37);
+#ifdef __AROS__
+    CyberGfxBase = OpenLibrary("cybergraphics.library", 41);
+    if (CyberGfxBase == NULL) {
+        return 0;
+    }
+#endif
     if (IntuitionBase == NULL || GfxBase == NULL || CxBase == NULL) {
         spike_close_libs();
         return 0;
