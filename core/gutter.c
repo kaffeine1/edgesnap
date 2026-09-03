@@ -277,8 +277,19 @@ static int es_zone_is_right(int z)
            z == ES_ZONE_BOTTOM_RIGHT;
 }
 
+static int es_width_allowed(int w, int min_w, int max_w)
+{
+    if (min_w > 0 && w < min_w) {
+        return 0;
+    }
+    if (max_w > 0 && w > max_w) {
+        return 0;
+    }
+    return 1;
+}
+
 int es_pair_fill(const ESRegistry *reg, void *self, int zone,
-                 const ESRect *usable, ESRect *rect)
+                 const ESRect *usable, int min_w, int max_w, ESRect *rect)
 {
     int want_left = es_zone_is_left(zone);
     int want_right = es_zone_is_right(zone);
@@ -309,7 +320,8 @@ int es_pair_fill(const ESRegistry *reg, void *self, int zone,
             int edge = e->snapped.x;
 
             if (edge > rect->x + ES_SEAM_MIN_SIDE &&
-                edge <= usable->x + usable->w) {
+                edge <= usable->x + usable->w &&
+                es_width_allowed(edge - rect->x, min_w, max_w)) {
                 rect->w = edge - rect->x;
                 return 1;
             }
@@ -317,7 +329,8 @@ int es_pair_fill(const ESRegistry *reg, void *self, int zone,
             int edge = e->snapped.x + e->snapped.w;
 
             if (edge < usable->x + usable->w - ES_SEAM_MIN_SIDE &&
-                edge >= usable->x) {
+                edge >= usable->x &&
+                es_width_allowed((rect->x + rect->w) - edge, min_w, max_w)) {
                 rect->w = (rect->x + rect->w) - edge;
                 rect->x = edge;
                 return 1;

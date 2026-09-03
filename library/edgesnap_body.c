@@ -355,7 +355,7 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
          * macOS: after a pair has been re-balanced to 70/30, the next
          * window snapped to the narrow side gets that 30%. */
         ObtainSemaphore(&g_sem);
-        es_pair_fill(&g_registry, win, (int)zone, &s.usable, &r);
+        es_pair_fill(&g_registry, win, (int)zone, &s.usable, s.min_w, s.max_w, &r);
         ReleaseSemaphore(&g_sem);
         /* Refuse rather than snap without a way back: a full registry
          * would make ESnap_UnsnapWindow silently impossible. */
@@ -998,7 +998,7 @@ void esb_input(int press, int motion, int release, ULONG quals,
             }
             es_engine_motion(&g_engine, &f, &a);
             if (a.show_preview) {
-                es_pair_fill(&g_registry, win, a.zone, &s.usable,
+                es_pair_fill(&g_registry, win, a.zone, &s.usable, s.min_w, s.max_w,
                              &a.preview_rect);
             }
             out->previewScreen = s.scr;

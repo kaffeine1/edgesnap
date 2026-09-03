@@ -89,14 +89,15 @@ void es_gutter_apply(const ESSeam *seam, int new_pos,
                      ESRect *out_a, ESRect *out_b);
 
 /*
- * Make a zone fill the space its opposite side is NOT using, the way
- * Windows and macOS do: once a pair has been re-balanced to 70/30,
- * snapping a third window to the narrow side must give it that 30%,
- * not the default half. self is the window being snapped (it must not
- * be treated as its own partner). Returns 1 when a partner was found
- * and *rect was adjusted.
+ * Fill what the opposite side is not using. The complement is taken
+ * only when the window can actually be that wide: a window whose
+ * minimum width is larger than the complement would be clamped by
+ * Intuition to something other than what was recorded, and a recorded
+ * box that does not match the real one reads as "the user moved it",
+ * which kills the seam. min_w and max_w are the window's limits, 0 for
+ * none. Returns 1 when rect was changed.
  */
 int es_pair_fill(const ESRegistry *reg, void *self, int zone,
-                 const ESRect *usable, ESRect *rect);
+                 const ESRect *usable, int min_w, int max_w, ESRect *rect);
 
 #endif /* EDGESNAP_GUTTER_H */
