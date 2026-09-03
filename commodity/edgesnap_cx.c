@@ -204,6 +204,24 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
      * 2026-09-03) shows its hand in the ctrl alt d dump instead of
      * leaving 'drag not detected' to be guessed at. */
     g_shared.diag_class[ie->ie_Class & 15]++;
+    /*
+     * Motion is not always RAWMOUSE. A USB tablet on AROS reports every
+     * move as IECLASS_NEWPOINTERPOS and only the buttons as RAWMOUSE
+     * (measured 2026-09-03: 461 pointer events to 2 raw ones in one
+     * drag), so a handler that counts moves on RAWMOUSE alone never
+     * sees the drag. The engine reads the pointer from the screen, not
+     * from the event, so 'the pointer moved' is all we need to know.
+     */
+    if (ie->ie_Class == IECLASS_NEWPOINTERPOS ||
+        ie->ie_Class == IECLASS_POINTERPOS) {
+        g_shared.quals = ie->ie_Qualifier;
+        g_shared.moves++;
+        engine = g_shared.engine_task;
+        if (engine != NULL && g_shared.armed) {
+            Signal(engine, g_shared.engine_sigmask);
+        }
+        return;
+    }
     if (ie->ie_Class != IECLASS_RAWMOUSE) {
         return;
     }
