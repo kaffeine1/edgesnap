@@ -733,6 +733,82 @@ LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out)
     return ES_OK;
 }
 
+/*
+ * Every window keeps its own floor and ceiling as well: a seam pushed
+ * past a MinWidth or a MaxHeight would make Intuition clamp that
+ * window to a box other than the one recorded, and a recorded box that
+ * does not match the real one reads as "the user moved it", which ends
+ * the seam mid-drag with the other side already moved. The samples are
+ * live, so a window that changed its minimum since it was snapped is
+ * honoured too. A side keeps its far edge, so its size is the distance
+ * from that edge to the divider.
+ */
+static void esb_seam_tighten(ESSeam *seam, const struct ESBSnap *sa,
+                             const struct ESBSnap *sb)
+{
+    int i;
+
+    for (i = 0; i < seam->a.n; i++) {
+        const ESRect *b = &seam->a.box[i];
+        int lo, hi;
+
+        if (seam->vertical) {
+            lo = b->x + sa[i].min_w;
+            hi = sa[i].max_w > 0 ? b->x + sa[i].max_w : 0x7FFF;
+        } else {
+            lo = b->y + sa[i].min_h;
+            hi = sa[i].max_h > 0 ? b->y + sa[i].max_h : 0x7FFF;
+        }
+        if (lo > seam->min_pos) {
+            seam->min_pos = lo;
+        }
+        if (hi < seam->max_pos) {
+            seam->max_pos = hi;
+        }
+    }
+    for (i = 0; i < seam->b.n; i++) {
+        const ESRect *b = &seam->b.box[i];
+        int lo, hi;
+
+        if (seam->vertical) {
+            hi = b->x + b->w - sb[i].min_w;
+            lo = sb[i].max_w > 0 ? b->x + b->w - sb[i].max_w : -0x7FFF;
+        } else {
+            hi = b->y + b->h - sb[i].min_h;
+            lo = sb[i].max_h > 0 ? b->y + b->h - sb[i].max_h : -0x7FFF;
+        }
+        if (lo > seam->min_pos) {
+            seam->min_pos = lo;
+        }
+        if (hi < seam->max_pos) {
+            seam->max_pos = hi;
+        }
+    }
+}
+
+/* Alive, and with the range every window on it can actually accept. */
+static int esb_seam_limits(ESSeam *seam)
+{
+    struct ESBSnap sa[ES_SEAM_SIDE_MAX], sb[ES_SEAM_SIDE_MAX];
+    int i;
+
+    if (!esb_seam_alive(seam)) {
+        return 0;
+    }
+    for (i = 0; i < seam->a.n; i++) {
+        if (!esb_sample((struct Window *)seam->a.ref[i], &sa[i])) {
+            return 0;
+        }
+    }
+    for (i = 0; i < seam->b.n; i++) {
+        if (!esb_sample((struct Window *)seam->b.ref[i], &sb[i])) {
+            return 0;
+        }
+    }
+    esb_seam_tighten(seam, sa, sb);
+    return seam->min_pos <= seam->max_pos;
+}
+
 LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
                           struct ESnapDivider *out)
 {
@@ -754,7 +830,7 @@ LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
             best_d = d;
         }
     }
-    if (best >= 0 && esb_seam_alive(&seams[best])) {
+    if (best >= 0 && esb_seam_limits(&seams[best])) {
         esb_seam_report(&seams[best], out);
     } else {
         esb_no_seam(out);
@@ -768,6 +844,7 @@ LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
     ESRect ra[ES_SEAM_SIDE_MAX], rb[ES_SEAM_SIDE_MAX];
     struct ESBSnap snap_a[ES_SEAM_SIDE_MAX], snap_b[ES_SEAM_SIDE_MAX];
     const ESSeam *seam = NULL;
+    ESSeam chosen;
     int n, i, d;
 
     ObtainSemaphore(&g_sem);
@@ -821,7 +898,13 @@ LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
         }
     }
 
-    es_gutter_apply(seam, (int)position, ra, rb);
+    /* the range the windows can take right now, not the fixed floor */
+    chosen = *seam;
+    esb_seam_tighten(&chosen, snap_a, snap_b);
+    if (chosen.min_pos > chosen.max_pos) {
+        return ES_ERR_UNSUPPORTED;      /* nothing on it can give */
+    }
+    es_gutter_apply(&chosen, (int)position, ra, rb);
 
     ObtainSemaphore(&g_sem);
     /* the registry must follow, or the next drag would start from the
