@@ -2276,7 +2276,7 @@ int main(int argc, char **argv)
     if (!spike_accent_init()) {
         spike_out("edgesnap: no public screen, nothing will be drawn\n");
     }
-#ifdef __amigaos4__
+#ifdef ES_PREVIEW_PIXELS
     if (!spike_pf_init()) {
         spike_out("edgesnap: no public screen, no preview frame\n");
     }
@@ -2412,7 +2412,7 @@ out:
         DeleteCxObjAll(broker);
     }
     spike_preview_hide();
-#ifdef __amigaos4__
+#ifdef ES_PREVIEW_PIXELS
     spike_pf_cleanup();
 #endif
     spike_divider_close();
