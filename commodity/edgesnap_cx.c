@@ -1635,6 +1635,18 @@ static void spike_engine_step(void)
     g_seen_moves = g_shared.moves;
     g_seen_releases = g_shared.releases;
 
+    /*
+     * The frame comes down BEFORE the release reaches the library. The
+     * library snaps the window inside that very call, and putting the
+     * saved pixels back afterwards races Intuition: where the window
+     * has already moved, the restore paints strips of the old
+     * background across it. Taken down now, the pixels go back exactly
+     * where they were read, with the window still at its old place.
+     */
+    if (new_release && g_drag_active) {
+        spike_preview_hide();
+    }
+
     ES_CALL(ESnap_FeedInput)((ULONG)new_press, (ULONG)new_move,
                              (ULONG)new_release, g_shared.quals, &r);
     spike_apply_report(&r);
