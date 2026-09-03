@@ -913,10 +913,15 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
     spike_pf_hide();
 
     if (g_pf.scr == NULL || dragscr != g_pf.scr) {
+        /* Silent once, and on AROS that silence hid the whole story. */
+        spike_log("edgesnap: frame: screen mismatch (drag on %p, frame "
+                  "screen %p)\n", (void *)dragscr, (void *)g_pf.scr);
         return;
     }
     g_pf.rect = *r;
     spike_pf_strips(r, g_pf.strip, &g_pf.strips);
+    spike_log("edgesnap: frame: %d,%d %dx%d pen %ld strips %d\n",
+              r->x, r->y, r->w, r->h, (long)g_pf.pen, g_pf.strips);
 
     for (i = 0; i < g_pf.strips; i++) {
         ULONG bytes = (ULONG)(g_pf.strip[i].w * g_pf.strip[i].h * ES_PF_BPP);
@@ -1973,6 +1978,7 @@ static void spike_config_reload(void)
 #define HK_SNAP_MAX    3
 #define HK_RESTORE     4
 #define HK_DUMP        5
+#define HK_FRAME       6   /* ctrl alt f: the preview frame, no drag */
 
 static int spike_add_hotkey(CxObj *broker, struct MsgPort *port,
                             STRPTR descr, LONG id)
@@ -2012,6 +2018,29 @@ static void spike_handle_hotkey(LONG id)
     struct Window *win;
     LONG rc = ES_OK;
 
+    if (id == HK_FRAME) {
+        /*
+         * Diagnostic: the preview frame with no drag in flight. Shows
+         * here and not during a drag: the drag hides it (locked layers,
+         * an outline redrawn over it). Shows nowhere: the drawing is at
+         * fault. Reported from AROS, where the frame was never seen.
+         */
+        struct Screen *ps = LockPubScreen(NULL);
+        ESRect box;
+
+        box.x = 120;
+        box.y = 120;
+        box.w = 400;
+        box.h = 300;
+        if (ps != NULL) {
+            spike_preview_show(ps, &box);
+            spike_log_flush();
+            Delay(60L);
+            spike_preview_hide();
+            UnlockPubScreen(NULL, ps);
+        }
+        return;
+    }
     if (id == HK_DUMP) {
         spike_dump_windows();
         return;
@@ -2228,6 +2257,7 @@ int main(int argc, char **argv)
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_down",
                           HK_RESTORE) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt d", HK_DUMP) ||
+        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt f", HK_FRAME) ||
         CxObjError(broker) != 0) {
         spike_out("edgesnap: could not build the commodity tree\n");
         goto out;
