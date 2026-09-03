@@ -97,8 +97,22 @@
 #include <cybergraphx/cybergraphics.h>
 #include <proto/cybergraphics.h>
 #define ES_PF_FORMAT RECTFMT_ARGB
+/* CGX order: destination first, the RastPort in the middle, format last. */
+#define ES_PF_READ(rp, x, y, buf, mod, w, h) \
+    ReadPixelArray((buf), 0, 0, (UWORD)(mod), (rp), (UWORD)(x), (UWORD)(y), \
+                   (UWORD)(w), (UWORD)(h), ES_PF_FORMAT)
+#define ES_PF_WRITE(buf, mod, rp, x, y, w, h) \
+    WritePixelArray((buf), 0, 0, (UWORD)(mod), (rp), (UWORD)(x), (UWORD)(y), \
+                    (UWORD)(w), (UWORD)(h), ES_PF_FORMAT)
 #else
 #define ES_PF_FORMAT PIXF_A8R8G8B8
+/* graphics.library order on AmigaOS 4: the RastPort comes first on a read. */
+#define ES_PF_READ(rp, x, y, buf, mod, w, h) \
+    ReadPixelArray((rp), (ULONG)(x), (ULONG)(y), (buf), 0, 0, (ULONG)(mod), \
+                   ES_PF_FORMAT, (ULONG)(w), (ULONG)(h))
+#define ES_PF_WRITE(buf, mod, rp, x, y, w, h) \
+    WritePixelArray((buf), 0, 0, (ULONG)(mod), ES_PF_FORMAT, (rp), \
+                    (x), (y), (ULONG)(w), (ULONG)(h))
 #endif
 #include "edgesnap.h"
 
@@ -833,12 +847,9 @@ static void spike_pf_hide(void)
     }
     for (i = 0; i < g_pf.strips; i++) {
         if (g_pf.saved[i] != NULL) {
-            WritePixelArray(g_pf.saved[i], 0, 0,
-                            (ULONG)(g_pf.strip[i].w * ES_PF_BPP),
-                            ES_PF_FORMAT, &g_pf.scr->RastPort,
-                            g_pf.strip[i].x, g_pf.strip[i].y,
-                            (ULONG)g_pf.strip[i].w,
-                            (ULONG)g_pf.strip[i].h);
+            ES_PF_WRITE(g_pf.saved[i], g_pf.strip[i].w * ES_PF_BPP,
+                        &g_pf.scr->RastPort, g_pf.strip[i].x, g_pf.strip[i].y,
+                        g_pf.strip[i].w, g_pf.strip[i].h);
             FreeVec(g_pf.saved[i]);
             g_pf.saved[i] = NULL;
         }
@@ -930,11 +941,9 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
         if (g_pf.saved[i] == NULL) {
             continue;          /* that strip simply will not be restored */
         }
-        ReadPixelArray(&g_pf.scr->RastPort, (ULONG)g_pf.strip[i].x,
-                       (ULONG)g_pf.strip[i].y, g_pf.saved[i], 0, 0,
-                       (ULONG)(g_pf.strip[i].w * ES_PF_BPP),
-                       ES_PF_FORMAT, (ULONG)g_pf.strip[i].w,
-                       (ULONG)g_pf.strip[i].h);
+        ES_PF_READ(&g_pf.scr->RastPort, g_pf.strip[i].x, g_pf.strip[i].y,
+                   g_pf.saved[i], g_pf.strip[i].w * ES_PF_BPP,
+                   g_pf.strip[i].w, g_pf.strip[i].h);
     }
     g_pf.drawn = 1;
     spike_pf_fill();
