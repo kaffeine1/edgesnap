@@ -64,6 +64,7 @@ struct ESBSnap {
     int min_w, min_h;
     int max_w, max_h;
     int mouse_x, mouse_y;
+    int bar_h;
     ULONG flags;
 };
 
@@ -254,6 +255,7 @@ static void esb_fill(struct Window *win, struct Screen *scr,
         out->max_h = 0;
     }
     out->flags = win->Flags;
+    out->bar_h = win->BorderTop;
     out->mouse_x = scr->MouseX;
     out->mouse_y = scr->MouseY;
     esb_usable_area_locked(scr, win, &out->usable, NULL);
@@ -983,6 +985,7 @@ void esb_input(int press, int motion, int release, ULONG quals,
             f.min_h = s.min_h;
             f.max_w = s.max_w;
             f.max_h = s.max_h;
+            f.bar_h = s.bar_h;
             f.flags = 0;
             if (esb_snappable(&s) && !esb_is_excluded(win)) {
                 f.flags |= ES_WF_SNAPPABLE;

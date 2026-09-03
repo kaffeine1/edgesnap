@@ -38,6 +38,7 @@ static void std_facts(ESWinFacts *f, void *ref)
     f->min_h = 0;
     f->max_w = 0;
     f->max_h = 0;
+    f->bar_h = 0;                /* no bar geometry: classic tests  */
     f->flags = ES_WF_SNAPPABLE | ES_WF_DRAGBAR;
 }
 
@@ -279,6 +280,62 @@ static void test_reset_hides_preview(void)
     CHECK(a.do_snap == 0);
 }
 
+
+/*
+ * A system that drags windows as an OUTLINE does not move the window
+ * until the button is released (AROS One, 2026-09-03). The window box
+ * therefore never changes during the drag, and "window moved while the
+ * pointer moved" is never true. A press on the drag bar plus pointer
+ * travel must count as a drag on its own evidence, preview and all,
+ * and the release must snap.
+ */
+static void test_outline_drag_from_the_bar(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    f.bar_h = 20;                   /* bar: y 100..119, press at y 110 */
+    es_engine_press(&e, &a);
+    es_engine_motion(&e, &f, &a);   /* baseline, on the bar */
+    CHECK(a.drag_started == 0);
+
+    f.mouse_x = 3;                  /* box untouched, pointer at the edge */
+    f.mouse_y = 240;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.drag_started == 1);
+    CHECK(a.zone == ES_ZONE_LEFT && a.show_preview == 1);
+
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 1 && a.hide_preview == 1);
+}
+
+/* The same travel with the press inside the window body is not a drag:
+ * a selection being dragged in an editor must not snap the editor. */
+static void test_outline_press_in_body_is_not_a_drag(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    f.bar_h = 20;
+    f.mouse_y = 200;                /* inside the body, below the bar */
+    es_engine_press(&e, &a);
+    es_engine_motion(&e, &f, &a);
+    f.mouse_x = 3;
+    f.mouse_y = 240;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.drag_started == 0);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 0);
+}
+
 int main(void)
 {
     test_happy_left_snap();
@@ -291,6 +348,8 @@ int main(void)
     test_facts_lost_mid_press();
     test_unsnappable_no_preview_no_snap();
     test_reset_hides_preview();
+    test_outline_drag_from_the_bar();
+    test_outline_press_in_body_is_not_a_drag();
 
     if (g_failures == 0) {
         printf("engine_test: all tests passed\n");

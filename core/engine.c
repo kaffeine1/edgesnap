@@ -44,6 +44,7 @@ static void es_engine_clear_tracking(ESEngine *e)
 {
     e->button_down = 0;
     e->dragging = 0;
+    e->on_bar = 0;
     e->candidate = 0;
     e->zone = ES_ZONE_NONE;
 }
@@ -91,6 +92,20 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
         e->base_mx = facts->mouse_x;
         e->base_my = facts->mouse_y;
         e->dragging = 0;
+        /*
+         * Did the press land on the drag bar? Remembered now, because
+         * on a system that drags windows as an outline the window box
+         * does not change until the button is released (AROS One,
+         * 2026-09-03), and "the window moved while the pointer moved"
+         * would never become true. A press on the bar plus pointer
+         * travel is a drag on its own evidence.
+         */
+        e->on_bar = (facts->flags & ES_WF_DRAGBAR) != 0 &&
+                    facts->bar_h > 0 &&
+                    facts->mouse_x >= facts->box.x &&
+                    facts->mouse_x < facts->box.x + facts->box.w &&
+                    facts->mouse_y >= facts->box.y &&
+                    facts->mouse_y < facts->box.y + facts->bar_h;
         return;
     }
 
@@ -100,7 +115,8 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
         int ptr_moved = (es_abs(facts->mouse_x - e->base_mx) +
                          es_abs(facts->mouse_y - e->base_my)) >=
                         e->cfg.drag_min_px;
-        if (win_moved && ptr_moved && (facts->flags & ES_WF_DRAGBAR) != 0) {
+        if (ptr_moved && (facts->flags & ES_WF_DRAGBAR) != 0 &&
+            (win_moved || e->on_bar)) {
             e->dragging = 1;
             out->drag_started = 1;
         }

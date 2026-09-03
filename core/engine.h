@@ -37,6 +37,7 @@ typedef struct ESWinFacts {
     int mouse_x, mouse_y;  /* pointer position on that screen           */
     int min_w, min_h;      /* window size limits; max 0 = unlimited     */
     int max_w, max_h;
+    int bar_h;             /* height of the drag bar (top border), px   */
     unsigned flags;        /* ES_WF_*                                   */
 } ESWinFacts;
 
@@ -69,6 +70,7 @@ typedef struct ESEngine {
     ESEngineConfig cfg;
     int button_down;
     int dragging;
+    int on_bar;      /* the press landed on the candidate's drag bar   */
     void *candidate;
     ESRect base_box;
     int base_mx, base_my;
