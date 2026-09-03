@@ -74,6 +74,7 @@ typedef struct ESEngine {
     void *candidate;
     ESRect base_box;
     int base_mx, base_my;
+    int press_mx, press_my; /* where the button went down; -1 = unknown */
     int zone;
     ESRect zone_rect;   /* fitted target of the current zone            */
     ESWinFacts last;    /* facts snapshot from the latest motion        */
@@ -83,7 +84,8 @@ typedef struct ESEngine {
 void es_engine_init(ESEngine *e, const ESEngineConfig *cfg);
 
 /* Primary button went down. */
-void es_engine_press(ESEngine *e, ESEngineActions *out);
+/* mx, my: the pointer where the button went down, -1 when unknown. */
+void es_engine_press(ESEngine *e, int mx, int my, ESEngineActions *out);
 
 /* Pointer moved while tracking. facts describes the active window at
  * this instant, or NULL when there is none. */

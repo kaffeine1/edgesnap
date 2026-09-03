@@ -45,6 +45,8 @@ static void es_engine_clear_tracking(ESEngine *e)
     e->button_down = 0;
     e->dragging = 0;
     e->on_bar = 0;
+    e->press_mx = -1;
+    e->press_my = -1;
     e->candidate = 0;
     e->zone = ES_ZONE_NONE;
 }
@@ -59,7 +61,7 @@ void es_engine_init(ESEngine *e, const ESEngineConfig *cfg)
     es_engine_clear_tracking(e);
 }
 
-void es_engine_press(ESEngine *e, ESEngineActions *out)
+void es_engine_press(ESEngine *e, int mx, int my, ESEngineActions *out)
 {
     es_actions_clear(out);
     /* A stray preview can only exist if a release was lost; be safe. */
@@ -68,6 +70,8 @@ void es_engine_press(ESEngine *e, ESEngineActions *out)
     }
     es_engine_clear_tracking(e);
     e->button_down = 1;
+    e->press_mx = mx;
+    e->press_my = my;
 }
 
 void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
@@ -86,11 +90,22 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
     e->last = *facts;
 
     if (e->candidate != facts->ref) {
-        /* first sight of this window during the press: baseline it */
+        /*
+         * First sight of this window during the press: baseline it.
+         * From the PRESS position when it is known. On a system that
+         * activates the pressed window a beat after the press (AROS),
+         * the first facts still name the old window, and the pressed
+         * one is first seen with the pointer already away from where
+         * the button went down; judged by the pointer, a press on the
+         * bar would look like a press in the body.
+         */
+        int px = e->press_mx >= 0 ? e->press_mx : facts->mouse_x;
+        int py = e->press_my >= 0 ? e->press_my : facts->mouse_y;
+
         e->candidate = facts->ref;
         e->base_box = facts->box;
-        e->base_mx = facts->mouse_x;
-        e->base_my = facts->mouse_y;
+        e->base_mx = px;
+        e->base_my = py;
         e->dragging = 0;
         /*
          * Did the press land on the drag bar? Remembered now, because
@@ -102,10 +117,8 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
          */
         e->on_bar = (facts->flags & ES_WF_DRAGBAR) != 0 &&
                     facts->bar_h > 0 &&
-                    facts->mouse_x >= facts->box.x &&
-                    facts->mouse_x < facts->box.x + facts->box.w &&
-                    facts->mouse_y >= facts->box.y &&
-                    facts->mouse_y < facts->box.y + facts->bar_h;
+                    px >= facts->box.x && px < facts->box.x + facts->box.w &&
+                    py >= facts->box.y && py < facts->box.y + facts->bar_h;
         return;
     }
 

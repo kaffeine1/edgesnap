@@ -1047,7 +1047,17 @@ void esb_input(int press, int motion, int release, ULONG quals,
     }
 
     if (press) {
-        es_engine_press(&g_engine, &a);
+        struct ESBSnap ps;
+        int mx = -1, my = -1;
+
+        /* where the button went down: the pointer on the screen of
+         * whatever window is active right now, which may still be the
+         * one about to lose the activation */
+        if (esb_sample_active(&ps) != NULL) {
+            mx = ps.mouse_x;
+            my = ps.mouse_y;
+        }
+        es_engine_press(&g_engine, mx, my, &a);
         esb_absorb(&a, out);
     }
 

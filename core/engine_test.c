@@ -48,7 +48,7 @@ static void start_drag(ESEngine *e, ESWinFacts *f)
 {
     ESEngineActions a;
 
-    es_engine_press(e, &a);
+    es_engine_press(e, -1, -1, &a);
     es_engine_motion(e, f, &a);          /* baseline */
     f->box.x += 30;
     f->box.y += 5;
@@ -107,7 +107,7 @@ static void test_click_without_drag(void)
 
     es_engine_init(&e, 0);
     std_facts(&f, &w1);
-    es_engine_press(&e, &a);
+    es_engine_press(&e, -1, -1, &a);
     es_engine_motion(&e, &f, &a);
     /* pointer wiggles but the window does not move: not a drag */
     f.mouse_x += 20;
@@ -129,7 +129,7 @@ static void test_app_moves_window_alone(void)
 
     es_engine_init(&e, 0);
     std_facts(&f, &w1);
-    es_engine_press(&e, &a);
+    es_engine_press(&e, -1, -1, &a);
     es_engine_motion(&e, &f, &a);
     /* window teleports while the pointer stands still: not a drag */
     f.box.x += 120;
@@ -149,7 +149,7 @@ static void test_no_dragbar_never_drags(void)
     es_engine_init(&e, 0);
     std_facts(&f, &w1);
     f.flags = ES_WF_SNAPPABLE; /* no ES_WF_DRAGBAR */
-    es_engine_press(&e, &a);
+    es_engine_press(&e, -1, -1, &a);
     es_engine_motion(&e, &f, &a);
     f.box.x += 30;
     f.mouse_x += 30;
@@ -214,7 +214,7 @@ static void test_candidate_switch_rebaselines(void)
     std_facts(&f2, &w2);
     f2.box.x = 400;
 
-    es_engine_press(&e, &a);
+    es_engine_press(&e, -1, -1, &a);
     es_engine_motion(&e, &f1, &a);
     /* active window changes mid-press: baseline moves to w2 */
     f2.mouse_x = f1.mouse_x + 30;
@@ -289,6 +289,62 @@ static void test_reset_hides_preview(void)
  * travel must count as a drag on its own evidence, preview and all,
  * and the release must snap.
  */
+/*
+ * The press lands on the bar of a window that is not active yet. The
+ * first facts still name the old window, elsewhere on the screen; the
+ * pressed one is first seen with the pointer already 60 px below the
+ * bar. The press position decides, so the drag still starts.
+ */
+static void test_late_activation_keeps_the_bar_press(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, w2;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    f.bar_h = 20;
+    es_engine_press(&e, f.mouse_x, 110, &a);   /* on w2's bar, y 100..119 */
+
+    f.box.y = 400;                  /* the old window: bar nowhere near */
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.drag_started == 0);
+
+    std_facts(&f, &w2);             /* activation done, pointer lower */
+    f.bar_h = 20;
+    f.mouse_y = 170;
+    es_engine_motion(&e, &f, &a);   /* baseline of w2 from the press */
+    CHECK(a.drag_started == 0);
+
+    f.mouse_x = 3;
+    f.mouse_y = 240;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.drag_started == 1);
+    CHECK(a.zone == ES_ZONE_LEFT && a.show_preview == 1);
+}
+
+/* Without a press position the pointer of the first facts decides, as
+ * before: a first sight in the body is a press in the body. */
+static void test_unknown_press_position_falls_back_to_the_pointer(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    f.bar_h = 20;
+    f.mouse_y = 170;                /* body */
+    es_engine_press(&e, -1, -1, &a);
+    es_engine_motion(&e, &f, &a);
+    f.mouse_x = 3;
+    f.mouse_y = 240;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.drag_started == 0);
+}
+
 static void test_outline_drag_from_the_bar(void)
 {
     ESEngine e;
@@ -299,7 +355,7 @@ static void test_outline_drag_from_the_bar(void)
     es_engine_init(&e, 0);
     std_facts(&f, &w1);
     f.bar_h = 20;                   /* bar: y 100..119, press at y 110 */
-    es_engine_press(&e, &a);
+    es_engine_press(&e, -1, -1, &a);
     es_engine_motion(&e, &f, &a);   /* baseline, on the bar */
     CHECK(a.drag_started == 0);
 
@@ -326,7 +382,7 @@ static void test_outline_press_in_body_is_not_a_drag(void)
     std_facts(&f, &w1);
     f.bar_h = 20;
     f.mouse_y = 200;                /* inside the body, below the bar */
-    es_engine_press(&e, &a);
+    es_engine_press(&e, -1, -1, &a);
     es_engine_motion(&e, &f, &a);
     f.mouse_x = 3;
     f.mouse_y = 240;
@@ -350,6 +406,8 @@ int main(void)
     test_reset_hides_preview();
     test_outline_drag_from_the_bar();
     test_outline_press_in_body_is_not_a_drag();
+    test_late_activation_keeps_the_bar_press();
+    test_unknown_press_position_falls_back_to_the_pointer();
 
     if (g_failures == 0) {
         printf("engine_test: all tests passed\n");
