@@ -86,27 +86,30 @@
  * screen's RastPort over saved pixels. MorphOS moves windows solid and
  * lets us open real borderless windows, which look after themselves.
  */
-#if defined(__amigaos4__) || defined(__AROS__)
+#if defined(__amigaos4__)
 #define ES_PREVIEW_PIXELS 1
+#elif defined(__AROS__)
+/*
+ * AROS drags a window as an outline drawn in COMPLEMENT mode on the
+ * screen (rom/intuition/windowclasses.c), unless IControl's opaque
+ * move is on. A frame painted in a solid colour and that outline
+ * erase each other wherever they cross; a frame drawn in COMPLEMENT
+ * composes with it in any order, and needs no saved pixels: drawing
+ * it a second time takes it away.
+ */
+#define ES_PREVIEW_XOR 1
 #else
 #define ES_PREVIEW_WINDOWS 1
 #endif
 
-/* The pixel array format the saved strips use, in each SDK's dialect. */
-#if defined(__AROS__)
-#include <cybergraphx/cybergraphics.h>
-#include <proto/cybergraphics.h>
-#define ES_PF_FORMAT RECTFMT_ARGB
-/* CGX order: destination first, the RastPort in the middle, format last. */
-#define ES_PF_READ(rp, x, y, buf, mod, w, h) \
-    ReadPixelArray((buf), 0, 0, (UWORD)(mod), (rp), (UWORD)(x), (UWORD)(y), \
-                   (UWORD)(w), (UWORD)(h), ES_PF_FORMAT)
-#define ES_PF_WRITE(buf, mod, rp, x, y, w, h) \
-    WritePixelArray((buf), 0, 0, (UWORD)(mod), (rp), (UWORD)(x), (UWORD)(y), \
-                    (UWORD)(w), (UWORD)(h), ES_PF_FORMAT)
-#else
+/*
+ * The pixel array calls in graphics.library's dialect. Should the
+ * pixel technique ever serve a CGX system, remember that cybergraphics
+ * takes the arguments in another order: destination first, the
+ * RastPort in the middle, the format last.
+ */
+#if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
 #define ES_PF_FORMAT PIXF_A8R8G8B8
-/* graphics.library order on AmigaOS 4: the RastPort comes first on a read. */
 #define ES_PF_READ(rp, x, y, buf, mod, w, h) \
     ReadPixelArray((rp), (ULONG)(x), (ULONG)(y), (buf), 0, 0, (ULONG)(mod), \
                    ES_PF_FORMAT, (ULONG)(w), (ULONG)(h))
@@ -156,8 +159,6 @@ struct Library *IntuitionBase;
 struct IntuitionBase *IntuitionBase;
 #endif
 #ifdef __AROS__
-/* Read/WritePixelArray live in cybergraphics.library on AROS. */
-struct Library *CyberGfxBase;
 #endif
 #define ES_IBASE ((struct IntuitionBase *)IntuitionBase)
 
@@ -755,7 +756,7 @@ static void spike_publish_ignored(void)
     ES_CALL(ESnap_IgnoreWindows)(mine, (ULONG)n);
 }
 
-#ifdef ES_PREVIEW_PIXELS
+#if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
 /*
  * The frame on AmigaOS 4, and why it is drawn straight onto the screen.
  *
@@ -817,25 +818,42 @@ static void spike_pf_strips(const ESRect *r, ESRect *strip, int *count)
     *count = (strip[2].h > 0) ? 4 : 2;
 }
 
-/* Paint the four strips in the accent colour. Called again on every
- * engine step: a solid fill can be repeated, which is the whole reason
- * for not using COMPLEMENT. */
-static void spike_pf_fill(void)
+/*
+ * Paint the four strips. With the pixel technique they are filled in
+ * the accent colour, and the fill is repeated on every engine step: a
+ * solid fill can be repeated, which is the whole reason for not using
+ * COMPLEMENT there. With the XOR technique the strips are inverted
+ * ONCE per show and once per hide; the strips never overlap, so no
+ * pixel is inverted twice in one pass.
+ */
+static void spike_pf_paint(void)
 {
     struct RastPort rp;
     int i;
 
-    if (!g_pf.drawn) {
-        return;
-    }
     rp = g_pf.scr->RastPort;   /* a copy: leave the screen's own alone */
+#ifdef ES_PREVIEW_XOR
+    SetDrMd(&rp, COMPLEMENT);
+#else
     SetAPen(&rp, (ULONG)g_pf.pen);
     SetDrMd(&rp, JAM1);
+#endif
     for (i = 0; i < g_pf.strips; i++) {
         RectFill(&rp, g_pf.strip[i].x, g_pf.strip[i].y,
                  g_pf.strip[i].x + g_pf.strip[i].w - 1,
                  g_pf.strip[i].y + g_pf.strip[i].h - 1);
     }
+}
+
+/* Repair the frame (pixel technique only: an XOR frame is never
+ * painted over by the outline drag, the two compose). */
+static void spike_pf_fill(void)
+{
+#ifndef ES_PREVIEW_XOR
+    if (g_pf.drawn) {
+        spike_pf_paint();
+    }
+#endif
 }
 
 static void spike_pf_hide(void)
@@ -845,6 +863,10 @@ static void spike_pf_hide(void)
     if (!g_pf.drawn) {
         return;
     }
+#ifdef ES_PREVIEW_XOR
+    spike_pf_paint();          /* the second inversion takes it away */
+    (void)i;
+#else
     for (i = 0; i < g_pf.strips; i++) {
         if (g_pf.saved[i] != NULL) {
             ES_PF_WRITE(g_pf.saved[i], g_pf.strip[i].w * ES_PF_BPP,
@@ -854,6 +876,7 @@ static void spike_pf_hide(void)
             g_pf.saved[i] = NULL;
         }
     }
+#endif
     g_pf.drawn = 0;
 }
 
@@ -934,6 +957,7 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
     spike_log("edgesnap: frame: %d,%d %dx%d pen %ld strips %d\n",
               r->x, r->y, r->w, r->h, (long)g_pf.pen, g_pf.strips);
 
+#ifndef ES_PREVIEW_XOR
     for (i = 0; i < g_pf.strips; i++) {
         ULONG bytes = (ULONG)(g_pf.strip[i].w * g_pf.strip[i].h * ES_PF_BPP);
 
@@ -945,8 +969,11 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
                    g_pf.saved[i], g_pf.strip[i].w * ES_PF_BPP,
                    g_pf.strip[i].w, g_pf.strip[i].h);
     }
+#else
+    (void)i;
+#endif
     g_pf.drawn = 1;
-    spike_pf_fill();
+    spike_pf_paint();
 }
 #endif /* ES_PREVIEW_PIXELS */
 
@@ -981,14 +1008,14 @@ static int spike_is_preview_win(struct Window *w)
  */
 static void spike_preview_refresh(void)
 {
-#ifdef ES_PREVIEW_PIXELS
+#if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
     spike_pf_fill();
 #endif
 }
 
 static void spike_preview_hide(void)
 {
-#ifdef ES_PREVIEW_PIXELS
+#if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
     spike_pf_hide();
 #else
     int i;
@@ -1037,7 +1064,7 @@ static struct Window *spike_preview_bar(struct Screen *scr, LONG pen,
 
 static void spike_preview_show(struct Screen *dragscr, const ESRect *r)
 {
-#ifdef ES_PREVIEW_PIXELS
+#if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
     spike_pf_show(dragscr, r);
 #else
     struct Screen *scr;
@@ -2118,12 +2145,6 @@ static void spike_close_libs(void)
         CxBase = NULL;
     }
     if (GfxBase != NULL) {
-#ifdef __AROS__
-        if (CyberGfxBase != NULL) {
-            CloseLibrary(CyberGfxBase);
-            CyberGfxBase = NULL;
-        }
-#endif
         CloseLibrary((struct Library *)GfxBase);
         GfxBase = NULL;
     }
@@ -2138,12 +2159,6 @@ static int spike_open_libs(void)
     IntuitionBase = (void *)OpenLibrary("intuition.library", 36);
     GfxBase = (void *)OpenLibrary("graphics.library", 36);
     CxBase = OpenLibrary("commodities.library", 37);
-#ifdef __AROS__
-    CyberGfxBase = OpenLibrary("cybergraphics.library", 41);
-    if (CyberGfxBase == NULL) {
-        return 0;
-    }
-#endif
     if (IntuitionBase == NULL || GfxBase == NULL || CxBase == NULL) {
         spike_close_libs();
         return 0;
@@ -2297,7 +2312,7 @@ int main(int argc, char **argv)
     if (!spike_accent_init()) {
         spike_out("edgesnap: no public screen, nothing will be drawn\n");
     }
-#ifdef ES_PREVIEW_PIXELS
+#if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
     if (!spike_pf_init()) {
         spike_out("edgesnap: no public screen, no preview frame\n");
     }
@@ -2433,7 +2448,7 @@ out:
         DeleteCxObjAll(broker);
     }
     spike_preview_hide();
-#ifdef ES_PREVIEW_PIXELS
+#if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
     spike_pf_cleanup();
 #endif
     spike_divider_close();
