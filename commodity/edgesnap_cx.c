@@ -1978,7 +1978,7 @@ static void spike_dump_windows(void)
     spike_out("edgesnap: insets l=%d t=%d r=%d b=%d -> usable %d,%d %dx%d\n",
            ins.l, ins.t, ins.r, ins.b,
            usable.x, usable.y, usable.w, usable.h);
-    spike_out("edgesnap: input action calls %lu; classes seen:"
+    spike_out("edgesnap: input action calls %lu; presses %lu releases %lu; classes seen:"
               " raw-mouse %lu raw-key %lu newpointerpos %lu pointerpos %lu"
               " other %lu\n",
               (unsigned long)g_shared.diag_calls,
