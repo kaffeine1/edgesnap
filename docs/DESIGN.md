@@ -767,6 +767,47 @@ AROS binary cross-built on the Mac links and then dies before `main`
 tester on a real installation, or it degrades in silence like every
 lane nobody runs.
 
+**Where it stands (2026-09-04).** Stages 1 and 2 are done and run on
+AROS One x86_64 under emulation: snapping from the hotkeys and from a
+drag, the preview frame, the seams with their handle, the preferences
+on Zune. Stage 3 is open. What the lane taught, and most of it turned
+out to be portable rather than AROS-specific:
+
+- **A drag is evidence, not a moved window.** AROS drags a window as an
+  outline; the window box does not change until the button is
+  released, so "the window moved while the pointer moved" never became
+  true. The engine now also accepts a press on the drag bar plus
+  pointer travel. And the pressed window becomes the active one a beat
+  after the press, so the first facts still name the old window: the
+  engine keeps the position where the button went down and judges the
+  bar from there, not from wherever the pointer is when the right
+  window is first seen.
+- **Motion is not always RAWMOUSE.** A USB tablet reports every move as
+  `IECLASS_NEWPOINTERPOS`. The input handler counts those too; the
+  engine reads the pointer from the screen, so that is all it needs.
+- **Every window keeps its own limits.** Filling what the opposite side
+  does not use, and dragging a seam, both ignored `MinWidth` and
+  `MaxWidth`. Intuition then clamped the window to a box other than
+  the one recorded, and a recorded box that does not match the real
+  one reads as "the user moved it", which kills the seam. Both paths
+  now honour the limits of every window involved; the bug was there on
+  all three systems, it only showed on a window with a wide minimum.
+- **The preview frame, one technique per system.** MorphOS moves
+  windows solid and the frame is four borderless windows. AmigaOS 4
+  drags a ghost and keeps the layers locked, so the frame is painted
+  over saved pixels and repainted on every step. AROS drags an outline
+  drawn in COMPLEMENT on the screen itself, and a solid frame and that
+  outline erase each other wherever they cross: there the frame is an
+  XOR too, with a mask made per pixel as "what is there" XOR "the
+  accent", so it shows in the accent colour and still composes with the
+  outline in any order. It comes down inside the input handler on the
+  release, ahead of Intuition, which moves the window on that very
+  event. A frame taken down after that inverts pixels the move has just
+  repainted.
+- **A silent exit is a defect in itself.** The frame did not show for a
+  reason that never reached the log; once the exit spoke, the cause
+  took one try to find.
+
 ### 0.4 - candidates
 
 - **Animated snap**: the window glides into its zone
