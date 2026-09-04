@@ -125,7 +125,7 @@ static void spike_pf_drop_now(void);    /* from the input handler */
  * takes the arguments in another order: destination first, the
  * RastPort in the middle, the format last.
  */
-#if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
+#ifdef ES_PREVIEW_PIXELS
 #define ES_PF_FORMAT PIXF_A8R8G8B8
 #define ES_PF_READ(rp, x, y, buf, mod, w, h) \
     ReadPixelArray((rp), (ULONG)(x), (ULONG)(y), (buf), 0, 0, (ULONG)(mod), \
