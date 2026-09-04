@@ -1982,6 +1982,8 @@ static void spike_dump_windows(void)
               " raw-mouse %lu raw-key %lu newpointerpos %lu pointerpos %lu"
               " other %lu\n",
               (unsigned long)g_shared.diag_calls,
+              (unsigned long)g_shared.presses,
+              (unsigned long)g_shared.releases,
               (unsigned long)g_shared.diag_class[IECLASS_RAWMOUSE & 15],
               (unsigned long)g_shared.diag_class[IECLASS_RAWKEY & 15],
               (unsigned long)g_shared.diag_class[IECLASS_NEWPOINTERPOS & 15],
