@@ -822,6 +822,9 @@ static struct PreviewFrame {
     UBYTE *saved[4];         /* the pixels each strip covered; XOR: scratch */
     UBYTE *mask[4];          /* XOR: per pixel, what was there XOR accent */
     UBYTE accent[4];         /* XOR: the accent as the bytes of an ARGB pixel */
+    int plain;               /* XOR: this frame is a plain inversion */
+    int shallow;             /* XOR: fewer than 24 bits, reads are lossy */
+    int said_plain;          /* XOR: the fallback was logged once */
     ESRect strip[4];
     int strips;
 } g_pf;
@@ -896,13 +899,17 @@ static void spike_pf_accent_bytes(void)
     g_pf.accent[1] = (UBYTE)(rgb[0] >> 24);
     g_pf.accent[2] = (UBYTE)(rgb[1] >> 24);
     g_pf.accent[3] = (UBYTE)(rgb[2] >> 24);
+    /* on 15 and 16 bits a written colour does not read back as itself */
+    g_pf.shallow = GetBitMapAttr(g_pf.scr->RastPort.BitMap, BMA_DEPTH) < 24;
 }
 
 /*
  * One pass over a strip: read what is there, XOR it with the strip's
  * mask, write it back. The first pass paints the accent, the second
  * one restores. Called under Forbid, from the task or from the input
- * handler; nothing in here allocates or waits.
+ * handler; nothing in here allocates or waits. Should the read fail
+ * here, the scratch still holds what the first pass wrote, and XORing
+ * that with the mask gives back what was there before the frame.
  */
 static void spike_pf_xor_strip(int i)
 {
@@ -921,6 +928,27 @@ static void spike_pf_xor_strip(int i)
     }
     ES_PF_WRITE(p, st->w * ES_PF_BPP, &g_pf.scr->RastPort, st->x, st->y,
                 st->w, st->h);
+}
+
+/*
+ * The plain inversion, for a screen the mask cannot serve: fewer than
+ * 24 bits, where a written colour does not read back as itself, or a
+ * driver whose reads return nothing. Drawn twice it is gone, and it
+ * composes with Intuition's outline all the same; only the colour is
+ * whatever the inverse of the background is.
+ */
+static void spike_pf_invert(void)
+{
+    struct RastPort rp;
+    int i;
+
+    rp = g_pf.scr->RastPort;   /* a copy: leave the screen's own alone */
+    SetDrMd(&rp, COMPLEMENT);
+    for (i = 0; i < g_pf.strips; i++) {
+        RectFill(&rp, g_pf.strip[i].x, g_pf.strip[i].y,
+                 g_pf.strip[i].x + g_pf.strip[i].w - 1,
+                 g_pf.strip[i].y + g_pf.strip[i].h - 1);
+    }
 }
 #endif
 
@@ -974,8 +1002,12 @@ static void spike_pf_drop_now(void)
 
     Forbid();
     if (g_pf.drawn && g_pf.scr != NULL) {
-        for (i = 0; i < g_pf.strips; i++) {
-            spike_pf_xor_strip(i);
+        if (g_pf.plain) {
+            spike_pf_invert();
+        } else {
+            for (i = 0; i < g_pf.strips; i++) {
+                spike_pf_xor_strip(i);
+            }
         }
         g_pf.drawn = 0;
     }
@@ -1094,29 +1126,94 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
     /*
      * The mask and the first pass in ONE forbidden stretch, all four
      * strips: a release arriving in the middle would find the frame
-     * either not yet up or fully up, never half of it.
+     * either not yet up or fully up, never half of it. The reads are
+     * checked: a driver that returns nothing would leave the mask made
+     * of whatever the allocation held, and the second pass would then
+     * paint that garbage, black on a fresh system. Such a frame falls
+     * back to the plain inversion, which reads nothing.
      */
     Forbid();
-    for (i = 0; i < g_pf.strips; i++) {
+    g_pf.plain = g_pf.shallow;
+    for (i = 0; i < g_pf.strips && !g_pf.plain; i++) {
         const ESRect *st = &g_pf.strip[i];
         UBYTE *p = g_pf.saved[i];
-        UBYTE *m = g_pf.mask[i];
         ULONG n = (ULONG)(st->w * st->h * ES_PF_BPP), k;
 
-        if (p == NULL || m == NULL) {
-            continue;          /* that strip simply will not be drawn */
+        if (p == NULL || g_pf.mask[i] == NULL) {
+            g_pf.plain = 1;    /* no memory: the inversion needs none */
+            break;
         }
-        ES_PF_READ(&g_pf.scr->RastPort, st->x, st->y, p, st->w * ES_PF_BPP,
-                   st->w, st->h);
+        if (ES_PF_READ(&g_pf.scr->RastPort, st->x, st->y, p,
+                       st->w * ES_PF_BPP, st->w, st->h) <
+            (ULONG)(st->w * st->h)) {
+            g_pf.plain = 1;
+            break;
+        }
         for (k = 0; k < n; k++) {
-            m[k] = p[k] ^ g_pf.accent[k & 3];
-            p[k] ^= m[k];      /* which is the accent */
+            g_pf.mask[i][k] = p[k] ^ g_pf.accent[k & 3];
         }
-        ES_PF_WRITE(p, st->w * ES_PF_BPP, &g_pf.scr->RastPort, st->x, st->y,
-                    st->w, st->h);
+    }
+    if (!g_pf.plain) {
+        int agreed = 1;
+
+        for (i = 0; i < g_pf.strips; i++) {
+            const ESRect *st = &g_pf.strip[i];
+            UBYTE *p = g_pf.saved[i];
+            ULONG n = (ULONG)(st->w * st->h * ES_PF_BPP), k;
+
+            for (k = 0; k < n; k++) {
+                p[k] ^= g_pf.mask[i][k];   /* which is the accent */
+            }
+            ES_PF_WRITE(p, st->w * ES_PF_BPP, &g_pf.scr->RastPort,
+                        st->x, st->y, st->w, st->h);
+        }
+        /*
+         * Read the strips back and compare them with the accent. A
+         * driver whose reads count pixels but return zeros, or a
+         * format that loses bits on the way, would make the second
+         * pass paint garbage; caught here, the accent is taken off
+         * again and the frame becomes the plain inversion instead.
+         */
+        for (i = 0; i < g_pf.strips && agreed; i++) {
+            const ESRect *st = &g_pf.strip[i];
+            UBYTE *p = g_pf.saved[i];
+            ULONG n = (ULONG)(st->w * st->h * ES_PF_BPP), k;
+
+            ES_PF_READ(&g_pf.scr->RastPort, st->x, st->y, p,
+                       st->w * ES_PF_BPP, st->w, st->h);
+            for (k = 0; k < n; k++) {
+                if ((k & 3) != 0 && p[k] != g_pf.accent[k & 3]) {
+                    agreed = 0;   /* alpha is not compared */
+                    break;
+                }
+            }
+        }
+        if (!agreed) {
+            for (i = 0; i < g_pf.strips; i++) {
+                const ESRect *st = &g_pf.strip[i];
+                UBYTE *p = g_pf.saved[i];
+                ULONG n = (ULONG)(st->w * st->h * ES_PF_BPP), k;
+
+                for (k = 0; k < n; k++) {
+                    p[k] = g_pf.mask[i][k] ^ g_pf.accent[k & 3];
+                }
+                ES_PF_WRITE(p, st->w * ES_PF_BPP, &g_pf.scr->RastPort,
+                            st->x, st->y, st->w, st->h);
+            }
+            g_pf.plain = 1;
+        }
+    }
+    if (g_pf.plain) {
+        spike_pf_invert();
     }
     g_pf.drawn = 1;
     Permit();
+    if (g_pf.plain && !g_pf.said_plain) {
+        g_pf.said_plain = 1;
+        spike_log("edgesnap: frame: %s, drawn as a plain inversion\n",
+                  g_pf.shallow ? "screen below 24 bits"
+                               : "pixel reads not trusted");
+    }
 #endif
 }
 #endif /* ES_PREVIEW_PIXELS */
