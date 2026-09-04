@@ -4,11 +4,14 @@
 # AROS x86_64 lane. Built ON the hosted bench against the TRUNK
 # toolchain (scripts/build-aros.sh does the round trip): an x86_64 AROS
 # binary cross-built on the Mac links and then dies before main, a
-# lesson from a sibling project. Two binaries:
-#   EdgeSnap       the commodity with the core LINKED IN (ES_STATIC_CORE):
-#                  no edgesnap.library yet on AROS, and none needed for a
-#                  first milestone that people can run
-#   EdgeSnapPrefs  the preferences window on Zune, from the MUI source
+# lesson from a sibling project. Three binaries:
+#   edgesnap.library  the body and the portable core behind the AROS
+#                     library ABI, generated from library/aros/edgesnap.conf
+#                     by genmodule (GENMODULE points at the bench's tool)
+#   EdgeSnap          the commodity, a client of the library as on the
+#                     other two systems (-DES_STATIC_CORE still links the
+#                     core in, for a build with no library at hand)
+#   EdgeSnapPrefs     the preferences window on Zune, from the MUI source
 #
 # Own code is C89-style; no -std= forced, the SDK headers decide.
 # 64-bit: pointers never travel through ULONG (see ESTagData).
@@ -40,15 +43,29 @@ LDLIBS += -lautoinit -lcrtprog -lcrt -lstdlib -lstdc.static \
 endif
 
 OUT := build/aros-x86_64
-CX_SRC := commodity/edgesnap_cx.c library/edgesnap_body.c \
+GEN := $(OUT)/gen
+GENMODULE ?= genmodule
+
+# The library body and the portable core: edgesnap.library on AROS.
+LIB_SRC := library/aros/edgesnap_library.c library/edgesnap_body.c \
 	core/zones.c core/panels.c core/engine.c core/registry.c \
 	core/config.c core/gutter.c
+LIB_GEN := $(GEN)/edgesnap_start.c $(GEN)/edgesnap_end.c
+# The commodity is a CLIENT of the library, as on the other two systems:
+# it keeps only what a frontend needs of the core (settings, panel
+# classification for the dump, zone names for the log).
+CX_SRC := commodity/edgesnap_cx.c core/config.c core/panels.c core/zones.c \
+	core/engine.c
 PREFS_SRC := prefs/morphos/edgesnap_prefs.c prefs/prefs_io.c \
 	core/config.c core/engine.c core/zones.c core/panels.c
 
+# A module links without the program startup and without a C runtime.
+MODULE_LDFLAGS ?= -nostartfiles -nostdlib -L"$(AROS_SDK_ROOT)/lib" -L"$(SDK_GCC_ROOT)"
+MODULE_LIBS ?= -Wl,--start-group -llibinit -lautoinit -lamiga -laros -lgcc -Wl,--end-group
+
 .PHONY: all clean
 
-all: $(OUT)/EdgeSnap $(OUT)/EdgeSnapPrefs
+all: $(OUT)/edgesnap.library $(OUT)/EdgeSnap $(OUT)/EdgeSnapPrefs
 
 # After linking: drop .got (the loader does not want it) and stamp the
 # ELF OS/ABI byte so AROS recognises its own binary. Both from the
@@ -61,8 +78,28 @@ define aros-link
 	@strings "$@" | grep -F '$$VER: ' | head -1
 endef
 
-$(OUT)/EdgeSnap: $(CX_SRC)
-	$(call aros-link,-DES_STATIC_CORE,$(CX_SRC))
+# genmodule turns edgesnap.conf into the library node, the jump table
+# and the client headers (proto/defines/inline/clib). The conf is the
+# source of truth for the AROS ABI; nothing generated is edited.
+$(GEN)/edgesnap_start.c: library/aros/edgesnap.conf
+	mkdir -p "$(GEN)/include/proto" "$(GEN)/include/defines" \
+		"$(GEN)/include/inline" "$(GEN)/include/clib"
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)" writefiles edgesnap library
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)" writelibdefs edgesnap library
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)" writefd edgesnap library
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)/include" writeincludes edgesnap library
+
+$(OUT)/edgesnap.library: $(GEN)/edgesnap_start.c $(LIB_SRC)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Wno-unused-parameter -I"$(GEN)" -Ilibrary/aros \
+		-fno-tree-loop-distribute-patterns \
+		$(MODULE_LDFLAGS) -o "$@" $(LIB_GEN) $(LIB_SRC) \
+		-Wl,--undefined=EdgeSnap_1_EdgeSnap_OpenLib $(MODULE_LIBS)
+	$(OBJCOPY) -R .got "$@"
+	printf '\013' | dd of="$@" bs=1 seek=8 conv=notrunc 2>/dev/null
+	@strings "$@" | grep -F '$$VER: ' | head -1
+
+$(OUT)/EdgeSnap: $(CX_SRC) $(GEN)/edgesnap_start.c
+	$(call aros-link,-I"$(GEN)/include",$(CX_SRC))
 
 # The varargs MUI_NewObject/MUI_MakeObject are not in muimaster.library
 # itself on AROS: they are link-time wrappers in libmui.a.

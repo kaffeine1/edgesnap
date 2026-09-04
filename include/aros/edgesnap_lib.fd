@@ -1,0 +1,23 @@
+##base _EdgeSnapBase
+##bias 30
+*
+* Automatically generated from 'library/aros/edgesnap.conf'.
+* Edits will be lost. This file is supposed to be a support file for identify.library.
+*
+##public
+ESnap_QueryCapabilities()()
+ESnap_SnapWindow(win,zone)(a0,d0)
+ESnap_UnsnapWindow(win)(a0)
+ESnap_QueryWindow(win,zone_out)(a0,a1)
+ESnap_ExcludeWindow(win,exclude)(a0,d0)
+ESnap_SetOptionsA(tags)(a0)
+ESnap_Enable(on)(d0)
+ESnap_FeedInput(presses,motions,releases,qualifiers,report)(d0,d1,d2,d3,a0)
+ESnap_ResetInput(report)(a0)
+ESnap_IgnoreWindows(windows,count)(a0,d0)
+ESnap_QueryScreenArea(screen,area)(a0,a1)
+ESnap_QueryDivider(thickness,divider)(d0,a0)
+ESnap_MoveDivider(position)(d0)
+ESnap_QueryDividerAt(thickness,x,y,divider)(d0,d1,d2,a0)
+ESnap_MoveDividerAt(vertical,line,position)(a0,a1,d0)
+##end

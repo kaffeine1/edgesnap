@@ -148,6 +148,17 @@ static void spike_pf_drop_now(void);    /* from the input handler */
 /* The body is linked in and called directly: no library to open. */
 #include "edgesnap_static.h"
 #define ES_CALL(fn) fn
+#elif defined(__AROS__)
+/*
+ * AROS: the client headers are generated from library/aros/edgesnap.conf
+ * by genmodule. The macro flavour is asked for, not the inline one: the
+ * prototypes above are the public ones from edgesnap.h, and a static
+ * inline of the same name after them would be a second declaration.
+ */
+#define EDGESNAP_NOLIBINLINE 1
+#include <proto/edgesnap.h>
+struct Library *EdgeSnapBase;
+#define ES_CALL(fn) fn
 #elif defined(__amigaos4__)
 #include "interfaces/edgesnap.h"
 static struct Library *EdgeSnapBase;
