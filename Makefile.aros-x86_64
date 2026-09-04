@@ -65,7 +65,7 @@ MODULE_LIBS ?= -Wl,--start-group -llibinit -lautoinit -lamiga -laros -lgcc -Wl,-
 
 .PHONY: all clean
 
-all: $(OUT)/edgesnap.library $(OUT)/EdgeSnap $(OUT)/EdgeSnapPrefs
+all: $(OUT)/edgesnap.library $(OUT)/EdgeSnap $(OUT)/EdgeSnapPrefs $(OUT)/esnaptest
 
 # After linking: drop .got (the loader does not want it) and stamp the
 # ELF OS/ABI byte so AROS recognises its own binary. Both from the
@@ -100,6 +100,11 @@ $(OUT)/edgesnap.library: $(GEN)/edgesnap_start.c $(LIB_SRC)
 
 $(OUT)/EdgeSnap: $(CX_SRC) $(GEN)/edgesnap_start.c
 	$(call aros-link,-I"$(GEN)/include",$(CX_SRC))
+
+# The worked example of a second client: the same calls a tiler or a
+# shell command would make, through the generated headers.
+$(OUT)/esnaptest: tools/esnaptest.c $(GEN)/edgesnap_start.c
+	$(call aros-link,-I"$(GEN)/include",tools/esnaptest.c)
 
 # The varargs MUI_NewObject/MUI_MakeObject are not in muimaster.library
 # itself on AROS: they are link-time wrappers in libmui.a.

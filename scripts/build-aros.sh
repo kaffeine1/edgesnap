@@ -32,7 +32,7 @@ mkdir -p "$ROOT/include/aros"
 scp -q -r -i "$KEY" "$HOST:$WS/build/aros-x86_64/gen/include/." "$ROOT/include/aros/"
 cp "$ROOT/build/aros-x86_64/gen/edgesnap_lib.fd" "$ROOT/include/aros/" 2>/dev/null || \
     scp -q -i "$KEY" "$HOST:$WS/build/aros-x86_64/gen/edgesnap_lib.fd" "$ROOT/include/aros/"
-for b in edgesnap.library EdgeSnap EdgeSnapPrefs; do
+for b in edgesnap.library EdgeSnap EdgeSnapPrefs esnaptest; do
     scp -q -i "$KEY" "$HOST:$WS/build/aros-x86_64/$b" "$ROOT/build/aros-x86_64/$b"
     file "$ROOT/build/aros-x86_64/$b" | grep -q "AROS Research Operating System" \
         || { echo "ERROR: $b is not an AROS binary" >&2; exit 1; }
