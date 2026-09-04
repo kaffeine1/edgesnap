@@ -98,6 +98,7 @@
  * it a second time takes it away.
  */
 #define ES_PREVIEW_XOR 1
+static void spike_pf_drop_now(void);    /* from the input handler */
 #else
 #define ES_PREVIEW_WINDOWS 1
 #endif
@@ -272,6 +273,15 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
     if (ie->ie_Code == IECODE_LBUTTON) {
         g_shared.presses++;
     } else if (ie->ie_Code == (IECODE_LBUTTON | IECODE_UP_PREFIX)) {
+#ifdef ES_PREVIEW_XOR
+        /*
+         * Ahead of Intuition, which sits lower in the chain and moves
+         * the window on this very event: a frame taken down after that
+         * inverts pixels the move has just repainted. Nothing here but
+         * the four rectangle fills Intuition does from this context.
+         */
+        spike_pf_drop_now();
+#endif
         g_shared.releases++;
     } else if (ie->ie_Code == IECODE_NOBUTTON) {
         g_shared.moves++;
@@ -864,7 +874,7 @@ static void spike_pf_hide(void)
         return;
     }
 #ifdef ES_PREVIEW_XOR
-    spike_pf_paint();          /* the second inversion takes it away */
+    spike_pf_drop_now();       /* the second inversion takes it away */
     (void)i;
 #else
     for (i = 0; i < g_pf.strips; i++) {
@@ -876,9 +886,29 @@ static void spike_pf_hide(void)
             g_pf.saved[i] = NULL;
         }
     }
-#endif
     g_pf.drawn = 0;
+#endif
 }
+
+#ifdef ES_PREVIEW_XOR
+/*
+ * Take the XOR frame down, from whichever context asks first: the
+ * engine task at the end of a drag, or the input handler on the
+ * release event, which on AROS comes before Intuition moves the
+ * window. Forbid keeps the two from interleaving: the handler runs in
+ * input.device's task, and a task cannot be switched to while another
+ * is forbidden. The flag and the drawing change together.
+ */
+static void spike_pf_drop_now(void)
+{
+    Forbid();
+    if (g_pf.drawn && g_pf.scr != NULL) {
+        spike_pf_paint();
+        g_pf.drawn = 0;
+    }
+    Permit();
+}
+#endif
 
 /*
  * Forget the saved pixels instead of restoring them. Used when the
@@ -969,11 +999,15 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
                    g_pf.saved[i], g_pf.strip[i].w * ES_PF_BPP,
                    g_pf.strip[i].w, g_pf.strip[i].h);
     }
-#else
-    (void)i;
-#endif
     g_pf.drawn = 1;
     spike_pf_paint();
+#else
+    (void)i;
+    Forbid();
+    g_pf.drawn = 1;
+    spike_pf_paint();
+    Permit();
+#endif
 }
 #endif /* ES_PREVIEW_PIXELS */
 
