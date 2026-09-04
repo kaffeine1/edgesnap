@@ -76,11 +76,12 @@ first gesture is the drag.
   2026-08-11) and real MorphOS hardware (2026-08-26): drag detection,
   snapping and the outline preview all work, including the
   MorphOS-specific CxCustom gate.
-- **AROS x86_64 (0.3, in progress):** the commodity with the core
-  linked statically and the preferences on Zune run on AROS One under
-  emulation (2026-09-04): drag and hotkey snapping, the preview frame,
-  the seams. No shared library on AROS yet, and not tried on real
-  hardware yet.
+- **AROS x86_64 (0.3, in progress):** `edgesnap.library` (generated
+  from `library/aros/edgesnap.conf` with AROS's genmodule), the
+  commodity as its client and the preferences on Zune run on AROS One
+  under emulation (2026-09-05): drag and hotkey snapping, the preview
+  frame, the seams. Testers on real hardware and VirtualBox have the
+  preview; the client headers are in `include/aros/`.
 - **Phase 1 (portable core): done.** The validated spike behavior lives
   as a portable, host-tested core: `core/engine.c` (drag/snap state
   machine), `core/registry.c` (stale-resistant snap registry + restore),

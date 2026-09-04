@@ -767,11 +767,18 @@ AROS binary cross-built on the Mac links and then dies before `main`
 tester on a real installation, or it degrades in silence like every
 lane nobody runs.
 
-**Where it stands (2026-09-04).** Stages 1 and 2 are done and run on
-AROS One x86_64 under emulation: snapping from the hotkeys and from a
-drag, the preview frame, the seams with their handle, the preferences
-on Zune. Stage 3 is open. What the lane taught, and most of it turned
-out to be portable rather than AROS-specific:
+**Where it stands (2026-09-05).** All three stages run on AROS One
+x86_64 under emulation: snapping from the hotkeys and from a drag, the
+preview frame, the seams with their handle, the preferences on Zune,
+and since 2026-09-05 a real `edgesnap.library` (2.4, the same vectors
+in the same order as the MorphOS `.fd`) with the commodity as its
+client. The AROS library is generated from `library/aros/edgesnap.conf`
+by AROS's own genmodule: the node, the jump table, the `.fd` and the
+client headers under `include/aros/` all come from that one list of
+vectors, and only the vector bodies are written by hand. First
+feedback from real hardware and from VirtualBox arrived the same week
+(see the preview frame below). What the lane taught, and most of it
+turned out to be portable rather than AROS-specific:
 
 - **A drag is evidence, not a moved window.** AROS drags a window as an
   outline; the window box does not change until the button is
