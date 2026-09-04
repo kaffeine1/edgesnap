@@ -93,11 +93,27 @@
  * AROS drags a window as an outline drawn in COMPLEMENT mode on the
  * screen (rom/intuition/windowclasses.c), unless IControl's opaque
  * move is on. A frame painted in a solid colour and that outline
- * erase each other wherever they cross; a frame drawn in COMPLEMENT
- * composes with it in any order, and needs no saved pixels: drawing
- * it a second time takes it away.
+ * erase each other wherever they cross. So the frame is an XOR too,
+ * and composes with the outline in any order, but the mask is made
+ * per pixel as "what is there" XOR "the accent": the first pass turns
+ * every pixel of the strips into the accent colour, the second pass
+ * with the same mask turns it back. The pixels are read and written
+ * through cybergraphics, in the CGX argument order: destination
+ * first, the RastPort in the middle, the format last. Reads on AROS
+ * go through the software cursor layer (rom/graphics/fakegfxhidd.c),
+ * so the mask never contains the pointer.
  */
 #define ES_PREVIEW_XOR 1
+#include <cybergraphx/cybergraphics.h>
+#include <proto/cybergraphics.h>
+struct Library *CyberGfxBase;
+#define ES_PF_FORMAT RECTFMT_ARGB
+#define ES_PF_READ(rp, x, y, buf, mod, w, h) \
+    ReadPixelArray((buf), 0, 0, (UWORD)(mod), (rp), (UWORD)(x), (UWORD)(y), \
+                   (UWORD)(w), (UWORD)(h), ES_PF_FORMAT)
+#define ES_PF_WRITE(buf, mod, rp, x, y, w, h) \
+    WritePixelArray((buf), 0, 0, (UWORD)(mod), (rp), (UWORD)(x), (UWORD)(y), \
+                    (UWORD)(w), (UWORD)(h), ES_PF_FORMAT)
 static void spike_pf_drop_now(void);    /* from the input handler */
 #else
 #define ES_PREVIEW_WINDOWS 1
@@ -803,7 +819,9 @@ static struct PreviewFrame {
     LONG pen;
     int pen_ok;
     struct ColorMap *cm;
-    UBYTE *saved[4];         /* the pixels each strip covered */
+    UBYTE *saved[4];         /* the pixels each strip covered; XOR: scratch */
+    UBYTE *mask[4];          /* XOR: per pixel, what was there XOR accent */
+    UBYTE accent[4];         /* XOR: the accent as the bytes of an ARGB pixel */
     ESRect strip[4];
     int strips;
 } g_pf;
@@ -828,32 +846,83 @@ static void spike_pf_strips(const ESRect *r, ESRect *strip, int *count)
     *count = (strip[2].h > 0) ? 4 : 2;
 }
 
-/*
- * Paint the four strips. With the pixel technique they are filled in
- * the accent colour, and the fill is repeated on every engine step: a
- * solid fill can be repeated, which is the whole reason for not using
- * COMPLEMENT there. With the XOR technique the strips are inverted
- * ONCE per show and once per hide; the strips never overlap, so no
- * pixel is inverted twice in one pass.
- */
+/* Free the strip buffers. Task context only: the input handler may
+ * take the frame down, but it leaves the buffers to the task. */
+static void spike_pf_free_buffers(void)
+{
+    int i;
+
+    for (i = 0; i < 4; i++) {
+        if (g_pf.saved[i] != NULL) {
+            FreeVec(g_pf.saved[i]);
+            g_pf.saved[i] = NULL;
+        }
+        if (g_pf.mask[i] != NULL) {
+            FreeVec(g_pf.mask[i]);
+            g_pf.mask[i] = NULL;
+        }
+    }
+}
+
+#ifndef ES_PREVIEW_XOR
+/* Paint the four strips in the accent colour. Called again on every
+ * engine step: a solid fill can be repeated, which is the whole reason
+ * for not using COMPLEMENT here. */
 static void spike_pf_paint(void)
 {
     struct RastPort rp;
     int i;
 
     rp = g_pf.scr->RastPort;   /* a copy: leave the screen's own alone */
-#ifdef ES_PREVIEW_XOR
-    SetDrMd(&rp, COMPLEMENT);
-#else
     SetAPen(&rp, (ULONG)g_pf.pen);
     SetDrMd(&rp, JAM1);
-#endif
     for (i = 0; i < g_pf.strips; i++) {
         RectFill(&rp, g_pf.strip[i].x, g_pf.strip[i].y,
                  g_pf.strip[i].x + g_pf.strip[i].w - 1,
                  g_pf.strip[i].y + g_pf.strip[i].h - 1);
     }
 }
+#else
+/* The accent colour as the four bytes of an ARGB pixel. */
+static void spike_pf_accent_bytes(void)
+{
+    ULONG rgb[3];
+
+    if (g_pf.scr == NULL) {
+        return;
+    }
+    GetRGB32(g_pf.scr->ViewPort.ColorMap, (ULONG)g_pf.pen, 1, rgb);
+    g_pf.accent[0] = 0xFF;
+    g_pf.accent[1] = (UBYTE)(rgb[0] >> 24);
+    g_pf.accent[2] = (UBYTE)(rgb[1] >> 24);
+    g_pf.accent[3] = (UBYTE)(rgb[2] >> 24);
+}
+
+/*
+ * One pass over a strip: read what is there, XOR it with the strip's
+ * mask, write it back. The first pass paints the accent, the second
+ * one restores. Called under Forbid, from the task or from the input
+ * handler; nothing in here allocates or waits.
+ */
+static void spike_pf_xor_strip(int i)
+{
+    const ESRect *st = &g_pf.strip[i];
+    UBYTE *p = g_pf.saved[i];
+    const UBYTE *m = g_pf.mask[i];
+    ULONG n = (ULONG)(st->w * st->h * ES_PF_BPP), k;
+
+    if (p == NULL || m == NULL) {
+        return;
+    }
+    ES_PF_READ(&g_pf.scr->RastPort, st->x, st->y, p, st->w * ES_PF_BPP,
+               st->w, st->h);
+    for (k = 0; k < n; k++) {
+        p[k] ^= m[k];
+    }
+    ES_PF_WRITE(p, st->w * ES_PF_BPP, &g_pf.scr->RastPort, st->x, st->y,
+                st->w, st->h);
+}
+#endif
 
 /* Repair the frame (pixel technique only: an XOR frame is never
  * painted over by the outline drag, the two compose). */
@@ -868,15 +937,15 @@ static void spike_pf_fill(void)
 
 static void spike_pf_hide(void)
 {
+#ifdef ES_PREVIEW_XOR
+    spike_pf_drop_now();       /* the second pass takes it away */
+    spike_pf_free_buffers();   /* task context: the handler leaves them */
+#else
     int i;
 
     if (!g_pf.drawn) {
         return;
     }
-#ifdef ES_PREVIEW_XOR
-    spike_pf_drop_now();       /* the second inversion takes it away */
-    (void)i;
-#else
     for (i = 0; i < g_pf.strips; i++) {
         if (g_pf.saved[i] != NULL) {
             ES_PF_WRITE(g_pf.saved[i], g_pf.strip[i].w * ES_PF_BPP,
@@ -901,9 +970,13 @@ static void spike_pf_hide(void)
  */
 static void spike_pf_drop_now(void)
 {
+    int i;
+
     Forbid();
     if (g_pf.drawn && g_pf.scr != NULL) {
-        spike_pf_paint();
+        for (i = 0; i < g_pf.strips; i++) {
+            spike_pf_xor_strip(i);
+        }
         g_pf.drawn = 0;
     }
     Permit();
@@ -917,16 +990,9 @@ static void spike_pf_drop_now(void)
  */
 static void spike_pf_discard(void)
 {
-    int i;
-
-    for (i = 0; i < g_pf.strips; i++) {
-        if (g_pf.saved[i] != NULL) {
-            FreeVec(g_pf.saved[i]);
-            g_pf.saved[i] = NULL;
-        }
-    }
-    g_pf.strips = 0;
     g_pf.drawn = 0;
+    g_pf.strips = 0;
+    spike_pf_free_buffers();
 }
 
 /*
@@ -941,6 +1007,9 @@ static void spike_screen_changed(int replaced)
         g_pf.scr = g_accent.scr;
     }
     g_pf.pen = g_accent.pen;
+#ifdef ES_PREVIEW_XOR
+    spike_pf_accent_bytes();
+#endif
 }
 
 /*
@@ -955,6 +1024,9 @@ static int spike_pf_init(void)
 {
     g_pf.scr = g_accent.scr;      /* the screen the accent was taken on */
     g_pf.pen = g_accent.pen;
+#ifdef ES_PREVIEW_XOR
+    spike_pf_accent_bytes();
+#endif
     return g_pf.scr != NULL;
 }
 
@@ -1002,10 +1074,48 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
     g_pf.drawn = 1;
     spike_pf_paint();
 #else
-    (void)i;
+    spike_pf_free_buffers();   /* a frame the handler took down left them */
+    for (i = 0; i < g_pf.strips; i++) {
+        ULONG bytes = (ULONG)(g_pf.strip[i].w * g_pf.strip[i].h * ES_PF_BPP);
+
+        g_pf.saved[i] = (UBYTE *)AllocVec(bytes, MEMF_ANY);
+        g_pf.mask[i] = (UBYTE *)AllocVec(bytes, MEMF_ANY);
+        if (g_pf.saved[i] == NULL || g_pf.mask[i] == NULL) {
+            if (g_pf.saved[i] != NULL) {
+                FreeVec(g_pf.saved[i]);
+                g_pf.saved[i] = NULL;
+            }
+            if (g_pf.mask[i] != NULL) {
+                FreeVec(g_pf.mask[i]);
+                g_pf.mask[i] = NULL;
+            }
+        }
+    }
+    /*
+     * The mask and the first pass in ONE forbidden stretch, all four
+     * strips: a release arriving in the middle would find the frame
+     * either not yet up or fully up, never half of it.
+     */
     Forbid();
+    for (i = 0; i < g_pf.strips; i++) {
+        const ESRect *st = &g_pf.strip[i];
+        UBYTE *p = g_pf.saved[i];
+        UBYTE *m = g_pf.mask[i];
+        ULONG n = (ULONG)(st->w * st->h * ES_PF_BPP), k;
+
+        if (p == NULL || m == NULL) {
+            continue;          /* that strip simply will not be drawn */
+        }
+        ES_PF_READ(&g_pf.scr->RastPort, st->x, st->y, p, st->w * ES_PF_BPP,
+                   st->w, st->h);
+        for (k = 0; k < n; k++) {
+            m[k] = p[k] ^ g_pf.accent[k & 3];
+            p[k] ^= m[k];      /* which is the accent */
+        }
+        ES_PF_WRITE(p, st->w * ES_PF_BPP, &g_pf.scr->RastPort, st->x, st->y,
+                    st->w, st->h);
+    }
     g_pf.drawn = 1;
-    spike_pf_paint();
     Permit();
 #endif
 }
@@ -2160,6 +2270,12 @@ static void spike_handle_hotkey(LONG id)
 
 static void spike_close_libs(void)
 {
+#ifdef ES_PREVIEW_XOR
+    if (CyberGfxBase != NULL) {
+        CloseLibrary(CyberGfxBase);
+        CyberGfxBase = NULL;
+    }
+#endif
 #ifdef __amigaos4__
     if (ICommodities != NULL) {
         DropInterface((struct Interface *)ICommodities);
@@ -2192,6 +2308,12 @@ static int spike_open_libs(void)
 {
     IntuitionBase = (void *)OpenLibrary("intuition.library", 36);
     GfxBase = (void *)OpenLibrary("graphics.library", 36);
+#ifdef ES_PREVIEW_XOR
+    CyberGfxBase = OpenLibrary("cybergraphics.library", 41);
+    if (CyberGfxBase == NULL) {
+        return 0;
+    }
+#endif
     CxBase = OpenLibrary("commodities.library", 37);
     if (IntuitionBase == NULL || GfxBase == NULL || CxBase == NULL) {
         spike_close_libs();
