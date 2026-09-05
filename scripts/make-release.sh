@@ -152,9 +152,9 @@ cp -R "$STAGE" "$AROS" && rm -rf "$AROS/EdgeSnap/os4" "$AROS/EdgeSnap/mos"
 # The AROS archive carries icons in AROS's own PNG format in place of
 # the classic Workbench ones, which AROS's icon.library reads badly:
 # one sent the Installer into an illegal access, another had Wanderer
-# open the Install script as a document. Drawn by
-# scripts/make-aros-icons.py until an icon set in the AROS style
-# replaces them.
+# open the Install script as a document. Made by
+# scripts/make-aros-icons.py: the commodity and the prefs icons from a
+# contributed AROS One style set, the rest drawn until the set covers them.
 cp "$ROOT/assets/aros/EdgeSnapDrawer.info"   "$AROS/EdgeSnap.info"
 cp "$ROOT/assets/aros/Install.info"          "$AROS/EdgeSnap/Install.info"
 cp "$ROOT/assets/aros/EdgeSnap.guide.info"   "$AROS/EdgeSnap/EdgeSnap.guide.info"

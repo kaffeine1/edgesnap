@@ -8,8 +8,13 @@
 # icons of the package are read badly by AROS's icon.library (one sent
 # the Installer into an illegal access, another had Wanderer open the
 # Install script as a document instead of running the Installer), so
-# the AROS archive gets these instead. Drawn here, plainly, until an
-# icon set in the AROS style replaces them.
+# the AROS archive gets these instead. The commodity and the
+# preferences icons come from a contributed set in the AROS One style
+# (assets/aros/src/*.png, a dual PNG: the selected image follows the
+# first one's IEND, which is where icon.library looks for it); they
+# get the icOn chunk here, after IHDR, with the rest of the image kept
+# byte for byte. The other four are drawn, plainly, until the set
+# covers them too.
 #
 #   python3 scripts/make-aros-icons.py     -> assets/aros/*.info
 #
@@ -18,10 +23,12 @@
 # 32-bit value for the numeric ones or a NUL-terminated string.
 import os
 import struct
+import zlib
 from PIL import Image, ImageDraw, PngImagePlugin
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "assets", "aros")
+SRC = os.path.join(OUT, "src")
 
 ATTR_STACKSIZE = 0x80001009
 ATTR_DEFAULTTOOL = 0x8000100A
@@ -124,21 +131,60 @@ def save(name, im, data):
     info.add(b"icOn", data)
     path = os.path.join(OUT, name)
     im.save(path, "PNG", pnginfo=info)
-    print("%-24s %5d bytes" % (name, os.path.getsize(path)))
+    print("%-24s %5d bytes, drawn" % (name, os.path.getsize(path)))
+
+
+def contributed(name, data):
+    """The contributed icon with our icOn chunk spliced in after IHDR.
+    Any icOn chunk already there is dropped; everything else, the
+    second image included, is copied untouched."""
+    path = os.path.join(SRC, name)
+    if not os.path.exists(path):
+        return None
+    raw = open(path, "rb").read()
+    sig = b"\x89PNG\r\n\x1a\n"
+    if raw[:8] != sig:
+        raise SystemExit("%s is not a PNG" % path)
+    out = sig
+    pos = 8
+    while pos + 8 <= len(raw):
+        ln, ty = struct.unpack(">I4s", raw[pos:pos + 8])
+        piece = raw[pos:pos + 12 + ln]
+        pos += 12 + ln
+        if ty == b"icOn":
+            continue
+        out += piece
+        if ty == b"IHDR":
+            out += struct.pack(">I", len(data)) + b"icOn" + data
+            out += struct.pack(">I", zlib.crc32(b"icOn" + data) & 0xffffffff)
+        if ty == b"IEND":
+            break
+    return out + raw[pos:]
+
+
+def emit(name, draw, data):
+    raw = contributed(name.replace(".info", ".png"), data)
+    if raw is None:
+        save(name, draw(), data)
+        return
+    path = os.path.join(OUT, name)
+    with open(path, "wb") as f:
+        f.write(raw)
+    print("%-24s %5d bytes, contributed" % (name, os.path.getsize(path)))
 
 
 def main():
     os.makedirs(OUT, exist_ok=True)
-    save("EdgeSnap.info", icon_commodity(),
+    emit("EdgeSnap.info", icon_commodity,
          chunk(WBTOOL, stack=65536, tooltypes=("DONOTWAIT",)))
-    save("EdgeSnapPrefs.info", icon_prefs(), chunk(WBTOOL, stack=65536))
-    save("Install.info", icon_install(),
+    emit("EdgeSnapPrefs.info", icon_prefs, chunk(WBTOOL, stack=65536))
+    emit("Install.info", icon_install,
          chunk(WBPROJECT, default_tool="Installer", tooltypes=("APPNAME=EdgeSnap",)))
-    save("EdgeSnap.guide.info", icon_doc(5),
+    emit("EdgeSnap.guide.info", lambda: icon_doc(5),
          chunk(WBPROJECT, default_tool="SYS:Utilities/MultiView"))
-    save("EdgeSnap.readme.info", icon_doc(3),
+    emit("EdgeSnap.readme.info", lambda: icon_doc(3),
          chunk(WBPROJECT, default_tool="SYS:Utilities/MultiView"))
-    save("EdgeSnapDrawer.info", icon_drawer(),
+    emit("EdgeSnapDrawer.info", icon_drawer,
          chunk(WBDRAWER, drawer=(60, 40, 480, 300)))
 
 
