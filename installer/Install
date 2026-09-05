@@ -71,10 +71,11 @@
   (cat "EdgeSnap " #app-version " is installed.\n"
        "by Michele Dipace <michele.dipace@kaffeine.net>\n\n"
        "Where it went:\n"
-       "    LIBS:edgesnap.library\n"
-       "    C:EdgeSnap\n"
-       "    SYS:Prefs/EdgeSnap\n"
-       "    one line in S:User-Startup\n"))
+       "    LIBS:edgesnap.library\n"))
+; the commodity's own place and how it starts differ on AROS: see
+; #cmd-path and #startup-line, put together at the exit below
+(set #done-mid
+  (cat "    SYS:Prefs/EdgeSnap\n"))
 
 ; The line that starts the commodity is named in here, and it differs
 ; on AROS, so this text is put together at the end, once the system is
@@ -122,9 +123,15 @@
     (choices "AmigaOS 4.x" "MorphOS" "AROS x86_64")
     (default #detected)))
 
-; The line that starts the commodity. AROS's Run opens a console for
-; the input unless that is redirected too, so both go to NIL: there.
+; Where the commodity lives and how it starts. On AmigaOS 4 and MorphOS
+; it goes to C: with one line in S:User-Startup. On AROS a Run from
+; S:User-Startup opens a console window for the new process and keeps
+; it on screen for the whole session, whatever the redirections, so
+; there the commodity goes to SYS:WBStartup with its icon, and Wanderer
+; starts it without a console, as it starts every commodity there.
 (set #startup-line "Run >NIL: C:EdgeSnap")
+(set #cmd-dest "C:")
+(set #cmd-path "C:EdgeSnap")
 (if (= #system 0)
     (
       (set #libsrc "os4/edgesnap.library")
@@ -142,7 +149,11 @@
       (set #libsrc "aros64/edgesnap.library")
       (set #cmdsrc "aros64/EdgeSnap")
       (set #prefssrc "aros64/EdgeSnapPrefs")
-      (set #startup-line "Run >NIL: <NIL: C:EdgeSnap")
+      (set #cmd-dest "SYS:WBStartup")
+      (set #cmd-path "SYS:WBStartup/EdgeSnap")
+      (if (exists "C:WBRun" (noreq))
+          (set #startup-line "WBRun SYS:WBStartup/EdgeSnap")
+          (set #startup-line "Run >NIL: <NIL: SYS:WBStartup/EdgeSnap"))
     ))
 
 (complete 20)
@@ -169,17 +180,27 @@
 (complete 50)
 
 ; --- the commodity --------------------------------------------------
-(if (exists "C:EdgeSnap" (noreq))
-    (protect "C:EdgeSnap" "+rwed"))
+(if (exists #cmd-path (noreq))
+    (protect #cmd-path "+rwed"))
 
 (copyfiles
   (prompt #cmd-prompt)
   (help #cmd-help)
   (source #cmdsrc)
-  (dest "C:")
+  (dest #cmd-dest)
   (confirm))
 
-(protect "C:EdgeSnap" "+rwed")
+(protect #cmd-path "+rwed")
+; On AROS the icon beside it, as a plain file (see the preferences for
+; why not (infos)): it is what makes Wanderer start it from WBStartup.
+(if (= #system 2)
+    (if (exists (cat #cmdsrc ".info") (noreq))
+        (
+          (copyfiles
+            (source (cat #cmdsrc ".info"))
+            (dest #cmd-dest))
+          (protect (cat #cmd-path ".info") "+rwed")
+        )))
 
 (complete 60)
 
@@ -230,10 +251,18 @@
 (complete 70)
 
 ; --- start it with the system ---------------------------------------
-(startup #app
-  (prompt #startup-prompt)
-  (help #startup-help)
-  (command (cat #startup-line "\n")))
+(if (= #system 2)
+    (startup #app
+      (prompt (cat "On AROS EdgeSnap starts from SYS:WBStartup, so no line is "
+                   "needed in S:User-Startup. A note is left there in its "
+                   "place, which also retires the line of an earlier "
+                   "installation."))
+      (help #startup-help)
+      (command "; EdgeSnap starts from SYS:WBStartup\n"))
+    (startup #app
+      (prompt #startup-prompt)
+      (help #startup-help)
+      (command (cat #startup-line "\n"))))
 
 (complete 90)
 
@@ -307,7 +336,7 @@
 ; Installer has no (reboot) to offer them instead.
 (if (= #update 1)
     (
-      (run "C:EdgeSnap QUIT")
+      (run (cat #cmd-path " QUIT"))
       (run "C:Wait >NIL: 2")
     ))
 
@@ -329,6 +358,11 @@
 ; standard one would add that EdgeSnap "is in Work:", which is not
 ; where any of it went.
 (exit (cat #done-head
+           "    " #cmd-path "\n"
+           #done-mid
+           (if (= #system 2)
+               "    (started by Wanderer at every boot)\n"
+               "    one line in S:User-Startup\n")
            "    " (tackon #guide-dest "EdgeSnap.guide") "\n\n"
            "Nothing else was installed into the drawer you ran this "
            "from, so it can be deleted.\n"

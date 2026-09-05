@@ -332,6 +332,26 @@ static int esb_snappable(const struct ESBSnap *s)
  * after, so no step covers or uncovers more than it must. The other
  * systems take the one call they have always taken.
  */
+#ifdef __AROS__
+/*
+ * Wait until the window has repainted what a layer operation left it
+ * to repaint: Intuition raises LAYERREFRESH on the layer when damage
+ * arrives and the window's owner clears it with EndRefresh(). Capped,
+ * because a console never clears it, having never repainted.
+ */
+static void esb_wait_repaint(struct Window *win, int cap_ticks)
+{
+    int i;
+
+    for (i = 0; i < cap_ticks; i++) {
+        if (win->WLayer == NULL || (win->WLayer->Flags & LAYERREFRESH) == 0) {
+            return;
+        }
+        Delay(1);
+    }
+}
+#endif
+
 static void esb_change_box(struct Window *win, const ESRect *from,
                            const ESRect *to, int may_raise)
 {
@@ -355,7 +375,8 @@ static void esb_change_box(struct Window *win, const ESRect *from,
     if (moved && may_raise && win->WLayer != NULL &&
         win->WLayer->front != NULL) {
         WindowToFront(win);
-        Delay(10);
+        Delay(2);                  /* the raise is an action: let it land */
+        esb_wait_repaint(win, 25);
     }
     if (moved && sized) {
         long before = (long)from->w * from->h;
@@ -377,6 +398,8 @@ static void esb_change_box(struct Window *win, const ESRect *from,
         } else {
             ChangeWindowBox(win, to->x, to->y, from->w, from->h);
         }
+        Delay(2);
+        esb_wait_repaint(win, 25); /* whatever the first step uncovered */
     }
 #else
     (void)from;
