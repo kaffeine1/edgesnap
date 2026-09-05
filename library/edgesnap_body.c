@@ -1193,3 +1193,249 @@ LONG esb_exclude_window(struct Window *win, BOOL exclude)
     esb_exclusions_sweep();
     return esb_exclude_window_inner(win, exclude);
 }
+
+/* ------------------------------------------ 2.5: windows and layouts */
+
+/*
+ * The generation is a hash of every window's identity and geometry on
+ * every screen, taken when asked. The library sees no open or close,
+ * so there is nothing to count between calls; what it can promise is
+ * that the number moves when the picture has.
+ */
+static ULONG g_generation;
+static ULONG g_gen_hash;
+static int g_gen_seen;
+
+static ULONG esb_hash_mix(ULONG h, ULONG v)
+{
+    return (h ^ v) * 16777619UL;
+}
+
+/* Under LockIBase only. */
+static ULONG esb_windows_hash(void)
+{
+    ULONG h = 2166136261UL;
+    struct Screen *scr;
+    struct Window *w;
+
+    for (scr = ESB_IBASE->FirstScreen; scr != NULL; scr = scr->NextScreen) {
+        h = esb_hash_mix(h, (ULONG)(IPTR)scr);
+        for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+            h = esb_hash_mix(h, (ULONG)(IPTR)w);
+            h = esb_hash_mix(h, (ULONG)(UWORD)w->LeftEdge |
+                                ((ULONG)(UWORD)w->TopEdge << 16));
+            h = esb_hash_mix(h, (ULONG)(UWORD)w->Width |
+                                ((ULONG)(UWORD)w->Height << 16));
+        }
+    }
+    return h;
+}
+
+ULONG esb_query_generation(struct Screen *scr)
+{
+    ULONG ilock, h, g;
+
+    (void)scr;                 /* every screen counts, see the header */
+    ilock = LockIBase(0);
+    h = esb_windows_hash();
+    UnlockIBase(ilock);
+
+    ObtainSemaphore(&g_sem);
+    if (!g_gen_seen || h != g_gen_hash) {
+        g_gen_hash = h;
+        g_gen_seen = 1;
+        g_generation++;
+    }
+    g = g_generation;
+    ReleaseSemaphore(&g_sem);
+    return g;
+}
+
+/* Under LockIBase only: is this window what the panel scan would take
+ * for a dock? The same test the usable area applies. */
+static int esb_looks_like_panel(struct Screen *scr, struct Window *w)
+{
+    ESRect scrrect, box;
+
+    if ((w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET | WFLG_BACKDROP)) != 0) {
+        return 0;
+    }
+    scrrect.x = 0;
+    scrrect.y = 0;
+    scrrect.w = scr->Width;
+    scrrect.h = scr->Height;
+    box.x = w->LeftEdge;
+    box.y = w->TopEdge;
+    box.w = w->Width;
+    box.h = w->Height;
+    return es_panel_classify(&scrrect, &box) != 0;
+}
+
+LONG esb_query_windows(struct Screen *scr, struct ESnapWindowInfo *buf,
+                       ULONG count, ULONG *needed)
+{
+    ULONG ilock, n = 0;
+    struct Window *w, *active;
+
+    if (needed == NULL || (buf == NULL && count != 0)) {
+        return ES_ERR_BAD_ARGS;
+    }
+    ObtainSemaphore(&g_sem);
+    ilock = LockIBase(0);
+    if (scr == NULL) {
+        scr = ESB_IBASE->FirstScreen;
+    }
+    active = ESB_IBASE->ActiveWindow;
+    for (w = (scr != NULL) ? scr->FirstWindow : NULL; w != NULL;
+         w = w->NextWindow) {
+        if (n < count) {
+            struct ESnapWindowInfo *o = &buf[n];
+            struct ESBSnap s;
+            int zone, i;
+
+            esb_fill(w, scr, &s);
+            o->window = w;
+            o->rect.x = s.box.x;
+            o->rect.y = s.box.y;
+            o->rect.w = s.box.w;
+            o->rect.h = s.box.h;
+            o->flags = 0;
+            if (esb_snappable(&s)) {
+                o->flags |= ESWI_SNAPPABLE;
+            }
+            if ((s.flags & WFLG_SIZEGADGET) == 0) {
+                o->flags |= ESWI_FIXED_SIZE;
+            }
+            if (s.flags & WFLG_BORDERLESS) {
+                o->flags |= ESWI_BORDERLESS;
+            }
+            if (s.flags & WFLG_BACKDROP) {
+                o->flags |= ESWI_BACKDROP;
+            }
+            if (esb_is_excluded(w)) {
+                o->flags |= ESWI_EXCLUDED;
+            }
+            if (esb_looks_like_panel(scr, w)) {
+                o->flags |= ESWI_PANEL;
+            }
+            if (w == active) {
+                o->flags |= ESWI_ACTIVE;
+            }
+            zone = es_registry_zone(&g_registry, w);
+            if (zone != ES_ZONE_NONE) {
+                o->flags |= ESWI_SNAPPED;
+            }
+            o->zone = (ULONG)zone;
+            o->minWidth = s.min_w;
+            o->minHeight = s.min_h;
+            o->maxWidth = s.max_w;
+            o->maxHeight = s.max_h;
+            o->serial = 0;
+            for (i = 0; i < 3; i++) {
+                o->reserved[i] = 0;
+            }
+        }
+        n++;
+    }
+    UnlockIBase(ilock);
+    ReleaseSemaphore(&g_sem);
+    *needed = n;
+    return ES_OK;
+}
+
+/* g_sem held. The one placement path PlaceWindow and PlaceWindowsA
+ * share: sample, refuse what SnapWindow refuses, fit, record, move. */
+static LONG esb_place_locked(struct Window *win, const ESRect *want,
+                             ULONG flags)
+{
+    struct ESBSnap s;
+    ESRect r;
+    LONG rc;
+
+    if (!esb_sample(win, &s)) {
+        es_registry_forget(&g_registry, win);
+        return ES_ERR_STALE;
+    }
+    if (esb_is_excluded(win) || !esb_snappable(&s)) {
+        return ES_ERR_REJECTED;
+    }
+    es_fit_rect(want, &s.usable, s.min_w, s.min_h, s.max_w, s.max_h, &r);
+    if ((flags & ES_PF_NO_RESTORE) == 0) {
+        rc = es_registry_remember(&g_registry, win, &s.box, &r, ES_ZONE_RECT);
+        if (rc != ES_OK) {
+            return rc;
+        }
+    }
+    ChangeWindowBox(win, r.x, r.y, r.w, r.h);
+    return ES_OK;
+}
+
+#define ESB_PF_ALL (ES_PF_NO_RESTORE | ES_PF_KEEP_ZORDER)
+
+LONG esb_place_window(struct Window *win, const struct ESnapRect *rect,
+                      ULONG flags)
+{
+    ESRect want;
+    LONG rc;
+
+    if (win == NULL || rect == NULL || rect->w <= 0 || rect->h <= 0 ||
+        (flags & ~ESB_PF_ALL) != 0) {
+        return ES_ERR_BAD_ARGS;
+    }
+    want.x = rect->x;
+    want.y = rect->y;
+    want.w = rect->w;
+    want.h = rect->h;
+    ObtainSemaphore(&g_sem);
+    rc = esb_place_locked(win, &want, flags);
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
+LONG esb_place_windows(struct ESnapPlacement *list, ULONG count,
+                       ULONG flags)
+{
+    long delta[ES_PLACE_MAX];
+    int order[ES_PLACE_MAX];
+    ULONG i, k;
+
+    if (list == NULL || count == 0 || count > ES_PLACE_MAX ||
+        (flags & ~ESB_PF_ALL) != 0) {
+        return ES_ERR_BAD_ARGS;
+    }
+    ObtainSemaphore(&g_sem);
+    /* first pass: what each window is now, so the moves can be ordered */
+    for (i = 0; i < count; i++) {
+        struct ESBSnap s;
+
+        delta[i] = 0;
+        list[i].result = ES_OK;
+        if (list[i].window == NULL || list[i].rect.w <= 0 ||
+            list[i].rect.h <= 0) {
+            list[i].result = ES_ERR_BAD_ARGS;
+        } else if (!esb_sample(list[i].window, &s)) {
+            es_registry_forget(&g_registry, list[i].window);
+            list[i].result = ES_ERR_STALE;
+        } else {
+            delta[i] = (long)list[i].rect.w * (long)list[i].rect.h -
+                       (long)s.box.w * (long)s.box.h;
+        }
+    }
+    es_order_by_growth(delta, (int)count, order);
+    /* second pass: shrinking first, growing last */
+    for (k = 0; k < count; k++) {
+        ESRect want;
+
+        i = (ULONG)order[k];
+        if (list[i].result != ES_OK) {
+            continue;
+        }
+        want.x = list[i].rect.x;
+        want.y = list[i].rect.y;
+        want.w = list[i].rect.w;
+        want.h = list[i].rect.h;
+        list[i].result = esb_place_locked(list[i].window, &want, flags);
+    }
+    ReleaseSemaphore(&g_sem);
+    return ES_OK;
+}

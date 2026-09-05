@@ -107,4 +107,13 @@ void esb_debug_usable(struct Screen *scr, ESRect *usable, ESInsets *ins);
  */
 LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want);
 
+/* 2.5: the windows as the library sees them, and placement. */
+LONG esb_query_windows(struct Screen *scr, struct ESnapWindowInfo *buf,
+                       ULONG count, ULONG *needed);
+ULONG esb_query_generation(struct Screen *scr);
+LONG esb_place_window(struct Window *win, const struct ESnapRect *rect,
+                      ULONG flags);
+LONG esb_place_windows(struct ESnapPlacement *list, ULONG count,
+                       ULONG flags);
+
 #endif /* EDGESNAP_BODY_H */

@@ -99,4 +99,28 @@
         LONG, vertical, a0, LONG, line, a1, LONG, position, d0, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+/* --- appended for 2.5 --- */
+#define ESnap_QueryWindows(__p0, __p1, __p2, __p3) \
+    LP4(0x78, LONG, ESnap_QueryWindows, \
+        struct Screen *, __p0, a0, struct ESnapWindowInfo *, __p1, a1, \
+        ULONG, __p2, d0, ULONG *, __p3, a2, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
+#define ESnap_QueryGeneration(__p0) \
+    LP1(0x7e, ULONG, ESnap_QueryGeneration, \
+        struct Screen *, __p0, a0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
+#define ESnap_PlaceWindow(__p0, __p1, __p2) \
+    LP3(0x84, LONG, ESnap_PlaceWindow, \
+        struct Window *, __p0, a0, const struct ESnapRect *, __p1, a1, \
+        ULONG, __p2, d0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
+#define ESnap_PlaceWindowsA(__p0, __p1, __p2) \
+    LP3(0x8a, LONG, ESnap_PlaceWindowsA, \
+        struct ESnapPlacement *, __p0, a0, ULONG, __p1, d0, \
+        ULONG, __p2, d1, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */

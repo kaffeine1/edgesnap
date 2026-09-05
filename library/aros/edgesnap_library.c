@@ -249,3 +249,48 @@ AROS_LH3(LONG, ESnap_MoveDividerAt,
     return esb_move_divider_at(vertical, line, position);
     AROS_LIBFUNC_EXIT
 }
+
+/* --- appended for 2.5 --- */
+
+AROS_LH4(LONG, ESnap_QueryWindows,
+         AROS_LHA(struct Screen *, screen, A0),
+         AROS_LHA(struct ESnapWindowInfo *, buf, A1),
+         AROS_LHA(ULONG, count, D0),
+         AROS_LHA(ULONG *, needed, A2),
+         struct EdgeSnapBase *, EdgeSnapBase, 20, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_query_windows(screen, buf, count, needed);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH1(ULONG, ESnap_QueryGeneration,
+         AROS_LHA(struct Screen *, screen, A0),
+         struct EdgeSnapBase *, EdgeSnapBase, 21, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_query_generation(screen);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH3(LONG, ESnap_PlaceWindow,
+         AROS_LHA(struct Window *, win, A0),
+         AROS_LHA(const struct ESnapRect *, rect, A1),
+         AROS_LHA(ULONG, flags, D0),
+         struct EdgeSnapBase *, EdgeSnapBase, 22, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_place_window(win, rect, flags);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH3(LONG, ESnap_PlaceWindowsA,
+         AROS_LHA(struct ESnapPlacement *, list, A0),
+         AROS_LHA(ULONG, count, D0),
+         AROS_LHA(ULONG, flags, D1),
+         struct EdgeSnapBase *, EdgeSnapBase, 23, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_place_windows(list, count, flags);
+    AROS_LIBFUNC_EXIT
+}

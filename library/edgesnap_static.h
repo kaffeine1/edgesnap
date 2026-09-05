@@ -35,4 +35,9 @@
 #define ESnap_MoveDivider       esb_move_divider
 #define ESnap_MoveDividerAt     esb_move_divider_at
 
+#define ESnap_QueryWindows    esb_query_windows
+#define ESnap_QueryGeneration esb_query_generation
+#define ESnap_PlaceWindow     esb_place_window
+#define ESnap_PlaceWindowsA   esb_place_windows
+
 #endif /* EDGESNAP_STATIC_H */

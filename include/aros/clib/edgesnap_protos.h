@@ -149,6 +149,45 @@ AROS_LP3(LONG, ESnap_MoveDividerAt,
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP4(LONG, ESnap_QueryWindows,
+         AROS_LPA(struct Screen *, screen, A0),
+         AROS_LPA(struct ESnapWindowInfo *, buf, A1),
+         AROS_LPA(ULONG, count, D0),
+         AROS_LPA(ULONG *, needed, A2),
+         LIBBASETYPEPTR, EdgeSnapBase, 20, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP1(ULONG, ESnap_QueryGeneration,
+         AROS_LPA(struct Screen *, screen, A0),
+         LIBBASETYPEPTR, EdgeSnapBase, 21, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP3(LONG, ESnap_PlaceWindow,
+         AROS_LPA(struct Window *, win, A0),
+         AROS_LPA(const struct ESnapRect *, rect, A1),
+         AROS_LPA(ULONG, flags, D0),
+         LIBBASETYPEPTR, EdgeSnapBase, 22, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP3(LONG, ESnap_PlaceWindowsA,
+         AROS_LPA(struct ESnapPlacement *, list, A0),
+         AROS_LPA(ULONG, count, D0),
+         AROS_LPA(ULONG, flags, D1),
+         LIBBASETYPEPTR, EdgeSnapBase, 23, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* CLIB_EDGESNAP_PROTOS_H */

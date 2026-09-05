@@ -46,6 +46,23 @@ void es_fit_zone_rect(int zone, const ESRect *usable,
                       int min_w, int min_h, int max_w, int max_h,
                       ESRect *out);
 
+/*
+ * Fit an arbitrary rectangle to a window's size limits (2.5, the
+ * PlaceWindow path). A side that has to give or grow keeps the edge
+ * that touches the usable area, so a cell against the right edge stays
+ * against it; a rectangle touching neither edge keeps its origin.
+ */
+void es_fit_rect(const ESRect *want, const ESRect *usable,
+                 int min_w, int min_h, int max_w, int max_h, ESRect *out);
+
+/*
+ * Order placements so that windows which shrink go first and windows
+ * which grow go last: an overlap on screen is then transient at worst.
+ * delta[i] is the new area minus the old one; order[] receives the
+ * indices, stable for equal deltas.
+ */
+void es_order_by_growth(const long *delta, int n, int *order);
+
 /* Static human-readable name, for logs. */
 const char *es_zone_name(int zone);
 

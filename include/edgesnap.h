@@ -315,4 +315,95 @@ LONG ESnap_SetOptionsA(const struct TagItem *tags);
  */
 LONG ESnap_Enable(BOOL on);
 
+/* ------------------------------------------ 2.5: windows and layouts */
+
+/*
+ * The windows as the library sees them, for a client that lays them
+ * out rather than snapping one at a time (a tiler). Each entry is one
+ * window of the screen; the window pointer is an identity key with the
+ * validate-per-call semantics of every other call here.
+ *
+ * The struct is part of the ABI from 2.5 on: fields are appended, never
+ * moved. serial is reserved for the window identity of a later
+ * revision and reads 0 until then; reserved[] reads 0.
+ */
+struct ESnapWindowInfo {
+    struct Window *window;
+    struct ESnapRect rect;     /* outer geometry, screen coordinates   */
+    ULONG flags;               /* ESWI_*                               */
+    ULONG zone;                /* what ESnap_QueryWindow would report  */
+    LONG minWidth, minHeight;  /* size limits; 0 = none                */
+    LONG maxWidth, maxHeight;
+    ULONG serial;              /* reserved: 0                          */
+    ULONG reserved[3];         /* reserved: 0                          */
+};
+
+#define ESWI_SNAPPABLE   0x0001UL /* size gadget, not backdrop/borderless */
+#define ESWI_SNAPPED     0x0002UL /* known to the registry (snapped/placed)*/
+#define ESWI_EXCLUDED    0x0004UL /* ESnap_ExcludeWindow                   */
+#define ESWI_FIXED_SIZE  0x0008UL /* no size gadget                        */
+#define ESWI_BORDERLESS  0x0010UL
+#define ESWI_BACKDROP    0x0020UL
+#define ESWI_PANEL       0x0040UL /* taken for a dock/panel                */
+#define ESWI_ACTIVE      0x0080UL
+
+/*
+ * ESnap_QueryWindows: the windows of screen (NULL: the frontmost), in
+ * Intuition's front-to-back order. Up to count entries are written to
+ * buf; *needed receives how many there are in all, so a short buffer
+ * shows as *needed > count and the caller can come back with a bigger
+ * one. ES_OK unless needed is NULL, or buf is NULL with a count.
+ *
+ * ESnap_QueryGeneration: a counter that moves whenever the window set
+ * or any window's geometry changes. The library does not see windows
+ * open or close, it validates per call, so this call rescans the
+ * window lists each time: cheap for a desktop's worth of windows, and
+ * the caller's poll is what pays for it. The screen narrows nothing
+ * yet: the generation counts changes on every screen. A client polls
+ * it and re-reads the list only when the number moved.
+ */
+LONG ESnap_QueryWindows(struct Screen *screen, struct ESnapWindowInfo *buf,
+                        ULONG count, ULONG *needed);
+ULONG ESnap_QueryGeneration(struct Screen *screen);
+
+/*
+ * ESnap_PlaceWindow: put win into rect with the contract of SnapWindow:
+ * the geometry before placement is recorded for UnsnapWindow, the
+ * window's size limits are honoured with the result anchored to the
+ * edge of rect that touches the usable area, and the errors are the
+ * same (ES_ERR_STALE, ES_ERR_REJECTED, ES_ERR_NO_MEMORY). QueryWindow
+ * reports ES_ZONE_RECT for a window placed this way. Geometry changes
+ * are requested, not applied (ChangeWindowBox semantics).
+ *
+ *   ES_PF_NO_RESTORE   do not touch the registry: no way back through
+ *                      UnsnapWindow, and no registry slot spent. For a
+ *                      client that moves windows many times a minute.
+ *   ES_PF_KEEP_ZORDER  do not reorder the windows. Accepted, and today
+ *                      a placement never reorders them anyway.
+ *
+ * ESnap_PlaceWindowsA: a whole layout in one call. Every entry gets its
+ * own result, so one stale window does not fail the rest. The library
+ * orders the moves so that windows which shrink go first and windows
+ * which grow go last; it cannot make the batch atomic, each move is a
+ * request of its own. ES_OK once every entry has been tried;
+ * ES_ERR_BAD_ARGS for a NULL list, an empty one, or more than
+ * ES_PLACE_MAX entries.
+ */
+#define ES_PF_NO_RESTORE   0x0001UL
+#define ES_PF_KEEP_ZORDER  0x0002UL
+
+LONG ESnap_PlaceWindow(struct Window *win, const struct ESnapRect *rect,
+                       ULONG flags);
+
+struct ESnapPlacement {
+    struct Window *window;
+    struct ESnapRect rect;
+    LONG result;               /* per entry: ES_OK or an error         */
+};
+
+#define ES_PLACE_MAX 64
+
+LONG ESnap_PlaceWindowsA(struct ESnapPlacement *list, ULONG count,
+                         ULONG flags);
+
 #endif /* EDGESNAP_H */

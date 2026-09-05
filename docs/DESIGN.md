@@ -833,6 +833,32 @@ turned out to be portable rather than AROS-specific:
   free - and measured on real hardware, because in emulation the redraw
   cost is not the real one.
 
+### 2.5 - what a tiling client asked for first
+
+The first client beyond the commodity announced itself on 2026-09-04: a
+tiling policy for AROS x86_64, i3/Hyprland style, that would rather
+build on the library than duplicate the Intuition plumbing. Its author
+wrote the calls a tiler needs in the order it would use them (issue
+#2), and the first three are appended as revision 2.5 on all three
+systems:
+
+- `ESnap_QueryWindows` and `ESnap_QueryGeneration`: the windows as the
+  library sees them, with geometry, limits and flags, and a counter
+  that moves when the picture has. The library sees no window open or
+  close, it validates per call, so the counter is a hash of the window
+  lists taken when asked; a signal-based notify can come later.
+- `ESnap_PlaceWindow`: an arbitrary rectangle with the contract of
+  `SnapWindow`, anchored to the edge of the rectangle that touches the
+  usable area when the window's limits bite. `ES_ZONE_RECT` names what
+  it places.
+- `ESnap_PlaceWindowsA`: a whole layout in one call, one result per
+  entry, ordered shrinking first and growing last. Ordered, not atomic:
+  `ChangeWindowBox` is a request per window.
+
+What follows in that list (window serials, work areas, groups, divider
+tokens, client roles) is the section below, designed in the issue with
+a real client on the other side.
+
 ### Before the ABI freeze
 
 Four structural changes. Each one moves a public signature, which is why

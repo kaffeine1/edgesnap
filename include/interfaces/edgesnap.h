@@ -77,6 +77,22 @@ struct EdgeSnapIFace
     LONG APICALL (*ESnap_MoveDividerAt)(struct EdgeSnapIFace *Self,
                                         LONG vertical, LONG line,
                                         LONG position);
+
+    /* --- appended for 2.5: the windows as the library sees them, and
+     * placement in an arbitrary rectangle --- */
+    LONG APICALL (*ESnap_QueryWindows)(struct EdgeSnapIFace *Self,
+                                       struct Screen *screen,
+                                       struct ESnapWindowInfo *buf,
+                                       ULONG count, ULONG *needed);
+    ULONG APICALL (*ESnap_QueryGeneration)(struct EdgeSnapIFace *Self,
+                                           struct Screen *screen);
+    LONG APICALL (*ESnap_PlaceWindow)(struct EdgeSnapIFace *Self,
+                                      struct Window *win,
+                                      const struct ESnapRect *rect,
+                                      ULONG flags);
+    LONG APICALL (*ESnap_PlaceWindowsA)(struct EdgeSnapIFace *Self,
+                                        struct ESnapPlacement *list,
+                                        ULONG count, ULONG flags);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

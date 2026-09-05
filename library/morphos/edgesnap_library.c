@@ -35,8 +35,8 @@
 
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  2
-#define ES_LIB_REVISION 4
-#define ES_LIB_IDSTRING "edgesnap.library 2.4 (2.9.2026) Michele Dipace\r\n"
+#define ES_LIB_REVISION 5
+#define ES_LIB_IDSTRING "edgesnap.library 2.5 (5.9.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -254,6 +254,33 @@ static LONG G_QueryDividerAt(void)
                                 (struct ESnapDivider *)REG_A0);
 }
 
+/* --- appended for 2.5 --- */
+
+static LONG G_QueryWindows(void)
+{
+    return esb_query_windows((struct Screen *)REG_A0,
+                             (struct ESnapWindowInfo *)REG_A1,
+                             (ULONG)REG_D0, (ULONG *)REG_A2);
+}
+
+static ULONG G_QueryGeneration(void)
+{
+    return esb_query_generation((struct Screen *)REG_A0);
+}
+
+static LONG G_PlaceWindow(void)
+{
+    return esb_place_window((struct Window *)REG_A0,
+                            (const struct ESnapRect *)REG_A1,
+                            (ULONG)REG_D0);
+}
+
+static LONG G_PlaceWindowsA(void)
+{
+    return esb_place_windows((struct ESnapPlacement *)REG_A0,
+                             (ULONG)REG_D0, (ULONG)REG_D1);
+}
+
 #define ES_GATE(name, fn) \
     static struct EmulLibEntry name = \
         { TRAP_LIB, 0, (void (*)(void))fn }
@@ -277,6 +304,10 @@ ES_GATE(GATE_QueryDivider, G_QueryDivider);
 ES_GATE(GATE_MoveDivider, G_MoveDivider);
 ES_GATE(GATE_QueryDividerAt, G_QueryDividerAt);
 ES_GATE(GATE_MoveDividerAt, G_MoveDividerAt);
+ES_GATE(GATE_QueryWindows, G_QueryWindows);
+ES_GATE(GATE_QueryGeneration, G_QueryGeneration);
+ES_GATE(GATE_PlaceWindow, G_PlaceWindow);
+ES_GATE(GATE_PlaceWindowsA, G_PlaceWindowsA);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -299,6 +330,10 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_MoveDivider,
     (APTR)&GATE_QueryDividerAt,
     (APTR)&GATE_MoveDividerAt,
+    (APTR)&GATE_QueryWindows,
+    (APTR)&GATE_QueryGeneration,
+    (APTR)&GATE_PlaceWindow,
+    (APTR)&GATE_PlaceWindowsA,
     (APTR)-1
 };
 

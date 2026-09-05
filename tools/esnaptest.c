@@ -189,6 +189,64 @@ int main(void)
                "ES_ERR_BAD_ARGS)\n", rcname(rc));
     }
 
+    /* 2.5: the calls a tiler makes. Only on a library that has them. */
+    if (EdgeSnapBase->lib_Revision >= 5) {
+        struct ESnapWindowInfo info[8];
+        ULONG needed = 0, gen0, gen1, i;
+
+        gen0 = ES_CALL(ESnap_QueryGeneration)(NULL);
+        rc = ES_CALL(ESnap_QueryWindows)(NULL, info, 8, &needed);
+        printf("esnaptest: ESnap_QueryWindows -> %s, %lu windows, "
+               "generation %lu\n", rcname(rc), (unsigned long)needed,
+               (unsigned long)gen0);
+        for (i = 0; i < needed && i < 8; i++) {
+            printf("esnaptest:   %p %ld,%ld %ldx%ld flags %04lx zone %lu "
+                   "min %ldx%ld\n", (void *)info[i].window,
+                   (long)info[i].rect.x, (long)info[i].rect.y,
+                   (long)info[i].rect.w, (long)info[i].rect.h,
+                   (unsigned long)info[i].flags, (unsigned long)info[i].zone,
+                   (long)info[i].minWidth, (long)info[i].minHeight);
+        }
+        if (win != NULL) {
+            struct ESnapRect r;
+            struct ESnapPlacement one;
+
+            r.x = 100;
+            r.y = 100;
+            r.w = 400;
+            r.h = 300;
+            rc = ES_CALL(ESnap_PlaceWindow)(win, &r, 0);
+            printf("esnaptest: ESnap_PlaceWindow(100,100 400x300) -> %s\n",
+                   rcname(rc));
+            Delay(25L);
+            gen1 = ES_CALL(ESnap_QueryGeneration)(NULL);
+            printf("esnaptest: generation %lu -> %lu (%s)\n",
+                   (unsigned long)gen0, (unsigned long)gen1,
+                   gen1 != gen0 ? "moved, as it should" : "did not move");
+            rc = ES_CALL(ESnap_QueryWindow)(win, &zone);
+            printf("esnaptest: ESnap_QueryWindow -> %s, zone %lu (expected "
+                   "%d, rect)\n", rcname(rc), (unsigned long)zone,
+                   ES_ZONE_RECT);
+            Delay(50L);
+            one.window = win;
+            one.rect.x = 300;
+            one.rect.y = 150;
+            one.rect.w = 500;
+            one.rect.h = 350;
+            one.result = 0;
+            rc = ES_CALL(ESnap_PlaceWindowsA)(&one, 1, ES_PF_NO_RESTORE);
+            printf("esnaptest: ESnap_PlaceWindowsA(1) -> %s, entry %s\n",
+                   rcname(rc), rcname(one.result));
+            Delay(50L);
+            rc = ES_CALL(ESnap_UnsnapWindow)(win);
+            printf("esnaptest: ESnap_UnsnapWindow after placing -> %s\n",
+                   rcname(rc));
+        }
+    } else {
+        printf("esnaptest: library revision %d has no 2.5 calls, skipped\n",
+               (int)EdgeSnapBase->lib_Revision);
+    }
+
 #if defined(__amigaos4__)
     DropInterface((struct Interface *)IEdgeSnap);
 #endif

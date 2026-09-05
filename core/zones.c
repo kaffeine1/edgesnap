@@ -152,7 +152,56 @@ const char *es_zone_name(int zone)
         return "bottom-right";
     case ES_ZONE_MAX:
         return "maximize";
+    case ES_ZONE_RECT:
+        return "rect";
     default:
         return "?";
+    }
+}
+
+void es_fit_rect(const ESRect *want, const ESRect *usable,
+                 int min_w, int min_h, int max_w, int max_h, ESRect *out)
+{
+    int right = want->x + want->w;
+    int bottom = want->y + want->h;
+    int touch_l = want->x <= usable->x;
+    int touch_r = right >= usable->x + usable->w;
+    int touch_t = want->y <= usable->y;
+    int touch_b = bottom >= usable->y + usable->h;
+
+    *out = *want;
+    if (min_w > 0 && out->w < min_w) {
+        out->w = min_w;
+    }
+    if (max_w > 0 && out->w > max_w) {
+        out->w = max_w;
+    }
+    if (min_h > 0 && out->h < min_h) {
+        out->h = min_h;
+    }
+    if (max_h > 0 && out->h > max_h) {
+        out->h = max_h;
+    }
+    if (out->w != want->w && touch_r && !touch_l) {
+        out->x = right - out->w;
+    }
+    if (out->h != want->h && touch_b && !touch_t) {
+        out->y = bottom - out->h;
+    }
+}
+
+void es_order_by_growth(const long *delta, int n, int *order)
+{
+    int i, j;
+
+    for (i = 0; i < n; i++) {
+        int idx = i;
+
+        j = i;
+        while (j > 0 && delta[order[j - 1]] > delta[idx]) {
+            order[j] = order[j - 1];
+            j--;
+        }
+        order[j] = idx;
     }
 }

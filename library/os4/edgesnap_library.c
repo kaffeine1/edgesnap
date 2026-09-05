@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 4
-#define ES_LIB_IDSTRING "edgesnap.library 2.4 (2.9.2026) Michele Dipace"
+#define ES_LIB_REVISION 5
+#define ES_LIB_IDSTRING "edgesnap.library 2.5 (5.9.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -325,6 +325,40 @@ static LONG _ESnap_QueryDividerAt(struct EdgeSnapIFace *Self, ULONG thickness,
     return esb_query_divider_at(thickness, x, y, divider);
 }
 
+/* --- appended for 2.5: the windows as the library sees them, and
+ * placement in an arbitrary rectangle (asked for by a tiling client) --- */
+
+static LONG _ESnap_QueryWindows(struct EdgeSnapIFace *Self,
+                                struct Screen *screen,
+                                struct ESnapWindowInfo *buf, ULONG count,
+                                ULONG *needed)
+{
+    (void)Self;
+    return esb_query_windows(screen, buf, count, needed);
+}
+
+static ULONG _ESnap_QueryGeneration(struct EdgeSnapIFace *Self,
+                                    struct Screen *screen)
+{
+    (void)Self;
+    return esb_query_generation(screen);
+}
+
+static LONG _ESnap_PlaceWindow(struct EdgeSnapIFace *Self, struct Window *win,
+                               const struct ESnapRect *rect, ULONG flags)
+{
+    (void)Self;
+    return esb_place_window(win, rect, flags);
+}
+
+static LONG _ESnap_PlaceWindowsA(struct EdgeSnapIFace *Self,
+                                 struct ESnapPlacement *list, ULONG count,
+                                 ULONG flags)
+{
+    (void)Self;
+    return esb_place_windows(list, count, flags);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -346,6 +380,10 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_MoveDivider,
     (APTR)_ESnap_QueryDividerAt,
     (APTR)_ESnap_MoveDividerAt,
+    (APTR)_ESnap_QueryWindows,
+    (APTR)_ESnap_QueryGeneration,
+    (APTR)_ESnap_PlaceWindow,
+    (APTR)_ESnap_PlaceWindowsA,
     (APTR)-1
 };
 

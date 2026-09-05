@@ -345,6 +345,42 @@ static void test_unknown_press_position_falls_back_to_the_pointer(void)
     CHECK(a.drag_started == 0);
 }
 
+/* 2.5: an arbitrary rectangle fitted to a window's limits keeps the
+ * edge that touches the usable area. */
+static void test_fit_rect_keeps_the_touching_edge(void)
+{
+    ESRect usable = {0, 20, 1024, 673};
+    ESRect want = {512, 20, 512, 673};    /* the right half */
+    ESRect out;
+
+    es_fit_rect(&want, &usable, 548, 0, 0, 0, &out);
+    CHECK(out.w == 548 && out.x == 476);  /* anchored to the right edge */
+
+    want.x = 0;                           /* the left half */
+    es_fit_rect(&want, &usable, 548, 0, 0, 0, &out);
+    CHECK(out.w == 548 && out.x == 0);
+
+    want.x = 100;                         /* touches neither: keeps x */
+    want.w = 300;
+    es_fit_rect(&want, &usable, 0, 0, 200, 0, &out);
+    CHECK(out.w == 200 && out.x == 100);
+
+    want.y = 300;                         /* the bottom edge, in height */
+    want.h = 393;
+    es_fit_rect(&want, &usable, 0, 500, 0, 0, &out);
+    CHECK(out.h == 500 && out.y == 193);
+}
+
+/* 2.5: a layout is applied shrinking first, growing last. */
+static void test_order_by_growth_shrinks_first(void)
+{
+    long d[5] = {100, -50, 0, -200, -50};
+    int o[5];
+
+    es_order_by_growth(d, 5, o);
+    CHECK(o[0] == 3 && o[1] == 1 && o[2] == 4 && o[3] == 2 && o[4] == 0);
+}
+
 static void test_outline_drag_from_the_bar(void)
 {
     ESEngine e;
@@ -408,6 +444,8 @@ int main(void)
     test_outline_press_in_body_is_not_a_drag();
     test_late_activation_keeps_the_bar_press();
     test_unknown_press_position_falls_back_to_the_pointer();
+    test_fit_rect_keeps_the_touching_edge();
+    test_order_by_growth_shrinks_first();
 
     if (g_failures == 0) {
         printf("engine_test: all tests passed\n");

@@ -40,6 +40,10 @@
  *       client can tell the two apart: methods appended, never moved,
  *       never changed - the major version is the compatibility
  *       promise, and the revision says which appended vectors exist.
+ *   2.5 - the first client beyond the commodity, a tiler, asked for
+ *       the windows as the library sees them and for placement in an
+ *       arbitrary rectangle: QueryWindows, QueryGeneration, PlaceWindow
+ *       and PlaceWindowsA appended, and ES_ZONE_RECT for what they place.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the
@@ -59,6 +63,7 @@
 #define ES_ZONE_BOTTOM_LEFT  5
 #define ES_ZONE_BOTTOM_RIGHT 6
 #define ES_ZONE_MAX          7
+#define ES_ZONE_RECT         8   /* placed in a rectangle by a client (2.5) */
 
 /* Zone sets (which zones react to a drag) travel as a bit mask. */
 #define ES_ZONEBIT(z)        (1u << (z))
