@@ -105,14 +105,18 @@
  */
 #define ES_PREVIEW_XOR 1
 /*
- * The seam handle leaves for the duration of a seam drag. Elsewhere it
- * is parked as an 8x8 speck under the pointer and follows it; AROS
- * keeps the handle at its full height instead, and every step of the
- * handle uncovers a strip of the window below that AROS backfills in
- * pen 0 and the console never repaints: a trail of black bars across
- * the window, which is what testers reported as "black artifacts".
- * With no window in play the drag is followed through the input
- * counters and the handle comes back on release, where the seam is.
+ * The seam handle stands still for the duration of a seam drag.
+ * Elsewhere it is parked as an 8x8 speck under the pointer and follows
+ * it; AROS clamps ChangeWindowBox to the window's limits, so the handle
+ * kept its full height, and every step of it uncovered a strip of the
+ * window below that AROS backfills in pen 0 and the console never
+ * repaints: a trail of black bars across the window, which is what
+ * testers reported as "black artifacts". Here the handle is left where
+ * it is (closing it under a held button froze Intuition, 2026-09-05),
+ * its own mouse reports are ignored, the drag is followed through the
+ * input counters, and only on release is the handle moved to where the
+ * seam now is: one uncovering, inside a window that has just been
+ * resized and repaints itself.
  */
 #define ES_SEAM_DRAG_BLIND 1
 #include <cybergraphx/cybergraphics.h>
@@ -1824,19 +1828,17 @@ static void spike_divider_events(void)
                     struct ESnapReport rep;
 
                     g_divider_scr = g_divider->WScreen;
-                    spike_divider_close();     /* clears dragging too */
                     g_divider_dragging = 1;
                     /*
-                     * The engine saw this press as any other: with the
-                     * handle gone the active window is the one we are
-                     * about to resize, and "the window moved while the
-                     * pointer moved" would read as a drag of it. Told to
-                     * forget the press, it sits this one out.
+                     * The engine saw this press as any other, and the
+                     * active window is one of the two we are about to
+                     * resize: "the window moved while the pointer
+                     * moved" would read as a drag of it. Told to forget
+                     * the press, it sits this one out.
                      */
                     ES_CALL(ESnap_ResetInput)(&rep);
                     spike_apply_report(&rep);
                 }
-                return;                        /* the port is gone */
 #else
                 g_divider_dragging = 1;
                 /* active window: otherwise the moves stop at our edge */
@@ -1882,6 +1884,9 @@ static void spike_divider_events(void)
                 return;
             }
         } else if (cls == IDCMP_MOUSEMOVE && g_divider_dragging) {
+#ifdef ES_SEAM_DRAG_BLIND
+            continue;              /* followed through the counters */
+#endif
             /*
              * Take the pointer from the SCREEN, not from the message's
              * window-relative coordinates: we move this very window to
