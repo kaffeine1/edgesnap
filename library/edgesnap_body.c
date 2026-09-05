@@ -314,6 +314,43 @@ static int esb_snappable(const struct ESBSnap *s)
     return 1;
 }
 
+/* ------------------------------------------------ moving a window */
+
+/*
+ * One box change, in the shape each system draws best. AROS's Wanderer
+ * redraws only the area a window gained and, after a change that moves
+ * and resizes at once, never repaints what the move left behind inside
+ * the window: a snapped drawer came up half drawn, with a black strip
+ * where the icons should have been (AROS One, 2026-09-05, and an AROS
+ * developer confirming the "wild ChangeWindowBox" case). So on AROS a
+ * change that does both is made in two: a window that shrinks is sized
+ * first and moved after, one that grows is moved first and sized
+ * after, so no step covers or uncovers more than it must. The other
+ * systems take the one call they have always taken.
+ */
+static void esb_change_box(struct Window *win, const ESRect *from,
+                           const ESRect *to)
+{
+#ifdef __AROS__
+    int moved = (from->x != to->x || from->y != to->y);
+    int sized = (from->w != to->w || from->h != to->h);
+
+    if (moved && sized) {
+        long before = (long)from->w * from->h;
+        long after = (long)to->w * to->h;
+
+        if (after <= before) {
+            ChangeWindowBox(win, from->x, from->y, to->w, to->h);
+        } else {
+            ChangeWindowBox(win, to->x, to->y, from->w, from->h);
+        }
+    }
+#else
+    (void)from;
+#endif
+    ChangeWindowBox(win, to->x, to->y, to->w, to->h);
+}
+
 /* ------------------------------------------------------- public API */
 
 ULONG esb_query_capabilities(void)
@@ -361,7 +398,7 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
          * would make ESnap_UnsnapWindow silently impossible. */
         rc = es_registry_remember(&g_registry, win, &s.box, &r, (int)zone);
         if (rc == ES_OK) {
-            ChangeWindowBox(win, r.x, r.y, r.w, r.h);
+            esb_change_box(win, &s.box, &r);
         }
     }
     ReleaseSemaphore(&g_sem);
@@ -389,7 +426,7 @@ LONG esb_unsnap_window(struct Window *win)
     } else {
         rc = es_registry_restore(&g_registry, win, &s.box, &out);
         if (rc == ES_OK) {
-            ChangeWindowBox(win, out.x, out.y, out.w, out.h);
+            esb_change_box(win, &s.box, &out);
         }
     }
     ReleaseSemaphore(&g_sem);
@@ -951,12 +988,12 @@ LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
             int j = order[k];
 
             if (j < seam->a.n) {
-                ChangeWindowBox((struct Window *)seam->a.ref[j],
-                                ra[j].x, ra[j].y, ra[j].w, ra[j].h);
+                esb_change_box((struct Window *)seam->a.ref[j],
+                               &snap_a[j].box, &ra[j]);
             } else {
                 j -= seam->a.n;
-                ChangeWindowBox((struct Window *)seam->b.ref[j],
-                                rb[j].x, rb[j].y, rb[j].w, rb[j].h);
+                esb_change_box((struct Window *)seam->b.ref[j],
+                               &snap_b[j].box, &rb[j]);
             }
         }
     }
@@ -1554,7 +1591,7 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
             return rc;
         }
     }
-    ChangeWindowBox(win, r.x, r.y, r.w, r.h);
+    esb_change_box(win, &s.box, &r);
     return ES_OK;
 }
 
