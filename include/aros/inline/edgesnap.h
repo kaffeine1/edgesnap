@@ -345,4 +345,36 @@ static inline LONG __inline_EdgeSnap_ESnap_PlaceWindowsA(struct ESnapPlacement *
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+static inline LONG __inline_EdgeSnap_ESnap_QueryWindowSerial(struct Window * __arg1, ULONG * __arg2, APTR __EdgeSnapBase)
+{
+    AROS_LIBREQ(EdgeSnapBase, 2)
+    return AROS_LC2(LONG, ESnap_QueryWindowSerial,\
+         AROS_LCA(struct Window *, (__arg1), A0), \
+         AROS_LCA(ULONG *, (__arg2), A1), \
+        struct Library *, (__EdgeSnapBase), 24, EdgeSnap    );
+}
+
+#define ESnap_QueryWindowSerial(arg1, arg2) \
+    __inline_EdgeSnap_ESnap_QueryWindowSerial((arg1), (arg2), __EDGESNAP_LIBBASE)
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+static inline LONG __inline_EdgeSnap_ESnap_FindWindow(ULONG __arg1, struct Window ** __arg2, APTR __EdgeSnapBase)
+{
+    AROS_LIBREQ(EdgeSnapBase, 2)
+    return AROS_LC2(LONG, ESnap_FindWindow,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(struct Window **, (__arg2), A0), \
+        struct Library *, (__EdgeSnapBase), 25, EdgeSnap    );
+}
+
+#define ESnap_FindWindow(arg1, arg2) \
+    __inline_EdgeSnap_ESnap_FindWindow((arg1), (arg2), __EDGESNAP_LIBBASE)
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 #endif /* INLINE_EDGESNAP_H*/

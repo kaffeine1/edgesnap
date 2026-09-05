@@ -40,4 +40,7 @@
 #define ESnap_PlaceWindow     esb_place_window
 #define ESnap_PlaceWindowsA   esb_place_windows
 
+#define ESnap_QueryWindowSerial esb_query_window_serial
+#define ESnap_FindWindow        esb_find_window
+
 #endif /* EDGESNAP_STATIC_H */

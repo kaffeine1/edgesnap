@@ -44,6 +44,9 @@
  *       the windows as the library sees them and for placement in an
  *       arbitrary rectangle: QueryWindows, QueryGeneration, PlaceWindow
  *       and PlaceWindowsA appended, and ES_ZONE_RECT for what they place.
+ *   2.6 - window identity: every observed window gets a serial that is
+ *       never reused; QueryWindowSerial and FindWindow appended, and
+ *       ESnapWindowInfo.serial filled.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

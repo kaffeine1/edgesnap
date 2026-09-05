@@ -29,4 +29,6 @@ ESnap_QueryWindows(screen,buf,count,needed)(a0,a1,d0,a2)
 ESnap_QueryGeneration(screen)(a0)
 ESnap_PlaceWindow(win,rect,flags)(a0,a1,d0)
 ESnap_PlaceWindowsA(list,count,flags)(a0,d0,d1)
+ESnap_QueryWindowSerial(win,serial)(a0,a1)
+ESnap_FindWindow(serial,window)(d0,a0)
 ##end

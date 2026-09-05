@@ -334,7 +334,7 @@ struct ESnapWindowInfo {
     ULONG zone;                /* what ESnap_QueryWindow would report  */
     LONG minWidth, minHeight;  /* size limits; 0 = none                */
     LONG maxWidth, maxHeight;
-    ULONG serial;              /* reserved: 0                          */
+    ULONG serial;              /* 2.6: the window's identity, see below */
     ULONG reserved[3];         /* reserved: 0                          */
 };
 
@@ -408,5 +408,33 @@ struct ESnapPlacement {
 
 LONG ESnap_PlaceWindowsA(struct ESnapPlacement *list, ULONG count,
                          ULONG flags);
+
+/* ------------------------------------------ 2.6: window identity */
+
+/*
+ * A struct Window * is an address, and an address is reused: a client
+ * that keeps state for a whole session, not just for a drag, meets
+ * that as the normal case. So every window the library observes gets
+ * a serial, never 0 and never reused, and the one promise is: same
+ * serial, same window.
+ *
+ * Observed means: seen by QueryWindows or QueryGeneration, or asked
+ * about with QueryWindowSerial. A window closed and another opened at
+ * the same address is told apart by its layer; a window never observed
+ * has no serial yet, and gets one when it is. What the library cannot
+ * see is a window that came and went entirely between two
+ * observations, and a client that polls QueryGeneration sees often.
+ *
+ * ESnap_QueryWindowSerial: the serial of win, assigned now if it had
+ * none. ES_ERR_STALE if there is no such window.
+ *
+ * ESnap_FindWindow: the window behind a serial, validated against the
+ * live window lists; ES_ERR_STALE once it is gone, and the serial is
+ * retired with it. The result is a struct Window * with the same
+ * validate-per-call rule as every other call here: it is good for
+ * the next call, not for keeping.
+ */
+LONG ESnap_QueryWindowSerial(struct Window *win, ULONG *serial);
+LONG ESnap_FindWindow(ULONG serial, struct Window **window);
 
 #endif /* EDGESNAP_H */

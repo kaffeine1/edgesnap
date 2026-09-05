@@ -247,6 +247,28 @@ int main(void)
                (int)EdgeSnapBase->lib_Revision);
     }
 
+    /* 2.6: identity. The serial must come back to the same window,
+     * and a serial nobody was given must be refused. */
+    if (EdgeSnapBase->lib_Revision >= 6 && win != NULL) {
+        ULONG serial = 0, again = 0;
+        struct Window *back = NULL;
+
+        rc = ES_CALL(ESnap_QueryWindowSerial)(win, &serial);
+        printf("esnaptest: ESnap_QueryWindowSerial -> %s, serial %lu\n",
+               rcname(rc), (unsigned long)serial);
+        rc = ES_CALL(ESnap_QueryWindowSerial)(win, &again);
+        printf("esnaptest: asked again -> %s, serial %lu (%s)\n",
+               rcname(rc), (unsigned long)again,
+               again == serial ? "same, as it should" : "DIFFERENT");
+        rc = ES_CALL(ESnap_FindWindow)(serial, &back);
+        printf("esnaptest: ESnap_FindWindow(%lu) -> %s, %p (%s)\n",
+               (unsigned long)serial, rcname(rc), (void *)back,
+               back == win ? "the same window" : "ANOTHER window");
+        rc = ES_CALL(ESnap_FindWindow)(serial + 1000000UL, &back);
+        printf("esnaptest: ESnap_FindWindow(unknown) -> %s (expected "
+               "ES_ERR_STALE)\n", rcname(rc));
+    }
+
 #if defined(__amigaos4__)
     DropInterface((struct Interface *)IEdgeSnap);
 #endif

@@ -294,3 +294,25 @@ AROS_LH3(LONG, ESnap_PlaceWindowsA,
     return esb_place_windows(list, count, flags);
     AROS_LIBFUNC_EXIT
 }
+
+/* --- appended for 2.6 --- */
+
+AROS_LH2(LONG, ESnap_QueryWindowSerial,
+         AROS_LHA(struct Window *, win, A0),
+         AROS_LHA(ULONG *, serial, A1),
+         struct EdgeSnapBase *, EdgeSnapBase, 24, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_query_window_serial(win, serial);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH2(LONG, ESnap_FindWindow,
+         AROS_LHA(ULONG, serial, D0),
+         AROS_LHA(struct Window **, window, A0),
+         struct EdgeSnapBase *, EdgeSnapBase, 25, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_find_window(serial, window);
+    AROS_LIBFUNC_EXIT
+}

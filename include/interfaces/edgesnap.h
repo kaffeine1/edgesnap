@@ -93,6 +93,13 @@ struct EdgeSnapIFace
     LONG APICALL (*ESnap_PlaceWindowsA)(struct EdgeSnapIFace *Self,
                                         struct ESnapPlacement *list,
                                         ULONG count, ULONG flags);
+
+    /* --- appended for 2.6: window identity --- */
+    LONG APICALL (*ESnap_QueryWindowSerial)(struct EdgeSnapIFace *Self,
+                                            struct Window *win,
+                                            ULONG *serial);
+    LONG APICALL (*ESnap_FindWindow)(struct EdgeSnapIFace *Self,
+                                     ULONG serial, struct Window **window);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 5
-#define ES_LIB_IDSTRING "edgesnap.library 2.5 (5.9.2026) Michele Dipace"
+#define ES_LIB_REVISION 6
+#define ES_LIB_IDSTRING "edgesnap.library 2.6 (5.9.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -359,6 +359,22 @@ static LONG _ESnap_PlaceWindowsA(struct EdgeSnapIFace *Self,
     return esb_place_windows(list, count, flags);
 }
 
+/* --- appended for 2.6: window identity --- */
+
+static LONG _ESnap_QueryWindowSerial(struct EdgeSnapIFace *Self,
+                                     struct Window *win, ULONG *serial)
+{
+    (void)Self;
+    return esb_query_window_serial(win, serial);
+}
+
+static LONG _ESnap_FindWindow(struct EdgeSnapIFace *Self, ULONG serial,
+                              struct Window **window)
+{
+    (void)Self;
+    return esb_find_window(serial, window);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -384,6 +400,8 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_QueryGeneration,
     (APTR)_ESnap_PlaceWindow,
     (APTR)_ESnap_PlaceWindowsA,
+    (APTR)_ESnap_QueryWindowSerial,
+    (APTR)_ESnap_FindWindow,
     (APTR)-1
 };
 

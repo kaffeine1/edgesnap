@@ -188,6 +188,24 @@ AROS_LP3(LONG, ESnap_PlaceWindowsA,
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP2(LONG, ESnap_QueryWindowSerial,
+         AROS_LPA(struct Window *, win, A0),
+         AROS_LPA(ULONG *, serial, A1),
+         LIBBASETYPEPTR, EdgeSnapBase, 24, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP2(LONG, ESnap_FindWindow,
+         AROS_LPA(ULONG, serial, D0),
+         AROS_LPA(struct Window **, window, A0),
+         LIBBASETYPEPTR, EdgeSnapBase, 25, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* CLIB_EDGESNAP_PROTOS_H */

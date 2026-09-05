@@ -1223,6 +1223,153 @@ LONG esb_exclude_window(struct Window *win, BOOL exclude)
     return esb_exclude_window_inner(win, exclude);
 }
 
+/* ------------------------------------------------ 2.6: window identity */
+
+/*
+ * Every window observed gets a serial that is never reused. The table
+ * is walked with the window lists, under g_sem and LockIBase: a window
+ * seen again at the same address with the same layer keeps its serial;
+ * the same address with another layer is another window, and the old
+ * entry dies; an entry not seen in a full walk is a window that is
+ * gone. The layer is the tell: Intuition gives every window one of its
+ * own, and a reused window address with a reused layer address between
+ * two observations is the one case the library cannot see.
+ */
+#define ESB_IDENT_SLOTS 128
+
+struct ESBIdent {
+    struct Window *win;
+    struct Layer *layer;
+    ULONG serial;
+    ULONG pass;                /* the last full walk that saw it     */
+};
+
+static struct ESBIdent g_ident[ESB_IDENT_SLOTS];
+static ULONG g_ident_next = 1; /* 0 means "none"                     */
+static ULONG g_ident_pass;     /* counts the full walks              */
+
+/* g_sem and LockIBase held: the serial of a window seen now. */
+static ULONG esb_ident_touch(struct Window *w)
+{
+    int i, spare = -1;
+
+    for (i = 0; i < ESB_IDENT_SLOTS; i++) {
+        struct ESBIdent *e = &g_ident[i];
+
+        if (e->win == w) {
+            if (e->layer == w->WLayer) {
+                e->pass = g_ident_pass;
+                return e->serial;
+            }
+            e->win = NULL;     /* same address, another window */
+            spare = i;
+            break;
+        }
+        if (e->win == NULL && spare < 0) {
+            spare = i;
+        }
+    }
+    if (spare < 0) {
+        return 0;              /* the table is full: no identity today */
+    }
+    g_ident[spare].win = w;
+    g_ident[spare].layer = w->WLayer;
+    g_ident[spare].serial = g_ident_next++;
+    g_ident[spare].pass = g_ident_pass;
+    return g_ident[spare].serial;
+}
+
+/* g_sem and LockIBase held: one full walk, every screen. Windows not
+ * seen are gone, and their serials retire with them. */
+static void esb_ident_observe_all(void)
+{
+    struct Screen *scr;
+    struct Window *w;
+    int i;
+
+    g_ident_pass++;
+    for (scr = ESB_IBASE->FirstScreen; scr != NULL; scr = scr->NextScreen) {
+        for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+            esb_ident_touch(w);
+        }
+    }
+    for (i = 0; i < ESB_IDENT_SLOTS; i++) {
+        if (g_ident[i].win != NULL && g_ident[i].pass != g_ident_pass) {
+            g_ident[i].win = NULL;
+        }
+    }
+}
+
+LONG esb_query_window_serial(struct Window *win, ULONG *serial)
+{
+    ULONG ilock;
+    struct Screen *scr;
+    struct Window *w;
+    int found = 0;
+
+    if (win == NULL || serial == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    *serial = 0;
+    ObtainSemaphore(&g_sem);
+    ilock = LockIBase(0);
+    for (scr = ESB_IBASE->FirstScreen; scr != NULL && !found;
+         scr = scr->NextScreen) {
+        for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+            if (w == win) {
+                *serial = esb_ident_touch(w);
+                found = 1;
+                break;
+            }
+        }
+    }
+    UnlockIBase(ilock);
+    ReleaseSemaphore(&g_sem);
+    return found ? ES_OK : ES_ERR_STALE;
+}
+
+LONG esb_find_window(ULONG serial, struct Window **window)
+{
+    ULONG ilock;
+    struct Screen *scr;
+    struct Window *w, *hit = NULL;
+    int i;
+
+    if (serial == 0 || window == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    *window = NULL;
+    ObtainSemaphore(&g_sem);
+    for (i = 0; i < ESB_IDENT_SLOTS; i++) {
+        if (g_ident[i].win != NULL && g_ident[i].serial == serial) {
+            hit = g_ident[i].win;
+            break;
+        }
+    }
+    if (hit != NULL) {
+        int alive = 0;
+
+        ilock = LockIBase(0);
+        for (scr = ESB_IBASE->FirstScreen; scr != NULL && !alive;
+             scr = scr->NextScreen) {
+            for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+                if (w == hit && w->WLayer == g_ident[i].layer) {
+                    alive = 1;
+                    break;
+                }
+            }
+        }
+        UnlockIBase(ilock);
+        if (!alive) {
+            g_ident[i].win = NULL;   /* gone: the serial retires */
+            hit = NULL;
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+    *window = hit;
+    return hit != NULL ? ES_OK : ES_ERR_STALE;
+}
+
 /* ------------------------------------------ 2.5: windows and layouts */
 
 /*
@@ -1265,11 +1412,12 @@ ULONG esb_query_generation(struct Screen *scr)
     ULONG ilock, h, g;
 
     (void)scr;                 /* every screen counts, see the header */
+    ObtainSemaphore(&g_sem);
     ilock = LockIBase(0);
     h = esb_windows_hash();
+    esb_ident_observe_all();   /* the poll is where windows are seen */
     UnlockIBase(ilock);
 
-    ObtainSemaphore(&g_sem);
     if (!g_gen_seen || h != g_gen_hash) {
         g_gen_hash = h;
         g_gen_seen = 1;
@@ -1311,6 +1459,7 @@ LONG esb_query_windows(struct Screen *scr, struct ESnapWindowInfo *buf,
     }
     ObtainSemaphore(&g_sem);
     ilock = LockIBase(0);
+    esb_ident_observe_all();
     if (scr == NULL) {
         scr = ESB_IBASE->FirstScreen;
     }
@@ -1359,7 +1508,7 @@ LONG esb_query_windows(struct Screen *scr, struct ESnapWindowInfo *buf,
             o->minHeight = s.min_h;
             o->maxWidth = s.max_w;
             o->maxHeight = s.max_h;
-            o->serial = 0;
+            o->serial = esb_ident_touch(w);
             for (i = 0; i < 3; i++) {
                 o->reserved[i] = 0;
             }

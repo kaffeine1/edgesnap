@@ -123,4 +123,15 @@
         ULONG, __p2, d1, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+/* --- appended for 2.6 --- */
+#define ESnap_QueryWindowSerial(__p0, __p1) \
+    LP2(0x90, LONG, ESnap_QueryWindowSerial, \
+        struct Window *, __p0, a0, ULONG *, __p1, a1, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
+#define ESnap_FindWindow(__p0, __p1) \
+    LP2(0x96, LONG, ESnap_FindWindow, \
+        ULONG, __p0, d0, struct Window **, __p1, a0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */
