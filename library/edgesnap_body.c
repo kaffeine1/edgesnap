@@ -1360,7 +1360,17 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
         return ES_ERR_REJECTED;
     }
     es_fit_rect(want, &s.usable, s.min_w, s.min_h, s.max_w, s.max_h, &r);
-    if ((flags & ES_PF_NO_RESTORE) == 0) {
+    /*
+     * The registry keeps the geometry from before the window was
+     * adopted, and follows every placement so that a restore still
+     * finds the window where the last placement put it. NO_RESTORE
+     * spends no slot on a window that was never adopted, but a window
+     * already in the registry is followed all the same: a tiler that
+     * re-places its windows many times a minute still owes the user
+     * the geometry from before it took them.
+     */
+    if ((flags & ES_PF_NO_RESTORE) == 0 ||
+        es_registry_zone(&g_registry, win) != ES_ZONE_NONE) {
         rc = es_registry_remember(&g_registry, win, &s.box, &r, ES_ZONE_RECT);
         if (rc != ES_OK) {
             return rc;

@@ -375,9 +375,12 @@ ULONG ESnap_QueryGeneration(struct Screen *screen);
  * reports ES_ZONE_RECT for a window placed this way. Geometry changes
  * are requested, not applied (ChangeWindowBox semantics).
  *
- *   ES_PF_NO_RESTORE   do not touch the registry: no way back through
- *                      UnsnapWindow, and no registry slot spent. For a
- *                      client that moves windows many times a minute.
+ *   ES_PF_NO_RESTORE   spend no registry slot on a window that was
+ *                      never adopted. A window already in the registry
+ *                      is followed all the same, so UnsnapWindow still
+ *                      gives back the geometry from before the first
+ *                      placement. For a client that moves windows many
+ *                      times a minute.
  *   ES_PF_KEEP_ZORDER  do not reorder the windows. Accepted, and today
  *                      a placement never reorders them anyway.
  *
