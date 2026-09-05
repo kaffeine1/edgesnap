@@ -381,8 +381,12 @@ ULONG ESnap_QueryGeneration(struct Screen *screen);
  *                      gives back the geometry from before the first
  *                      placement. For a client that moves windows many
  *                      times a minute.
- *   ES_PF_KEEP_ZORDER  do not reorder the windows. Accepted, and today
- *                      a placement never reorders them anyway.
+ *   ES_PF_KEEP_ZORDER  do not reorder the windows. On AROS a window is
+ *                      brought to the front before it is moved, so
+ *                      that the move copies everything and leaves no
+ *                      damage a file manager will not repaint; with
+ *                      this flag it stays where it is in the stack,
+ *                      damage and all.
  *
  * ESnap_PlaceWindowsA: a whole layout in one call. Every entry gets its
  * own result, so one stale window does not fail the rest. The library

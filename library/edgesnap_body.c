@@ -329,12 +329,24 @@ static int esb_snappable(const struct ESBSnap *s)
  * systems take the one call they have always taken.
  */
 static void esb_change_box(struct Window *win, const ESRect *from,
-                           const ESRect *to)
+                           const ESRect *to, int may_raise)
 {
 #ifdef __AROS__
     int moved = (from->x != to->x || from->y != to->y);
     int sized = (from->w != to->w || from->h != to->h);
 
+    /*
+     * Fully visible before it moves. A move is a copy of what is on
+     * screen, and whatever another window covered cannot be copied:
+     * that part arrives as damage inside the old area, which Wanderer
+     * never repaints, and shows as a black block. In front, the window
+     * has nothing covered and the move is clean. A client that asked
+     * to keep the stacking order gets what it asked for, black block
+     * and all.
+     */
+    if (moved && may_raise) {
+        WindowToFront(win);
+    }
     if (moved && sized) {
         long before = (long)from->w * from->h;
         long after = (long)to->w * to->h;
@@ -347,6 +359,7 @@ static void esb_change_box(struct Window *win, const ESRect *from,
     }
 #else
     (void)from;
+    (void)may_raise;
 #endif
     ChangeWindowBox(win, to->x, to->y, to->w, to->h);
 }
@@ -398,7 +411,7 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
          * would make ESnap_UnsnapWindow silently impossible. */
         rc = es_registry_remember(&g_registry, win, &s.box, &r, (int)zone);
         if (rc == ES_OK) {
-            esb_change_box(win, &s.box, &r);
+            esb_change_box(win, &s.box, &r, 1);
         }
     }
     ReleaseSemaphore(&g_sem);
@@ -426,7 +439,7 @@ LONG esb_unsnap_window(struct Window *win)
     } else {
         rc = es_registry_restore(&g_registry, win, &s.box, &out);
         if (rc == ES_OK) {
-            esb_change_box(win, &s.box, &out);
+            esb_change_box(win, &s.box, &out, 1);
         }
     }
     ReleaseSemaphore(&g_sem);
@@ -989,11 +1002,11 @@ LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
 
             if (j < seam->a.n) {
                 esb_change_box((struct Window *)seam->a.ref[j],
-                               &snap_a[j].box, &ra[j]);
+                               &snap_a[j].box, &ra[j], 1);
             } else {
                 j -= seam->a.n;
                 esb_change_box((struct Window *)seam->b.ref[j],
-                               &snap_b[j].box, &rb[j]);
+                               &snap_b[j].box, &rb[j], 1);
             }
         }
     }
@@ -1591,7 +1604,7 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
             return rc;
         }
     }
-    esb_change_box(win, &s.box, &r);
+    esb_change_box(win, &s.box, &r, (flags & ES_PF_KEEP_ZORDER) == 0);
     return ES_OK;
 }
 
