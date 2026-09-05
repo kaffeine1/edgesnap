@@ -358,48 +358,40 @@ static void esb_change_box(struct Window *win, const ESRect *from,
 #ifdef __AROS__
     int moved = (from->x != to->x || from->y != to->y);
     int sized = (from->w != to->w || from->h != to->h);
+    int covered = win->WLayer != NULL && win->WLayer->front != NULL;
     struct Screen *scr = win->WScreen;
+    int fits_here = scr != NULL && from->x >= 0 && from->y >= 0 &&
+                    from->x + to->w <= (int)scr->Width &&
+                    from->y + to->h <= (int)scr->Height;
 
     /*
-     * Nothing covered before it moves. A move is a copy of what is on
-     * screen, and whatever another window covered cannot be copied:
-     * that part arrives as damage inside the old area. Wanderer
-     * repairs such damage with a full redraw only while the window's
-     * size is unchanged, so the damage must be repaired BEFORE the
-     * size changes. Raising the window is what uncovers it, so the
-     * raise comes first, followed by a wait long enough for a drawer
-     * full of icons to be drawn again; a window already in front is
-     * not raised and nothing is waited for. A client that asked to
-     * keep the stacking order gets what it asked for, damage and all.
+     * Wanderer, in three sentences. When a window's size changes, Zune
+     * discards the damage the window carries without drawing it and
+     * asks for a full redraw, which Wanderer's icon list narrows to the
+     * areas gained: damage present at that moment stays pen 0. When
+     * damage arrives alone, at a steady size, Zune repaints all of it.
+     * Damage is what a raise or a move uncovers. So: no size change
+     * after damage. Size first, where the window stands; then raise,
+     * which uncovers and is repaired at a steady size; then move,
+     * which copies. A window that grows beyond the screen where it
+     * stands cannot be sized first: it moves, is raised, and waits for
+     * the repair before its size changes.
      */
-    if (moved && may_raise && win->WLayer != NULL &&
-        win->WLayer->front != NULL) {
-        WindowToFront(win);
-        Delay(2);                  /* the raise is an action: let it land */
-        esb_wait_repaint(win, 25);
-    }
-    if (moved && sized) {
-        long before = (long)from->w * from->h;
-        long after = (long)to->w * to->h;
-        int fits_here = from->x >= 0 && from->y >= 0 && scr != NULL &&
-                        from->x + to->w <= (int)scr->Width &&
-                        from->y + to->h <= (int)scr->Height;
-
-        /*
-         * Two steps, so that Wanderer sees a plain resize (it paints
-         * the areas gained) and a plain move (a copy). A window that
-         * shrinks is sized first; one that grows is sized first as
-         * well when the bigger box still fits the screen where the
-         * window stands, since a move that runs off the screen edge
-         * cannot copy what lies beyond it; otherwise it moves first.
-         */
-        if (after <= before || fits_here) {
-            ChangeWindowBox(win, from->x, from->y, to->w, to->h);
-        } else {
-            ChangeWindowBox(win, to->x, to->y, from->w, from->h);
+    if (sized && moved && !fits_here && (long)to->w * to->h >
+                                        (long)from->w * from->h) {
+        ChangeWindowBox(win, to->x, to->y, from->w, from->h);
+        if (may_raise && covered) {
+            WindowToFront(win);
         }
         Delay(2);
-        esb_wait_repaint(win, 25); /* whatever the first step uncovered */
+        esb_wait_repaint(win, 75);
+    } else {
+        if (sized) {
+            ChangeWindowBox(win, from->x, from->y, to->w, to->h);
+        }
+        if (moved && may_raise && covered) {
+            WindowToFront(win);
+        }
     }
 #else
     (void)from;
