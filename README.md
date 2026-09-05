@@ -232,6 +232,11 @@ into `SYS:WBStartup` instead; the icon carries the settings as
 tooltypes, and the commodity reads them (and stays silent, since a
 Workbench start has no console).
 
+On AROS the installer takes the Workbench route itself: a `Run` from
+`S:User-Startup` opens a console window for the new process there and
+keeps it open, so the commodity and its icon go into `SYS:WBStartup`
+and Wanderer starts it at every boot.
+
 Verified on AmigaOS 4 in the VM: install, reboot, and the first drag
 snapped with nothing started by hand.
 

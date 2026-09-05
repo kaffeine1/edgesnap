@@ -62,8 +62,10 @@ What it puts where:
   @{b}SYS:Prefs/EdgeSnap@{ub}      the settings window
   the manual, where you say
 
-On AROS the line in S:User-Startup redirects the input as well, or
-Run would open a console for it.
+On AROS the commodity goes to @{b}SYS:WBStartup/EdgeSnap@{ub} with its
+icon instead, and Wanderer starts it at every boot: a Run line in
+S:User-Startup would open a console window for it there and keep it
+open. S:User-Startup only gets a comment saying so.
 
 @{b}Updating@{ub} is installing again. The running copy is stopped,
 the old library is let go of, and the new one takes over - no reboot,
@@ -71,6 +73,7 @@ and nothing for you to type.
 
 To remove it: delete the two files above and the line between
 @{b};BEGIN EdgeSnap@{ub} and @{b};END EdgeSnap@{ub} in S:User-Startup.
+On AROS delete the library and the two files in SYS:WBStartup.
 
 @endnode
 
