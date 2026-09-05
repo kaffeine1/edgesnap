@@ -13,6 +13,18 @@
 #   build/channels/aminet/          edgesnap.lha + edgesnap.readme
 #   build/channels/os4depot/        edgesnap.lha + edgesnap_lha.readme
 #   build/channels/morphos-storage/ edgesnap.lha + edgesnap.readme
+#   build/channels/aminet-aros/     edgesnap.x86_64-aros.lha + .readme
+#   build/channels/arosarchives/    edgesnap.x86_64-aros-v11.lha + _lha.readme
+#
+# AROS has an archive of its own (make-release.sh packs it): Aminet has
+# no x86_64 token, so the x86_64 build is declared i386-aros and carries
+# the platform in the file name like every other x86_64 package there;
+# the AROS Archives (archives.arosworld.org, OS4Depot's software, so the
+# same header format) want the platform in the name too, and "-v11"
+# marks the x86_64 ABIv11 build. Their form is index.php?function=submit,
+# no account and no captcha; a passphrase set on our own uploads is what
+# lets a later replace go through without the previous uploader's nod,
+# and its value lives in SECRETS, never here.
 #
 # Each channel gets its OWN directory on purpose. The archives are named
 # the same for all three, and on macOS's case-insensitive filesystem two
@@ -29,6 +41,11 @@ import textwrap
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VERSION = sys.argv[1] if len(sys.argv) > 1 else "0.2"
 ARCHIVE = os.path.join(ROOT, "build", "EdgeSnap-%s.lha" % VERSION)
+ARCHIVE_AROS = os.path.join(ROOT, "build", "EdgeSnap-%s-AROS64.lha" % VERSION)
+# From the second AROS release on, the previous archive is named here so
+# the old entry does not survive beside the new one. None for the first.
+AROS_REPLACES_AMINET = None       # e.g. "util/cdity/edgesnap.x86_64-aros.lha"
+AROS_REPLACES_ARCHIVES = None     # e.g. "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
 AUTHOR = "Michele Dipace <michele.dipace@kaffeine.net>"
@@ -215,13 +232,63 @@ def morphos_readme():
     return aminet_readme()
 
 
+AROS_NOTE = [
+    "This is the AROS x86_64 build (ABIv11, as on AROS One x64). Aminet",
+    "has no token for it, so it is filed under i386-aros: it does not run",
+    "on i386 AROS. AmigaOS 4 and MorphOS have their own archive,",
+    "edgesnap.lha.",
+    "",
+]
+
+AROS_ARCHIVES_NOTE = [
+    "This is the AROS x86_64 build (ABIv11, as on AROS One x64); it does",
+    "not run on i386 AROS. AmigaOS 4 and MorphOS have their own archive,",
+    "on Aminet, OS4Depot and MorphOS-Storage.",
+    "",
+]
+
+
+def aminet_aros_readme():
+    head = [
+        "Short:        %s" % SHORT,
+        "Uploader:     %s (Michele Dipace)" % EMAIL,
+        "Author:       %s" % AUTHOR,
+        "Type:         util/cdity",
+        "Version:      %s" % VERSION,
+        "Architecture: i386-aros",
+    ]
+    if AROS_REPLACES_AMINET:
+        head.append("Replaces:     %s" % AROS_REPLACES_AMINET)
+    head.append("")
+    return head + AROS_NOTE + body_lines()
+
+
+def arosarchives_readme():
+    head = [
+        "name:EdgeSnap",
+        "description:Tile windows by dragging them to an edge",
+        "version:%s" % VERSION,
+        "author:Michele Dipace",
+        "submitter:Michele Dipace",
+        "email:%s" % EMAIL,
+        "url:%s" % URL,
+        "category:utility/workbench",
+        "requirements:AROS x86_64 ABIv11 (AROS One x64)",
+        "license:Other",
+    ]
+    if AROS_REPLACES_ARCHIVES:
+        head.append("replaces:%s" % AROS_REPLACES_ARCHIVES)
+    head += ["distribute:yes", "hend:", ""]
+    return head + AROS_ARCHIVES_NOTE + body_lines()
+
+
 def write(path, lines):
     # LF only, no trailing blanks, exactly what the channels ask for.
     with open(path, "w", newline="\n") as fh:
         fh.write("\n".join(lines).rstrip("\n") + "\n")
 
 
-def check(path, label, problems):
+def check(path, label, problems, name_max=30):
     raw = open(path, "rb").read()
     if b"\r" in raw:
         problems.append("%s: contains CR (must be LF only)" % label)
@@ -233,9 +300,9 @@ def check(path, label, problems):
     except UnicodeDecodeError:
         problems.append("%s: not plain ASCII" % label)
     name = os.path.basename(path)
-    if len(name) > 30:
-        problems.append("%s: filename is %d characters (max 30)" %
-                        (label, len(name)))
+    if name_max is not None and len(name) > name_max:
+        problems.append("%s: filename is %d characters (max %d)" %
+                        (label, len(name), name_max))
 
 
 def main():
@@ -250,24 +317,39 @@ def main():
 
     shutil.rmtree(OUT, ignore_errors=True)
     channels = [
-        ("aminet", "edgesnap.readme", aminet_readme()),
-        ("os4depot", "edgesnap_lha.readme", os4depot_readme()),
-        ("morphos-storage", "edgesnap.readme", morphos_readme()),
+        ("aminet", ARCHIVE, "edgesnap.lha", "edgesnap.readme", aminet_readme()),
+        ("os4depot", ARCHIVE, "edgesnap.lha", "edgesnap_lha.readme", os4depot_readme()),
+        ("morphos-storage", ARCHIVE, "edgesnap.lha", "edgesnap.readme", morphos_readme()),
     ]
+    if os.path.exists(ARCHIVE_AROS):
+        channels += [
+            ("aminet-aros", ARCHIVE_AROS, "edgesnap.x86_64-aros.lha",
+             "edgesnap.x86_64-aros.readme", aminet_aros_readme()),
+            ("arosarchives", ARCHIVE_AROS, "edgesnap.x86_64-aros-v11.lha",
+             "edgesnap.x86_64-aros-v11_lha.readme", arosarchives_readme()),
+        ]
+    else:
+        print("note: %s missing, the AROS channels are skipped" % ARCHIVE_AROS)
     problems = []
-    digest = hashlib.md5(open(ARCHIVE, "rb").read()).hexdigest()
 
-    for name, readme, lines in channels:
+    for name, archive, lha, readme, lines in channels:
         d = os.path.join(OUT, name)
         os.makedirs(d)
-        shutil.copy2(ARCHIVE, os.path.join(d, "edgesnap.lha"))
+        shutil.copy2(archive, os.path.join(d, lha))
         rp = os.path.join(d, readme)
         write(rp, lines)
-        check(rp, "%s/%s" % (name, readme), problems)
-        print("%-16s edgesnap.lha + %s" % (name, readme))
+        # The 30-character name is Aminet's rule; the AROS Archives run
+        # OS4Depot's software and take the longer _lha.readme names.
+        check(rp, "%s/%s" % (name, readme), problems,
+              name_max=None if name == "arosarchives" else 30)
+        print("%-16s %s + %s" % (name, lha, readme))
 
     print()
-    print("archive md5: %s  (%d bytes)" % (digest, os.path.getsize(ARCHIVE)))
+    for archive in (ARCHIVE, ARCHIVE_AROS):
+        if os.path.exists(archive):
+            digest = hashlib.md5(open(archive, "rb").read()).hexdigest()
+            print("%s md5: %s  (%d bytes)" % (os.path.basename(archive), digest,
+                                              os.path.getsize(archive)))
     if problems:
         print("\nPROBLEMS:", file=sys.stderr)
         for p in problems:

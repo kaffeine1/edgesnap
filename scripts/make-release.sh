@@ -46,6 +46,10 @@ fi
 echo "host tests: all suites pass"
 STAGE="$ROOT/build/release"
 OUT="$ROOT/build/EdgeSnap-$VERSION.lha"
+# AROS travels on its own: Aminet has no x86_64 token and the AROS
+# Archives want the platform in the file name, so the same stage is
+# packed twice, once without aros64/ and once with nothing else.
+OUT_AROS="$ROOT/build/EdgeSnap-$VERSION-AROS64.lha"
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/EdgeSnap"
@@ -112,28 +116,44 @@ echo "manifest: all $(echo $MANIFEST | wc -w | tr -d ' ') files present, nothing
 #   git clone https://github.com/jca02266/lha && ./configure && make
 LHA_BIN=${LHA_BIN:-"$HOME/amiga-dev/tools/lha-src/src/lha"}
 
-rm -f "$OUT"
-if [ -x "$LHA_BIN" ]; then
-    ( cd "$STAGE" && "$LHA_BIN" a "$OUT" EdgeSnap.info EdgeSnap >/dev/null )
-    echo "packed with $LHA_BIN (compressed)"
-else
-    python3 "$ROOT/scripts/make-lha.py" "$OUT" "$STAGE" EdgeSnap.info EdgeSnap
-    echo "WARNING: no LhA encoder at $LHA_BIN - the archive is STORED, not" >&2
-    echo "         compressed. Fine for GitHub, not what Aminet expects." >&2
-fi
+# pack_one <archive> <stage copy> : pack, unpack again and compare. An
+# archive nobody has opened is a promise, not a package.
+pack_one() {
+    out="$1"; src="$2"
+    rm -f "$out"
+    if [ -x "$LHA_BIN" ]; then
+        ( cd "$src" && "$LHA_BIN" a "$out" EdgeSnap.info EdgeSnap >/dev/null )
+        echo "packed $(basename "$out") with $LHA_BIN (compressed)"
+    else
+        python3 "$ROOT/scripts/make-lha.py" "$out" "$src" EdgeSnap.info EdgeSnap
+        echo "WARNING: no LhA encoder at $LHA_BIN - the archive is STORED, not" >&2
+        echo "         compressed. Fine for GitHub, not what Aminet expects." >&2
+    fi
+    check="$ROOT/build/release-check"
+    rm -rf "$check"
+    mkdir -p "$check"
+    (cd "$check" && lha xfq "$out" >/dev/null 2>&1) || true
+    if diff -r "$src" "$check" >/dev/null 2>&1; then
+        echo "verified: $(basename "$out") unpacks byte for byte"
+    else
+        echo "ERROR: $(basename "$out") does not unpack to what went in" >&2
+        diff -r "$src" "$check" | head -10 >&2
+        exit 1
+    fi
+}
 
-# Unpack it again and compare: an archive nobody has opened is a
-# promise, not a package.
-CHECK="$ROOT/build/release-check"
-rm -rf "$CHECK"
-mkdir -p "$CHECK"
-(cd "$CHECK" && lha xfq "$OUT" >/dev/null 2>&1) || true
-if diff -r "$STAGE" "$CHECK" >/dev/null 2>&1; then
-    echo "verified: unpacks byte for byte"
-else
-    echo "ERROR: the archive does not unpack to what went in" >&2
-    diff -r "$STAGE" "$CHECK" | head -10 >&2
-    exit 1
-fi
+MAIN="$ROOT/build/release-main"
+AROS="$ROOT/build/release-aros"
+rm -rf "$MAIN" "$AROS"
+cp -R "$STAGE" "$MAIN" && rm -rf "$MAIN/EdgeSnap/aros64"
+cp -R "$STAGE" "$AROS" && rm -rf "$AROS/EdgeSnap/os4" "$AROS/EdgeSnap/mos"
+# No icons in the AROS archive for now: the classic Workbench icons of
+# the package send AROS's icon.library into an illegal access (seen in
+# the Installer on AROS One, 2026-09-05), and Wanderer opens every icon
+# it shows. Until an icon set in the AROS style joins the package, the
+# installer is started from a Shell there: Installer EdgeSnap/Install.
+find "$AROS" -name "*.info" -delete
+pack_one "$OUT" "$MAIN"
+pack_one "$OUT_AROS" "$AROS"
 
-ls -l "$OUT"
+ls -l "$OUT" "$OUT_AROS"
