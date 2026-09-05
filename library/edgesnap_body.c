@@ -26,6 +26,7 @@
 #endif
 
 #include <exec/types.h>
+#include <string.h>
 #include <exec/semaphores.h>
 #include <devices/inputevent.h>
 #include <intuition/intuition.h>
@@ -334,10 +335,32 @@ static int esb_snappable(const struct ESBSnap *s)
  */
 #ifdef __AROS__
 /*
+ * Is this one of Wanderer's windows? Its IDCMP port belongs to the
+ * Wanderer task. The repaint wait below is for Wanderer alone: other
+ * Zune programs repaint what a layer operation leaves them, and the
+ * console never does, so waiting on it would only cost time.
+ */
+static int esb_is_wanderer(struct Window *win)
+{
+    struct Task *t;
+    const char *name;
+
+    if (win->UserPort == NULL) {
+        return 0;
+    }
+    t = win->UserPort->mp_SigTask;
+    if (t == NULL || (name = t->tc_Node.ln_Name) == NULL) {
+        return 0;
+    }
+    return strstr(name, "Wanderer") != NULL;
+}
+
+/*
  * Wait until the window has repainted what a layer operation left it
- * to repaint: Intuition raises LAYERREFRESH on the layer when damage
- * arrives and the window's owner clears it with EndRefresh(). Capped,
- * because a console never clears it, having never repainted.
+ * to repaint: layers raise LAYERREFRESH when damage arrives, and the
+ * window's owner clears it with EndRefresh(), which on AROS comes
+ * after the drawing. Capped, generously: a drawer full of icons takes
+ * its time under emulation.
  */
 static void esb_wait_repaint(struct Window *win, int cap_ticks)
 {
@@ -359,6 +382,7 @@ static void esb_change_box(struct Window *win, const ESRect *from,
     int moved = (from->x != to->x || from->y != to->y);
     int sized = (from->w != to->w || from->h != to->h);
     int covered = win->WLayer != NULL && win->WLayer->front != NULL;
+    int wanderer = esb_is_wanderer(win);
     struct Screen *scr = win->WScreen;
     int fits_here = scr != NULL && from->x >= 0 && from->y >= 0 &&
                     from->x + to->w <= (int)scr->Width &&
@@ -370,27 +394,32 @@ static void esb_change_box(struct Window *win, const ESRect *from,
      * asks for a full redraw, which Wanderer's icon list narrows to the
      * areas gained: damage present at that moment stays pen 0. When
      * damage arrives alone, at a steady size, Zune repaints all of it.
-     * Damage is what a raise or a move uncovers. So: no size change
-     * after damage. Size first, where the window stands; then raise,
-     * which uncovers and is repaired at a steady size; then move,
+     * Damage is what a raise or a move uncovers. So the size may only
+     * change once the damage has been repaired: raise first and wait
+     * for the repaint, then size where the window stands, then move,
      * which copies. A window that grows beyond the screen where it
-     * stands cannot be sized first: it moves, is raised, and waits for
-     * the repair before its size changes.
+     * stands moves first instead, and waits once more before its size
+     * changes, since the move may have uncovered what lay beyond the
+     * edge.
      */
-    if (sized && moved && !fits_here && (long)to->w * to->h >
-                                        (long)from->w * from->h) {
-        ChangeWindowBox(win, to->x, to->y, from->w, from->h);
-        if (may_raise && covered) {
-            WindowToFront(win);
+    if (moved && may_raise && covered) {
+        WindowToFront(win);
+        Delay(2);                  /* the raise is an action: let it land */
+        if (wanderer) {
+            esb_wait_repaint(win, 150);
         }
-        Delay(2);
-        esb_wait_repaint(win, 75);
-    } else {
-        if (sized) {
+    }
+    if (sized && moved) {
+        int grows = (long)to->w * to->h > (long)from->w * from->h;
+
+        if (grows && !fits_here) {
+            ChangeWindowBox(win, to->x, to->y, from->w, from->h);
+            Delay(2);
+            if (wanderer) {
+                esb_wait_repaint(win, 150);
+            }
+        } else {
             ChangeWindowBox(win, from->x, from->y, to->w, to->h);
-        }
-        if (moved && may_raise && covered) {
-            WindowToFront(win);
         }
     }
 #else
