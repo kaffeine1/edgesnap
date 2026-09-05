@@ -193,14 +193,33 @@
 (if (exists "SYS:Prefs/EdgeSnap.info" (noreq))
     (protect "SYS:Prefs/EdgeSnap.info" "+rwed"))
 
-(copyfiles
-  (prompt #prefs-prompt)
-  (help #prefs-help)
-  (source #prefssrc)
-  (newname "EdgeSnap")
-  (dest "SYS:Prefs")
-  (infos)
-  (confirm))
+; On AROS the icon goes as a plain file: the Installer's (infos) copy
+; hands every icon to icon.library, and AROS's stops with an illegal
+; access on ours, classic or PNG alike, while Wanderer reads the same
+; PNG icons without complaint (AROS One, 2026-09-05).
+(if (= #system 2)
+    (
+      (copyfiles
+        (prompt #prefs-prompt)
+        (help #prefs-help)
+        (source #prefssrc)
+        (newname "EdgeSnap")
+        (dest "SYS:Prefs")
+        (confirm))
+      (if (exists (cat #prefssrc ".info") (noreq))
+          (copyfiles
+            (source (cat #prefssrc ".info"))
+            (newname "EdgeSnap.info")
+            (dest "SYS:Prefs")))
+    )
+    (copyfiles
+      (prompt #prefs-prompt)
+      (help #prefs-help)
+      (source #prefssrc)
+      (newname "EdgeSnap")
+      (dest "SYS:Prefs")
+      (infos)
+      (confirm)))
 
 (protect "SYS:Prefs/EdgeSnap" "+rwed")
 ; The icon comes off the CD with the CD's own bits, and an icon that
@@ -258,18 +277,22 @@
 (if (exists (tackon #guide-dest "EdgeSnap.guide.info") (noreq))
     (protect (tackon #guide-dest "EdgeSnap.guide.info") "+rwed"))
 
-; The manual and its icon. The AROS archive carries icons in AROS's own
-; format: the classic Workbench icon sent AROS's icon.library into an
-; illegal access from inside the Installer (AROS One, 2026-09-05). An
-; icon of the old kind already sitting at the destination does the same
-; the moment the copy looks at it, so on AROS it is removed first.
+; The manual and its icon; on AROS the icon as a plain file, for the
+; reason given at the preferences above.
 (if (= #system 2)
-    (if (exists (tackon #guide-dest "EdgeSnap.guide.info") (noreq))
-        (delete (tackon #guide-dest "EdgeSnap.guide.info") (optional "force"))))
-(copyfiles
-  (source "EdgeSnap.guide")
-  (dest #guide-dest)
-  (infos))
+    (
+      (copyfiles
+        (source "EdgeSnap.guide")
+        (dest #guide-dest))
+      (if (exists "EdgeSnap.guide.info" (noreq))
+          (copyfiles
+            (source "EdgeSnap.guide.info")
+            (dest #guide-dest)))
+    )
+    (copyfiles
+      (source "EdgeSnap.guide")
+      (dest #guide-dest)
+      (infos)))
 
 (protect (tackon #guide-dest "EdgeSnap.guide") "+rwed")
 (if (exists (tackon #guide-dest "EdgeSnap.guide.info") (noreq))
