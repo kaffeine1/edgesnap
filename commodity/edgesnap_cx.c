@@ -104,6 +104,17 @@
  * so the mask never contains the pointer.
  */
 #define ES_PREVIEW_XOR 1
+/*
+ * The seam handle leaves for the duration of a seam drag. Elsewhere it
+ * is parked as an 8x8 speck under the pointer and follows it; AROS
+ * keeps the handle at its full height instead, and every step of the
+ * handle uncovers a strip of the window below that AROS backfills in
+ * pen 0 and the console never repaints: a trail of black bars across
+ * the window, which is what testers reported as "black artifacts".
+ * With no window in play the drag is followed through the input
+ * counters and the handle comes back on release, where the seam is.
+ */
+#define ES_SEAM_DRAG_BLIND 1
 #include <cybergraphx/cybergraphics.h>
 #include <proto/cybergraphics.h>
 struct Library *CyberGfxBase;
@@ -1511,6 +1522,7 @@ static int g_divider_vertical;
  * the line it sits on. */
 static int g_divider_line;
 static int g_divider_dragging;
+static struct Screen *g_divider_scr;   /* blind drag: where the pointer is read */
 /* Is the strip painted right now? It opens invisible and lights up when
  * the pointer comes to it. */
 static int g_divider_hot;
@@ -1789,6 +1801,8 @@ static void spike_divider_sync(void)
  * Messages left on the old port belong to a window that has gone; the
  * new one, if any, is waited on in the next round.
  */
+static void spike_apply_report(const struct ESnapReport *r);
+
 static void spike_divider_events(void)
 {
     struct IntuiMessage *im;
@@ -1805,6 +1819,25 @@ static void spike_divider_events(void)
 
         if (cls == IDCMP_MOUSEBUTTONS) {
             if (code == SELECTDOWN) {
+#ifdef ES_SEAM_DRAG_BLIND
+                {
+                    struct ESnapReport rep;
+
+                    g_divider_scr = g_divider->WScreen;
+                    spike_divider_close();     /* clears dragging too */
+                    g_divider_dragging = 1;
+                    /*
+                     * The engine saw this press as any other: with the
+                     * handle gone the active window is the one we are
+                     * about to resize, and "the window moved while the
+                     * pointer moved" would read as a drag of it. Told to
+                     * forget the press, it sits this one out.
+                     */
+                    ES_CALL(ESnap_ResetInput)(&rep);
+                    spike_apply_report(&rep);
+                }
+                return;                        /* the port is gone */
+#else
                 g_divider_dragging = 1;
                 /* active window: otherwise the moves stop at our edge */
                 ActivateWindow(g_divider);
@@ -1822,6 +1855,7 @@ static void spike_divider_events(void)
                  * reports coming.
                  */
                 spike_divider_park();
+#endif
             } else if (code == SELECTUP) {
                 g_divider_dragging = 0;
                 /*
@@ -1959,6 +1993,37 @@ static void spike_engine_step(void)
     g_seen_presses = g_shared.presses;
     g_seen_moves = g_shared.moves;
     g_seen_releases = g_shared.releases;
+
+#ifdef ES_SEAM_DRAG_BLIND
+    if (g_divider_dragging) {
+        if (new_move && g_divider_scr != NULL) {
+            LONG pos = g_divider_vertical ? (LONG)g_divider_scr->MouseX
+                                          : (LONG)g_divider_scr->MouseY;
+            LONG rc = ES_CALL(ESnap_MoveDividerAt)((LONG)g_divider_vertical,
+                                                   (LONG)g_divider_line, pos);
+
+            if (rc == ES_OK) {
+                g_divider_line = (int)pos;   /* the seam's name moved */
+            } else {
+                spike_log("edgesnap: divider gone (%ld)\n", (long)rc);
+                g_divider_dragging = 0;
+            }
+        }
+        if (new_release) {
+            struct ESnapDivider d;
+
+            g_divider_dragging = 0;
+            Delay(10L);                      /* the windows settle */
+            spike_divider_sync();
+            if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) == ES_OK &&
+                d.present) {
+                spike_divider_pass_focus(&d);
+            }
+            spike_log_flush();
+        }
+        return;   /* the windows move because we move them: no engine */
+    }
+#endif
 
     /*
      * The frame comes down BEFORE the release reaches the library. The
