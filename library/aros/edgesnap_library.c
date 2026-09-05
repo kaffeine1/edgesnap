@@ -20,6 +20,7 @@
 #include <exec/types.h>
 #include <exec/libraries.h>
 #include <intuition/intuition.h>
+#include <dos/dosextens.h>
 #include <utility/tagitem.h>
 #include <aros/libcall.h>
 #include <aros/symbolsets.h>
@@ -42,6 +43,8 @@ struct ExecBase *SysBase;
 /* The body speaks Intuition; the generated library node opens it at
  * init and closes it at expunge, on the strength of this line. */
 ADD2LIBS((CONST_STRPTR)"intuition.library", 36, struct IntuitionBase *, IntuitionBase);
+/* The body waits a beat between a move and a resize on AROS (Delay). */
+ADD2LIBS((CONST_STRPTR)"dos.library", 36, struct DosLibrary *, DOSBase);
 
 static int EdgeSnap_Init(struct EdgeSnapBase *base)
 {

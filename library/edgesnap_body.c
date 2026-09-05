@@ -33,6 +33,9 @@
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
+#ifdef __AROS__
+#include <proto/dos.h>
+#endif
 
 #include "edgesnap.h"
 #include "edgesnap_body.h"
@@ -356,6 +359,14 @@ static void esb_change_box(struct Window *win, const ESRect *from,
         } else {
             ChangeWindowBox(win, to->x, to->y, from->w, from->h);
         }
+        /*
+         * A beat between the two. Wanderer repairs an area uncovered
+         * by the first step with a full redraw only while its size is
+         * unchanged: once the size has changed it paints the new areas
+         * alone, and damage that arrived in between stays pen 0. The
+         * wait lets the repair land before the size moves.
+         */
+        Delay(3);
     }
 #else
     (void)from;
