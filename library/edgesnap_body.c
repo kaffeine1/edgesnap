@@ -374,13 +374,89 @@ static int esb_is_wanderer(struct Window *win)
  */
 static void esb_wait_repaint(struct Window *win, int cap_ticks)
 {
-    int i;
+    int i, quiet = 0;
 
     for (i = 0; i < cap_ticks; i++) {
-        if (win->WLayer == NULL || (win->WLayer->Flags & LAYERREFRESH) == 0) {
+        if (win->WLayer == NULL) {
+            return;
+        }
+        if ((win->WLayer->Flags & LAYERREFRESH) != 0) {
+            quiet = 0;
+        } else if (++quiet >= 3) {
             return;
         }
         Delay(1);
+    }
+}
+
+/*
+ * ChangeWindowBox() is asynchronous on AROS. Do not manufacture fresh
+ * damage until Intuition has installed the final box and left it stable
+ * long enough for Wanderer to consume IDCMP_NEWSIZE.
+ */
+static int esb_wait_box(struct Window *win, const ESRect *box,
+                        int cap_ticks)
+{
+    int i, steady = 0;
+
+    for (i = 0; i < cap_ticks; i++) {
+        if (win->LeftEdge == box->x && win->TopEdge == box->y &&
+            win->Width == box->w && win->Height == box->h) {
+            if (++steady >= 3) {
+                return 1;
+            }
+        } else {
+            steady = 0;
+        }
+        Delay(1);
+    }
+    return 0;
+}
+
+/*
+ * Wanderer's resize redraw can leave earlier layer damage black. Once
+ * the size is steady, briefly cover the visible part of the drawer with
+ * an unpainted SIMPLE_REFRESH layer. Closing it creates new, resize-free
+ * damage, which sends Zune through its full redraw path.
+ */
+static void esb_refresh_wanderer(struct Window *win, const ESRect *box)
+{
+    struct Screen *scr = win->WScreen;
+    struct Window *cover;
+    int left, top, right, bottom;
+
+    if (scr == NULL) {
+        return;
+    }
+    left = box->x < 0 ? 0 : box->x;
+    top = box->y < 0 ? 0 : box->y;
+    right = box->x + box->w;
+    bottom = box->y + box->h;
+    if (right > (int)scr->Width) {
+        right = scr->Width;
+    }
+    if (bottom > (int)scr->Height) {
+        bottom = scr->Height;
+    }
+    if (right <= left || bottom <= top) {
+        return;
+    }
+
+    cover = OpenWindowTags(NULL,
+                           WA_CustomScreen, scr,
+                           WA_Left, left,
+                           WA_Top, top,
+                           WA_Width, right - left,
+                           WA_Height, bottom - top,
+                           WA_Flags, WFLG_BORDERLESS |
+                                     WFLG_SIMPLE_REFRESH |
+                                     WFLG_NOCAREREFRESH,
+                           WA_Activate, FALSE,
+                           WA_BackFill, LAYERS_NOBACKFILL,
+                           TAG_DONE);
+    if (cover != NULL) {
+        CloseWindow(cover);
+        esb_wait_repaint(win, 150);
     }
 }
 #endif
@@ -437,6 +513,12 @@ static void esb_change_box(struct Window *win, const ESRect *from,
     (void)may_raise;
 #endif
     ChangeWindowBox(win, to->x, to->y, to->w, to->h);
+#ifdef __AROS__
+    if (wanderer && (moved || sized) && esb_wait_box(win, to, 150)) {
+        esb_wait_repaint(win, 150);
+        esb_refresh_wanderer(win, to);
+    }
+#endif
 }
 
 /* ------------------------------------------------------- public API */

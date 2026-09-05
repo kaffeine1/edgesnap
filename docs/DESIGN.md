@@ -814,6 +814,21 @@ turned out to be portable rather than AROS-specific:
 - **A silent exit is a defect in itself.** The frame did not show for a
   reason that never reached the log; once the exit spoke, the cause
   took one try to find.
+- **Wanderer needs fresh damage after a resize.** Its icon list treats a
+  size change as `UPDATE_RESIZE` and redraws only newly gained areas. Zune
+  can therefore clear layer damage from an older area without painting it,
+  leaving that area black even though `LAYERREFRESH` was raised and cleared.
+  The AROS-only placement path now waits for the requested box to remain
+  stable and for refresh activity to become quiet. It then opens and closes
+  an unpainted borderless `SIMPLE_REFRESH` window over the visible drawer
+  box with `LAYERS_NOBACKFILL`. Closing that cover creates fresh damage at a
+  steady size, so Zune takes the full damage redraw path. The workaround is
+  restricted to windows owned by the Wanderer task; applying it to consoles
+  would expose their separate failure to repaint uncovered pixels. Ten
+  repeated left/right placements in AROS One, including drawers starting
+  beyond either screen edge, finished without a black 40 by 40 pixel area.
+  The proper system-side fix remains in Wanderer's icon list: its resize
+  update must also honor existing layer damage in the old area.
 
 ### 0.4 - candidates
 
