@@ -2121,11 +2121,31 @@ static int spike_divider_distance(void)
     return dx > dy ? dx : dy;
 }
 
+static void spike_seam_query(void);
+
+/*
+ * Light the seam up when the pointer arrives, put it out when it
+ * leaves. While no seam is lit the library is asked again every few
+ * moves where the nearest one is: a seam asked for right after a snap
+ * finds windows that have not moved yet and answers "none", and the
+ * one asked for on the last release is not the nearest once the
+ * pointer has crossed the screen. Asking is a walk over a handful of
+ * windows, and the pointer moving is the only time the answer can
+ * change for us.
+ */
 static void spike_divider_hover(void)
 {
+    static ULONG moves_since_ask;
     int d;
 
-    if (!g_seam.present || g_divider_dragging) {
+    if (g_divider_dragging) {
+        return;
+    }
+    if (!g_seam.hot && ++moves_since_ask >= 6) {
+        moves_since_ask = 0;
+        spike_seam_query();
+    }
+    if (!g_seam.present) {
         return;
     }
     d = spike_divider_distance();
@@ -2137,7 +2157,7 @@ static void spike_divider_hover(void)
 }
 
 /* Ask the library where the seam nearest the pointer is, and remember it. */
-static void spike_divider_sync(void)
+static void spike_seam_query(void)
 {
     struct ESnapDivider d;
     struct Screen *ps = LockPubScreen(NULL);
@@ -2174,6 +2194,11 @@ static void spike_divider_sync(void)
     g_seam.strip.w = (int)d.strip.w;
     g_seam.strip.h = (int)d.strip.h;
     g_seam.scr = g_accent.scr != NULL ? g_accent.scr : ps;
+}
+
+static void spike_divider_sync(void)
+{
+    spike_seam_query();
     spike_divider_hover();
 }
 
