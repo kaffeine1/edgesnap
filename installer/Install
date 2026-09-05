@@ -76,11 +76,14 @@
        "    SYS:Prefs/EdgeSnap\n"
        "    one line in S:User-Startup\n"))
 
-(set #done-tail
+; The line that starts the commodity is named in here, and it differs
+; on AROS, so this text is put together at the end, once the system is
+; known (see #startup-line and the exit at the bottom).
+(set #done-tail-1
   (cat "\nEdgeSnap starts with the system at every boot. To start it by "
-       "hand at any time:\n\n"
-       "    Run >NIL: C:EdgeSnap\n\n"
-       "The settings are in SYS:Prefs/EdgeSnap - open it, change what "
+       "hand at any time:\n\n    "))
+(set #done-tail-2
+  (cat "\n\nThe settings are in SYS:Prefs/EdgeSnap - open it, change what "
        "you like, and EdgeSnap follows without being restarted. "
        "Exchange enables, disables or removes it as with any "
        "commodity."))
@@ -255,13 +258,22 @@
 (if (exists (tackon #guide-dest "EdgeSnap.guide.info") (noreq))
     (protect (tackon #guide-dest "EdgeSnap.guide.info") "+rwed"))
 
-(copyfiles
-  (source "EdgeSnap.guide")
-  (dest #guide-dest)
-  (infos))
+; On AROS the manual travels without its icon: the classic Workbench
+; icon in the package sends AROS's icon.library into an illegal access
+; from inside the Installer (AROS One, 2026-09-05), and an icon in the
+; AROS style will come with the AROS icon set.
+(if (= #system 2)
+    (copyfiles
+      (source "EdgeSnap.guide")
+      (dest #guide-dest))
+    (copyfiles
+      (source "EdgeSnap.guide")
+      (dest #guide-dest)
+      (infos)))
 
 (protect (tackon #guide-dest "EdgeSnap.guide") "+rwed")
-(protect (tackon #guide-dest "EdgeSnap.guide.info") "+rwed")
+(if (exists (tackon #guide-dest "EdgeSnap.guide.info") (noreq))
+    (protect (tackon #guide-dest "EdgeSnap.guide.info") "+rwed"))
 
 (complete 95)
 
@@ -297,5 +309,5 @@
            "    " (tackon #guide-dest "EdgeSnap.guide") "\n\n"
            "Nothing else was installed into the drawer you ran this "
            "from, so it can be deleted.\n"
-           #done-tail)
+           #done-tail-1 #startup-line #done-tail-2)
       (quiet))
