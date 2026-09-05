@@ -29,6 +29,7 @@
 #include <exec/semaphores.h>
 #include <devices/inputevent.h>
 #include <intuition/intuition.h>
+#include <graphics/layers.h>
 #include <intuition/intuitionbase.h>
 
 #include <proto/exec.h>
@@ -337,36 +338,45 @@ static void esb_change_box(struct Window *win, const ESRect *from,
 #ifdef __AROS__
     int moved = (from->x != to->x || from->y != to->y);
     int sized = (from->w != to->w || from->h != to->h);
+    struct Screen *scr = win->WScreen;
 
     /*
-     * Fully visible before it moves. A move is a copy of what is on
+     * Nothing covered before it moves. A move is a copy of what is on
      * screen, and whatever another window covered cannot be copied:
-     * that part arrives as damage inside the old area, which Wanderer
-     * never repaints, and shows as a black block. In front, the window
-     * has nothing covered and the move is clean. A client that asked
-     * to keep the stacking order gets what it asked for, black block
-     * and all.
+     * that part arrives as damage inside the old area. Wanderer
+     * repairs such damage with a full redraw only while the window's
+     * size is unchanged, so the damage must be repaired BEFORE the
+     * size changes. Raising the window is what uncovers it, so the
+     * raise comes first, followed by a wait long enough for a drawer
+     * full of icons to be drawn again; a window already in front is
+     * not raised and nothing is waited for. A client that asked to
+     * keep the stacking order gets what it asked for, damage and all.
      */
-    if (moved && may_raise) {
+    if (moved && may_raise && win->WLayer != NULL &&
+        win->WLayer->front != NULL) {
         WindowToFront(win);
+        Delay(10);
     }
     if (moved && sized) {
         long before = (long)from->w * from->h;
         long after = (long)to->w * to->h;
+        int fits_here = from->x >= 0 && from->y >= 0 && scr != NULL &&
+                        from->x + to->w <= (int)scr->Width &&
+                        from->y + to->h <= (int)scr->Height;
 
-        if (after <= before) {
+        /*
+         * Two steps, so that Wanderer sees a plain resize (it paints
+         * the areas gained) and a plain move (a copy). A window that
+         * shrinks is sized first; one that grows is sized first as
+         * well when the bigger box still fits the screen where the
+         * window stands, since a move that runs off the screen edge
+         * cannot copy what lies beyond it; otherwise it moves first.
+         */
+        if (after <= before || fits_here) {
             ChangeWindowBox(win, from->x, from->y, to->w, to->h);
         } else {
             ChangeWindowBox(win, to->x, to->y, from->w, from->h);
         }
-        /*
-         * A beat between the two. Wanderer repairs an area uncovered
-         * by the first step with a full redraw only while its size is
-         * unchanged: once the size has changed it paints the new areas
-         * alone, and damage that arrived in between stays pen 0. The
-         * wait lets the repair land before the size moves.
-         */
-        Delay(3);
     }
 #else
     (void)from;
