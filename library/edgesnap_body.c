@@ -923,13 +923,42 @@ LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
     }
     ReleaseSemaphore(&g_sem);
 
-    for (i = 0; i < seam->a.n; i++) {
-        ChangeWindowBox((struct Window *)seam->a.ref[i],
-                        ra[i].x, ra[i].y, ra[i].w, ra[i].h);
-    }
-    for (i = 0; i < seam->b.n; i++) {
-        ChangeWindowBox((struct Window *)seam->b.ref[i],
-                        rb[i].x, rb[i].y, rb[i].w, rb[i].h);
+    /*
+     * Shrinking first, growing last, as a layout is applied. A window
+     * that grows into space another window still holds gets its new
+     * size while that space is covered, and on a system whose console
+     * or file manager clears a window only when its size changes and
+     * never repaints an area uncovered later (AROS One, 2026-09-05),
+     * the strip stays pen 0 once the other window has moved away. With
+     * the shrinking side moved first, the growing side finds its new
+     * area free at the moment it is told its new size.
+     */
+    {
+        long delta[2 * ES_SEAM_SIDE_MAX];
+        int order[2 * ES_SEAM_SIDE_MAX];
+        int n = 0, k;
+
+        for (i = 0; i < seam->a.n; i++, n++) {
+            delta[n] = (long)ra[i].w * ra[i].h -
+                       (long)snap_a[i].box.w * snap_a[i].box.h;
+        }
+        for (i = 0; i < seam->b.n; i++, n++) {
+            delta[n] = (long)rb[i].w * rb[i].h -
+                       (long)snap_b[i].box.w * snap_b[i].box.h;
+        }
+        es_order_by_growth(delta, n, order);
+        for (k = 0; k < n; k++) {
+            int j = order[k];
+
+            if (j < seam->a.n) {
+                ChangeWindowBox((struct Window *)seam->a.ref[j],
+                                ra[j].x, ra[j].y, ra[j].w, ra[j].h);
+            } else {
+                j -= seam->a.n;
+                ChangeWindowBox((struct Window *)seam->b.ref[j],
+                                rb[j].x, rb[j].y, rb[j].w, rb[j].h);
+            }
+        }
     }
     return ES_OK;
 }
