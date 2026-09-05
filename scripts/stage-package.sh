@@ -56,8 +56,8 @@ fi
 
 # AROS x86_64: built on the bench (scripts/build-aros.sh brings the
 # binaries back), with icons in AROS's own PNG format beside the
-# programs; the installer starts the commodity from S:User-Startup
-# there, and the icon is for whoever prefers WBStartup.
+# programs; the installer puts the commodity into SYS:WBStartup
+# there, so its icon travels with it.
 mkdir -p "$DEST/aros64"
 if [ -f "$ROOT/build/aros-x86_64/EdgeSnap" ]; then
     cp "$ROOT/build/aros-x86_64/EdgeSnap"          "$DEST/aros64/EdgeSnap"
@@ -89,7 +89,7 @@ Short:        Drag windows to screen edges to tile them
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/wb
-Version:      0.2 (beta)
+Version:      0.3 (beta)
 Architecture: ppc-amigaos >= 4.0; ppc-morphos >= 3.0
 Distribution: Aminet
 License:      MIT
@@ -112,8 +112,8 @@ any other. esnaptest, in the package, is a worked example.
 
 TO INSTALL: double-click the Install icon. It recognises the system,
 proposes the matching build, and puts everything where it belongs -
-including one line in S:User-Startup, so snapping is simply there from
-the next boot. Updating is installing again: no reboot needed.
+including one line in S:User-Startup (on AROS the commodity goes into
+SYS:WBStartup instead), so snapping is simply there from the next boot. Updating is installing again: no reboot needed.
 
 Full documentation is in EdgeSnap.guide.
 EOF
