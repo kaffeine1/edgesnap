@@ -85,9 +85,11 @@ EdgeSnap/mos/esnaptest
 EdgeSnap/mos/EdgeSnapPrefs
 EdgeSnap/mos/EdgeSnapPrefs.info
 EdgeSnap/aros64/EdgeSnap
+EdgeSnap/aros64/EdgeSnap.info
 EdgeSnap/aros64/edgesnap.library
 EdgeSnap/aros64/esnaptest
 EdgeSnap/aros64/EdgeSnapPrefs
+EdgeSnap/aros64/EdgeSnapPrefs.info
 "
 missing=0
 for f in $MANIFEST; do
@@ -147,12 +149,16 @@ AROS="$ROOT/build/release-aros"
 rm -rf "$MAIN" "$AROS"
 cp -R "$STAGE" "$MAIN" && rm -rf "$MAIN/EdgeSnap/aros64"
 cp -R "$STAGE" "$AROS" && rm -rf "$AROS/EdgeSnap/os4" "$AROS/EdgeSnap/mos"
-# No icons in the AROS archive for now: the classic Workbench icons of
-# the package send AROS's icon.library into an illegal access (seen in
-# the Installer on AROS One, 2026-09-05), and Wanderer opens every icon
-# it shows. Until an icon set in the AROS style joins the package, the
-# installer is started from a Shell there: Installer EdgeSnap/Install.
-find "$AROS" -name "*.info" -delete
+# The AROS archive carries icons in AROS's own PNG format in place of
+# the classic Workbench ones, which AROS's icon.library reads badly:
+# one sent the Installer into an illegal access, another had Wanderer
+# open the Install script as a document. Drawn by
+# scripts/make-aros-icons.py until an icon set in the AROS style
+# replaces them.
+cp "$ROOT/assets/aros/EdgeSnapDrawer.info"   "$AROS/EdgeSnap.info"
+cp "$ROOT/assets/aros/Install.info"          "$AROS/EdgeSnap/Install.info"
+cp "$ROOT/assets/aros/EdgeSnap.guide.info"   "$AROS/EdgeSnap/EdgeSnap.guide.info"
+cp "$ROOT/assets/aros/EdgeSnap.readme.info"  "$AROS/EdgeSnap/EdgeSnap.readme.info"
 pack_one "$OUT" "$MAIN"
 pack_one "$OUT_AROS" "$AROS"
 

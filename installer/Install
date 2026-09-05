@@ -258,18 +258,13 @@
 (if (exists (tackon #guide-dest "EdgeSnap.guide.info") (noreq))
     (protect (tackon #guide-dest "EdgeSnap.guide.info") "+rwed"))
 
-; On AROS the manual travels without its icon: the classic Workbench
-; icon in the package sends AROS's icon.library into an illegal access
-; from inside the Installer (AROS One, 2026-09-05), and an icon in the
-; AROS style will come with the AROS icon set.
-(if (= #system 2)
-    (copyfiles
-      (source "EdgeSnap.guide")
-      (dest #guide-dest))
-    (copyfiles
-      (source "EdgeSnap.guide")
-      (dest #guide-dest)
-      (infos)))
+; The manual and its icon. The AROS archive carries icons in AROS's own
+; format: the classic Workbench icon sent AROS's icon.library into an
+; illegal access from inside the Installer (AROS One, 2026-09-05).
+(copyfiles
+  (source "EdgeSnap.guide")
+  (dest #guide-dest)
+  (infos))
 
 (protect (tackon #guide-dest "EdgeSnap.guide") "+rwed")
 (if (exists (tackon #guide-dest "EdgeSnap.guide.info") (noreq))

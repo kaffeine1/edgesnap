@@ -55,15 +55,19 @@ else
 fi
 
 # AROS x86_64: built on the bench (scripts/build-aros.sh brings the
-# binaries back). No icons of its own yet: the installer starts the
-# commodity from S:User-Startup there, and a WBStartup icon in the
-# AROS style will join the package when there is one.
+# binaries back), with icons in AROS's own PNG format beside the
+# programs; the installer starts the commodity from S:User-Startup
+# there, and the icon is for whoever prefers WBStartup.
 mkdir -p "$DEST/aros64"
 if [ -f "$ROOT/build/aros-x86_64/EdgeSnap" ]; then
     cp "$ROOT/build/aros-x86_64/EdgeSnap"          "$DEST/aros64/EdgeSnap"
     cp "$ROOT/build/aros-x86_64/edgesnap.library"  "$DEST/aros64/edgesnap.library"
     cp "$ROOT/build/aros-x86_64/esnaptest"         "$DEST/aros64/esnaptest"
     cp "$ROOT/build/aros-x86_64/EdgeSnapPrefs"     "$DEST/aros64/EdgeSnapPrefs"
+    # Icons in AROS's own format (scripts/make-aros-icons.py): the
+    # classic ones are read badly by AROS's icon.library.
+    cp "$ROOT/assets/aros/EdgeSnap.info"           "$DEST/aros64/EdgeSnap.info"
+    cp "$ROOT/assets/aros/EdgeSnapPrefs.info"      "$DEST/aros64/EdgeSnapPrefs.info"
 else
     echo "WARNING: no AROS build - aros64/ left empty" >&2
 fi
