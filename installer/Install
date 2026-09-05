@@ -260,7 +260,12 @@
 
 ; The manual and its icon. The AROS archive carries icons in AROS's own
 ; format: the classic Workbench icon sent AROS's icon.library into an
-; illegal access from inside the Installer (AROS One, 2026-09-05).
+; illegal access from inside the Installer (AROS One, 2026-09-05). An
+; icon of the old kind already sitting at the destination does the same
+; the moment the copy looks at it, so on AROS it is removed first.
+(if (= #system 2)
+    (if (exists (tackon #guide-dest "EdgeSnap.guide.info") (noreq))
+        (delete (tackon #guide-dest "EdgeSnap.guide.info") (optional "force"))))
 (copyfiles
   (source "EdgeSnap.guide")
   (dest #guide-dest)
