@@ -90,8 +90,8 @@ Architecture: ppc-amigaos >= 4.0; ppc-morphos >= 3.0
 Distribution: Aminet
 License:      MIT
 
-EdgeSnap gives AmigaOS 4.x and MorphOS the window snapping of Windows
-and macOS. Drag a window by its title bar until the POINTER touches a
+EdgeSnap gives AmigaOS 4.x, MorphOS and AROS x86_64 the window snapping
+of Windows and macOS. Drag a window by its title bar until the POINTER touches a
 screen edge or corner: a frame shows where it will land, and letting
 go fills that half or quarter of the screen.
 

@@ -6,7 +6,7 @@
 
 @node MAIN "EdgeSnap 0.2 beta"
 @{b}EdgeSnap 0.2 beta@{ub}
-Window snapping for AmigaOS 4.x and MorphOS
+Window snapping for AmigaOS 4.x, MorphOS and AROS x86_64
 by Michele Dipace <michele.dipace@kaffeine.net>
 
   @{" What it does        " link ABOUT}
@@ -59,6 +59,11 @@ What it puts where:
   @{b}C:EdgeSnap@{ub}              the commodity you interact with
   @{b}ENVARC:EdgeSnap.prefs@{ub}   the settings, commented, changing nothing
   one line in @{b}S:User-Startup@{ub}   so it is simply there at every boot
+  @{b}SYS:Prefs/EdgeSnap@{ub}      the settings window
+  the manual, where you say
+
+On AROS the line in S:User-Startup redirects the input as well, or
+Run would open a console for it.
 
 @{b}Updating@{ub} is installing again. The running copy is stopped,
 the old library is let go of, and the new one takes over - no reboot,
@@ -82,11 +87,15 @@ other side gives it the space that is actually left, not a rigid
 half - so a sixty/forty split stays sixty/forty.
 
 @{b}The seam@{ub}
-Where two snapped windows meet there is nothing to see, as on macOS.
-Press on the join and the pointer becomes a double arrow: drag, and
-both windows are resized together. Let go and the pointer goes back.
-Dragging far towards one side stops when a window would become too
-small - that is a limit, not a fault.
+Where two snapped windows meet there is nothing to see until the
+pointer comes near: then the join lights up in the same colour as the
+preview frame. Press on it and drag, and both windows are resized
+together; on AmigaOS 4 and MorphOS the pointer becomes a double arrow
+and the windows follow as you drag, on AROS only the line follows and
+the windows change when you let go, the way AROS moves its own
+windows. Dragging far towards one side stops where a window would
+become smaller than it allows - that is a limit, not a fault. Three or
+four windows that share one line share one seam.
 
 @{b}Hotkeys@{ub}
   @{b}ctrl alt cursor left@{ub}    snap the active window left
@@ -130,9 +139,9 @@ and hold that key while you drag.
       reboot. Starting EdgeSnap a second time by accident is simply
       refused; only QUIT stops it.
 
-Run from a Shell rather than with @{b}Run >NIL:@{ub} and it prints
-what it decides, drag by drag - useful when something does not behave
-as expected.
+Run from a Shell rather than with @{b}Run >NIL:@{ub} (on AROS
+@{b}Run >NIL: <NIL:@{ub}) and it prints what it decides, drag by drag -
+useful when something does not behave as expected.
 
 Settings are re-read while it runs: whatever writes
 @{b}ENV:EdgeSnap.prefs@{ub} - the preferences window, an editor, a
