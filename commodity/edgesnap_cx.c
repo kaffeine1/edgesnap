@@ -119,6 +119,17 @@
  * resized and repaints itself.
  */
 #define ES_SEAM_DRAG_BLIND 1
+/*
+ * And on AROS the seam has no window at all. Even a handle that stands
+ * still has to be moved once, on release, to where the seam went, and
+ * that one uncovering left a line of pen 0 the console never repainted.
+ * The seam is a line drawn on the screen with the frame's technique,
+ * lit when the pointer comes near; the press on it is recognised and
+ * swallowed by the input handler, so the two windows below never see
+ * the click, and the drag runs through the input counters.
+ */
+#define ES_SEAM_NO_WINDOW 1
+static void spike_sl_hide(void);
 #include <cybergraphx/cybergraphics.h>
 #include <proto/cybergraphics.h>
 struct Library *CyberGfxBase;
@@ -260,6 +271,12 @@ struct SpikeShared {
     volatile ULONG releases;
     volatile ULONG moves;
     volatile ULONG quals;   /* latest qualifier bits seen with the mouse */
+    /* the windowless seam (AROS): the task says when the pointer is on
+     * a lit seam and while a seam drag runs; the handler counts the
+     * presses it swallowed on our behalf */
+    volatile ULONG seam_hot;
+    volatile ULONG seam_dragging;
+    volatile ULONG seam_grabs;
 };
 
 static struct SpikeShared g_shared;
@@ -313,8 +330,21 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
     }
     g_shared.quals = ie->ie_Qualifier;
     if (ie->ie_Code == IECODE_LBUTTON) {
+#ifdef ES_SEAM_NO_WINDOW
+        if (g_shared.seam_hot) {
+            /* the seam is ours: a NULL event is one Intuition ignores,
+             * so the two windows below never see this click */
+            ie->ie_Class = IECLASS_NULL;
+            g_shared.seam_grabs++;
+        }
+#endif
         g_shared.presses++;
     } else if (ie->ie_Code == (IECODE_LBUTTON | IECODE_UP_PREFIX)) {
+#ifdef ES_SEAM_NO_WINDOW
+        if (g_shared.seam_dragging) {
+            ie->ie_Class = IECLASS_NULL;   /* the press was ours too */
+        }
+#endif
 #ifdef ES_PREVIEW_XOR
         /*
          * Ahead of Intuition, which sits lower in the chain and moves
@@ -1539,6 +1569,9 @@ static int g_divider_hot;
 
 static void spike_divider_close(void)
 {
+#ifdef ES_SEAM_NO_WINDOW
+    spike_sl_hide();
+#endif
     if (g_divider != NULL) {
         CloseWindow(g_divider);
         g_divider = NULL;
@@ -1547,6 +1580,7 @@ static void spike_divider_close(void)
     }
 }
 
+#ifndef ES_SEAM_NO_WINDOW
 /*
  * The seam is visible, and it has to be.
  *
@@ -1927,11 +1961,253 @@ static void spike_divider_events(void)
     }
 }
 
+#else /* ES_SEAM_NO_WINDOW */
+
+/* ------------------------------------ the seam as a line on the screen */
+
+/*
+ * One strip in the accent colour over the seam, drawn and taken away
+ * with the frame's masked XOR (see spike_pf_show): what is there XOR the
+ * accent, twice. Task context only, under Forbid like the frame.
+ */
+static struct {
+    int shown;
+    int plain;                 /* drawn as a plain inversion */
+    ESRect rect;
+    UBYTE *saved;
+    UBYTE *mask;
+} g_sl;
+
+static void spike_sl_invert(void)
+{
+    struct RastPort rp;
+
+    rp = g_pf.scr->RastPort;
+    SetDrMd(&rp, COMPLEMENT);
+    RectFill(&rp, g_sl.rect.x, g_sl.rect.y,
+             g_sl.rect.x + g_sl.rect.w - 1, g_sl.rect.y + g_sl.rect.h - 1);
+}
+
+static void spike_sl_show(const ESRect *r)
+{
+    ULONG bytes, n, k;
+    int ok = 0;
+
+    if (g_sl.shown || g_pf.scr == NULL || r->w <= 0 || r->h <= 0) {
+        return;
+    }
+    g_sl.rect = *r;
+    bytes = (ULONG)(r->w * r->h * ES_PF_BPP);
+    g_sl.saved = (UBYTE *)AllocVec(bytes, MEMF_ANY);
+    g_sl.mask = (UBYTE *)AllocVec(bytes, MEMF_ANY);
+    Forbid();
+    g_sl.plain = g_pf.shallow || g_sl.saved == NULL || g_sl.mask == NULL;
+    if (!g_sl.plain) {
+        n = bytes;
+        if (ES_PF_READ(&g_pf.scr->RastPort, r->x, r->y, g_sl.saved,
+                       r->w * ES_PF_BPP, r->w, r->h) >= (ULONG)(r->w * r->h)) {
+            for (k = 0; k < n; k++) {
+                g_sl.mask[k] = g_sl.saved[k] ^ g_pf.accent[k & 3];
+                g_sl.saved[k] ^= g_sl.mask[k];        /* the accent */
+            }
+            ES_PF_WRITE(g_sl.saved, r->w * ES_PF_BPP, &g_pf.scr->RastPort,
+                        r->x, r->y, r->w, r->h);
+            ok = 1;
+            ES_PF_READ(&g_pf.scr->RastPort, r->x, r->y, g_sl.saved,
+                       r->w * ES_PF_BPP, r->w, r->h);
+            for (k = 0; k < n; k++) {
+                if ((k & 3) != 0 && g_sl.saved[k] != g_pf.accent[k & 3]) {
+                    ok = 0;
+                    break;
+                }
+            }
+            if (!ok) {              /* take the accent off again */
+                for (k = 0; k < n; k++) {
+                    g_sl.saved[k] = g_sl.mask[k] ^ g_pf.accent[k & 3];
+                }
+                ES_PF_WRITE(g_sl.saved, r->w * ES_PF_BPP,
+                            &g_pf.scr->RastPort, r->x, r->y, r->w, r->h);
+            }
+        }
+        if (!ok) {
+            g_sl.plain = 1;
+        }
+    }
+    if (g_sl.plain) {
+        spike_sl_invert();
+    }
+    g_sl.shown = 1;
+    Permit();
+}
+
+static void spike_sl_hide(void)
+{
+    if (g_sl.shown && g_pf.scr != NULL) {
+        Forbid();
+        if (g_sl.plain) {
+            spike_sl_invert();
+        } else {
+            const ESRect *r = &g_sl.rect;
+            ULONG n = (ULONG)(r->w * r->h * ES_PF_BPP), k;
+
+            ES_PF_READ(&g_pf.scr->RastPort, r->x, r->y, g_sl.saved,
+                       r->w * ES_PF_BPP, r->w, r->h);
+            for (k = 0; k < n; k++) {
+                g_sl.saved[k] ^= g_sl.mask[k];
+            }
+            ES_PF_WRITE(g_sl.saved, r->w * ES_PF_BPP, &g_pf.scr->RastPort,
+                        r->x, r->y, r->w, r->h);
+        }
+        g_sl.shown = 0;
+        Permit();
+    }
+    if (g_sl.saved != NULL) {
+        FreeVec(g_sl.saved);
+        g_sl.saved = NULL;
+    }
+    if (g_sl.mask != NULL) {
+        FreeVec(g_sl.mask);
+        g_sl.mask = NULL;
+    }
+    g_sl.shown = 0;
+}
+
+/* ------------------------------------------- the seam, without window */
+
+static struct {
+    int present;
+    int vertical;
+    int line;
+    int hot;                   /* the line is lit, the pointer on it */
+    ESRect strip;
+    struct Screen *scr;
+} g_seam;
+
+static void spike_seam_light(int on)
+{
+    if (on && !g_seam.hot) {
+        spike_sl_show(&g_seam.strip);
+        g_seam.hot = 1;
+        g_shared.seam_hot = 1;
+    } else if (!on && g_seam.hot) {
+        g_shared.seam_hot = 0;
+        g_seam.hot = 0;
+        spike_sl_hide();
+    }
+}
+
+static int spike_divider_distance(void)
+{
+    int px, py, dx = 0, dy = 0;
+    const ESRect *r = &g_seam.strip;
+
+    if (!g_seam.present || g_seam.scr == NULL) {
+        return 0x7FFF;
+    }
+    px = (int)g_seam.scr->MouseX;
+    py = (int)g_seam.scr->MouseY;
+    if (px < r->x) {
+        dx = r->x - px;
+    } else if (px >= r->x + r->w) {
+        dx = px - (r->x + r->w - 1);
+    }
+    if (py < r->y) {
+        dy = r->y - py;
+    } else if (py >= r->y + r->h) {
+        dy = py - (r->y + r->h - 1);
+    }
+    return dx > dy ? dx : dy;
+}
+
+static void spike_divider_hover(void)
+{
+    int d;
+
+    if (!g_seam.present || g_divider_dragging) {
+        return;
+    }
+    d = spike_divider_distance();
+    if (!g_seam.hot && d <= ES_SEAM_SHOW_PX) {
+        spike_seam_light(1);
+    } else if (g_seam.hot && d >= ES_SEAM_HIDE_PX) {
+        spike_seam_light(0);
+    }
+}
+
+/* Ask the library where the seam nearest the pointer is, and remember it. */
+static void spike_divider_sync(void)
+{
+    struct ESnapDivider d;
+    struct Screen *ps = LockPubScreen(NULL);
+    LONG px = 0, py = 0, rc;
+
+    if (ps != NULL) {
+        px = (LONG)ps->MouseX;
+        py = (LONG)ps->MouseY;
+        UnlockPubScreen(NULL, ps);
+    }
+    rc = ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, px, py, &d);
+    if (rc != ES_OK || !d.present) {
+        spike_seam_light(0);
+        g_seam.present = 0;
+        return;
+    }
+    if (g_seam.hot &&
+        (g_seam.strip.x != (int)d.strip.x || g_seam.strip.y != (int)d.strip.y ||
+         g_seam.strip.w != (int)d.strip.w || g_seam.strip.h != (int)d.strip.h)) {
+        spike_seam_light(0);        /* the line moves: off, then on again */
+    }
+    if (!g_seam.present || g_seam.line != (int)d.position ||
+        g_seam.vertical != (int)d.vertical) {
+        spike_log("edgesnap: seam at %ld (%s)\n", (long)d.position,
+                  d.vertical ? "vertical" : "horizontal");
+    }
+    g_seam.present = 1;
+    g_seam.vertical = (int)d.vertical;
+    g_seam.line = (int)d.position;
+    g_seam.strip.x = (int)d.strip.x;
+    g_seam.strip.y = (int)d.strip.y;
+    g_seam.strip.w = (int)d.strip.w;
+    g_seam.strip.h = (int)d.strip.h;
+    g_seam.scr = g_accent.scr != NULL ? g_accent.scr : ps;
+    spike_divider_hover();
+}
+
+/* After a seam drag the focus goes to the window under the pointer. */
+static void spike_divider_pass_focus(const struct ESnapDivider *d)
+{
+    struct Window *win;
+
+    if (d == NULL || !d->present || g_seam.scr == NULL) {
+        return;
+    }
+    if (d->vertical) {
+        win = (g_seam.scr->MouseX < (LONG)d->strip.x) ? d->windowA
+                                                       : d->windowB;
+    } else {
+        win = (g_seam.scr->MouseY < (LONG)d->strip.y) ? d->windowA
+                                                       : d->windowB;
+    }
+    if (win != NULL) {
+        ActivateWindow(win);
+    }
+}
+
+static void spike_divider_events(void)
+{
+    /* no handle window, so nothing ever arrives here */
+}
+
+#endif /* ES_SEAM_NO_WINDOW */
+
 /* -------------------------------------------------- core glue (phase 2) */
 
 static ULONG g_seen_presses;
 static ULONG g_seen_releases;
 static ULONG g_seen_moves;
+#ifdef ES_SEAM_NO_WINDOW
+static ULONG g_seen_grabs;
+#endif
 
 /*
  * The frontend contributes raw input facts and draws the frame; every
@@ -1999,6 +2275,25 @@ static void spike_engine_step(void)
     g_seen_moves = g_shared.moves;
     g_seen_releases = g_shared.releases;
 
+#ifdef ES_SEAM_NO_WINDOW
+    if (g_shared.seam_grabs != g_seen_grabs) {
+        g_seen_grabs = g_shared.seam_grabs;
+        if (g_seam.present && !g_divider_dragging) {
+            struct ESnapReport rep;
+
+            /* the handler swallowed a press on the lit seam: the line
+             * goes out, and the drag runs on the counters from here */
+            spike_seam_light(0);
+            g_divider_scr = g_seam.scr;
+            g_divider_vertical = g_seam.vertical;
+            g_divider_line = g_seam.line;
+            g_divider_dragging = 1;
+            g_shared.seam_dragging = 1;
+            ES_CALL(ESnap_ResetInput)(&rep);
+            spike_apply_report(&rep);
+        }
+    }
+#endif
 #ifdef ES_SEAM_DRAG_BLIND
     if (g_divider_dragging) {
         if (new_move && g_divider_scr != NULL) {
@@ -2018,6 +2313,9 @@ static void spike_engine_step(void)
             struct ESnapDivider d;
 
             g_divider_dragging = 0;
+#ifdef ES_SEAM_NO_WINDOW
+            g_shared.seam_dragging = 0;
+#endif
             Delay(10L);                      /* the windows settle */
             spike_divider_sync();
             if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) == ES_OK &&
