@@ -12,7 +12,7 @@
 
 (set #welcome
   (cat "EdgeSnap " #app-version "\n"
-       "Window snapping for AmigaOS 4.x and MorphOS\n"
+       "Window snapping for AmigaOS 4.x, MorphOS and AROS\n"
        "by Michele Dipace <michele.dipace@kaffeine.net>\n"
        "MIT license\n\n"
        "Drag a window against a screen edge or corner and it fills "
@@ -104,28 +104,42 @@
     (set #update 1)
     (set #update 0))
 
-; --- which system? MorphOS is the one with MOSSYS: ------------------
+; --- which system? MorphOS is the one with MOSSYS:, AROS the one with
+; aros.library -------------------------------------------------------
 (if (exists "MOSSYS:" (noreq))
     (set #detected 1)
-    (set #detected 0))
+    (if (exists "LIBS:aros.library" (noreq))
+        (set #detected 2)
+        (set #detected 0)))
 
 (set #system
   (askchoice
     (prompt #ask-system)
     (help #ask-system-help)
-    (choices "AmigaOS 4.x" "MorphOS")
+    (choices "AmigaOS 4.x" "MorphOS" "AROS x86_64")
     (default #detected)))
 
+; The line that starts the commodity. AROS's Run opens a console for
+; the input unless that is redirected too, so both go to NIL: there.
+(set #startup-line "Run >NIL: C:EdgeSnap")
 (if (= #system 0)
     (
       (set #libsrc "os4/edgesnap.library")
       (set #cmdsrc "os4/EdgeSnap")
       (set #prefssrc "os4/EdgeSnapPrefs")
-    )
+    ))
+(if (= #system 1)
     (
       (set #libsrc "mos/edgesnap.library")
       (set #cmdsrc "mos/EdgeSnap")
       (set #prefssrc "mos/EdgeSnapPrefs")
+    ))
+(if (= #system 2)
+    (
+      (set #libsrc "aros64/edgesnap.library")
+      (set #cmdsrc "aros64/EdgeSnap")
+      (set #prefssrc "aros64/EdgeSnapPrefs")
+      (set #startup-line "Run >NIL: <NIL: C:EdgeSnap")
     ))
 
 (complete 20)
@@ -197,7 +211,7 @@
 (startup #app
   (prompt #startup-prompt)
   (help #startup-help)
-  (command "Run >NIL: C:EdgeSnap\n"))
+  (command (cat #startup-line "\n")))
 
 (complete 90)
 
@@ -274,7 +288,7 @@
                  "an update, puts the version just installed in charge "
                  "of the one that was running before.\n\n"))
       (default 1))
-    (run "Run >NIL: C:EdgeSnap"))
+    (run #startup-line))
 
 ; (quiet): our own closing text says what happened - the Installer's
 ; standard one would add that EdgeSnap "is in Work:", which is not

@@ -80,6 +80,10 @@ EdgeSnap/mos/edgesnap.library
 EdgeSnap/mos/esnaptest
 EdgeSnap/mos/EdgeSnapPrefs
 EdgeSnap/mos/EdgeSnapPrefs.info
+EdgeSnap/aros64/EdgeSnap
+EdgeSnap/aros64/edgesnap.library
+EdgeSnap/aros64/esnaptest
+EdgeSnap/aros64/EdgeSnapPrefs
 "
 missing=0
 for f in $MANIFEST; do

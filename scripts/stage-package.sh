@@ -54,6 +54,20 @@ else
     echo "WARNING: no MorphOS build - mos/ left empty" >&2
 fi
 
+# AROS x86_64: built on the bench (scripts/build-aros.sh brings the
+# binaries back). No icons of its own yet: the installer starts the
+# commodity from S:User-Startup there, and a WBStartup icon in the
+# AROS style will join the package when there is one.
+mkdir -p "$DEST/aros64"
+if [ -f "$ROOT/build/aros-x86_64/EdgeSnap" ]; then
+    cp "$ROOT/build/aros-x86_64/EdgeSnap"          "$DEST/aros64/EdgeSnap"
+    cp "$ROOT/build/aros-x86_64/edgesnap.library"  "$DEST/aros64/edgesnap.library"
+    cp "$ROOT/build/aros-x86_64/esnaptest"         "$DEST/aros64/esnaptest"
+    cp "$ROOT/build/aros-x86_64/EdgeSnapPrefs"     "$DEST/aros64/EdgeSnapPrefs"
+else
+    echo "WARNING: no AROS build - aros64/ left empty" >&2
+fi
+
 # The licence travels with the package. The readme and the guide both
 # say the MIT text is in here, and a licence that is only in the
 # repository is not in the hands of the person holding the archive.
