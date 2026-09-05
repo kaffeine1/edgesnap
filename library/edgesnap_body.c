@@ -26,7 +26,6 @@
 #endif
 
 #include <exec/types.h>
-#include <string.h>
 #include <exec/semaphores.h>
 #include <devices/inputevent.h>
 #include <intuition/intuition.h>
@@ -342,8 +341,10 @@ static int esb_snappable(const struct ESBSnap *s)
  */
 static int esb_is_wanderer(struct Window *win)
 {
+    static const char tag[] = "Wanderer";
     struct Task *t;
     const char *name;
+    int i, j;
 
     if (win->UserPort == NULL) {
         return 0;
@@ -352,7 +353,16 @@ static int esb_is_wanderer(struct Window *win)
     if (t == NULL || (name = t->tc_Node.ln_Name) == NULL) {
         return 0;
     }
-    return strstr(name, "Wanderer") != NULL;
+    /* a library links no C runtime: the search is spelled out */
+    for (i = 0; name[i] != '\0'; i++) {
+        for (j = 0; tag[j] != '\0' && name[i + j] == tag[j]; j++) {
+            ;
+        }
+        if (tag[j] == '\0') {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 /*
