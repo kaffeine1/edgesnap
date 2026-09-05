@@ -974,10 +974,56 @@ static void spike_pf_fill(void)
 #endif
 }
 
+#ifdef ES_PREVIEW_XOR
+/*
+ * After a masked frame has come down, the scratch of every strip holds
+ * what the second pass wrote, which is what was there before the
+ * frame. Read the strips once more and compare: a difference means the
+ * erase did not land, or landed elsewhere, on this driver. Task
+ * context only, and the finding is only logged, never repaired: the
+ * window may have moved since, and then the difference is legitimate.
+ */
+static void spike_pf_check_erased(void)
+{
+    static int said;
+    int i;
+    ULONG diff = 0, n_total = 0;
+
+    if (said || g_pf.drawn || g_pf.plain || g_pf.scr == NULL) {
+        return;
+    }
+    for (i = 0; i < g_pf.strips; i++) {
+        const ESRect *st = &g_pf.strip[i];
+        const UBYTE *want = g_pf.saved[i];
+        UBYTE *m = g_pf.mask[i];    /* reused as the read buffer */
+        ULONG n = (ULONG)(st->w * st->h * ES_PF_BPP), k;
+
+        if (want == NULL || m == NULL) {
+            continue;
+        }
+        ES_PF_READ(&g_pf.scr->RastPort, st->x, st->y, m, st->w * ES_PF_BPP,
+                   st->w, st->h);
+        for (k = 0; k < n; k++) {
+            if ((k & 3) != 0 && m[k] != want[k]) {
+                diff++;
+            }
+        }
+        n_total += n;
+    }
+    if (diff != 0) {
+        said = 1;
+        spike_log("edgesnap: frame: after the erase %lu of %lu bytes differ "
+                  "from what was there (window moved, or the erase did not "
+                  "land)\n", (unsigned long)diff, (unsigned long)n_total);
+    }
+}
+#endif
+
 static void spike_pf_hide(void)
 {
 #ifdef ES_PREVIEW_XOR
     spike_pf_drop_now();       /* the second pass takes it away */
+    spike_pf_check_erased();   /* diagnostics for the drivers we cannot see */
     spike_pf_free_buffers();   /* task context: the handler leaves them */
 #else
     int i;
