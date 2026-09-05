@@ -2079,6 +2079,8 @@ static struct {
     int vertical;
     int line;
     int hot;                   /* the line is lit, the pointer on it */
+    int min_pos, max_pos;      /* how far the seam may go            */
+    int track;                 /* during a drag: where the line is   */
     ESRect strip;
     struct Screen *scr;
 } g_seam;
@@ -2165,6 +2167,8 @@ static void spike_divider_sync(void)
     g_seam.present = 1;
     g_seam.vertical = (int)d.vertical;
     g_seam.line = (int)d.position;
+    g_seam.min_pos = (int)d.minPosition;
+    g_seam.max_pos = (int)d.maxPosition;
     g_seam.strip.x = (int)d.strip.x;
     g_seam.strip.y = (int)d.strip.y;
     g_seam.strip.w = (int)d.strip.w;
@@ -2281,9 +2285,12 @@ static void spike_engine_step(void)
         if (g_seam.present && !g_divider_dragging) {
             struct ESnapReport rep;
 
-            /* the handler swallowed a press on the lit seam: the line
-             * goes out, and the drag runs on the counters from here */
-            spike_seam_light(0);
+            /* the handler swallowed a press on the lit seam: from here
+             * the drag runs on the counters, and the lit line becomes
+             * the one that follows the pointer */
+            g_seam.hot = 0;
+            g_shared.seam_hot = 0;
+            g_seam.track = g_seam.line;
             g_divider_scr = g_seam.scr;
             g_divider_vertical = g_seam.vertical;
             g_divider_line = g_seam.line;
@@ -2296,26 +2303,53 @@ static void spike_engine_step(void)
 #endif
 #ifdef ES_SEAM_DRAG_BLIND
     if (g_divider_dragging) {
+        /*
+         * AROS resizes its own windows as an outline and applies the
+         * new size on release; the seam does the same. Resizing the
+         * two windows live, step by step, left the console behind: the
+         * strips it should have painted at every step came faster than
+         * its redraw, and stayed pen 0. So only the line follows the
+         * pointer, and the two windows change once, when the button
+         * comes up: one new strip each, which they paint.
+         */
         if (new_move && g_divider_scr != NULL) {
             LONG pos = g_divider_vertical ? (LONG)g_divider_scr->MouseX
                                           : (LONG)g_divider_scr->MouseY;
-            LONG rc = ES_CALL(ESnap_MoveDividerAt)((LONG)g_divider_vertical,
-                                                   (LONG)g_divider_line, pos);
 
-            if (rc == ES_OK) {
-                g_divider_line = (int)pos;   /* the seam's name moved */
-            } else {
-                spike_log("edgesnap: divider gone (%ld)\n", (long)rc);
-                g_divider_dragging = 0;
+            if (pos < g_seam.min_pos) {
+                pos = g_seam.min_pos;
+            }
+            if (pos > g_seam.max_pos) {
+                pos = g_seam.max_pos;
+            }
+            if ((int)pos != g_seam.track) {
+                ESRect r = g_seam.strip;
+
+                if (g_divider_vertical) {
+                    r.x = (int)pos - r.w / 2;
+                } else {
+                    r.y = (int)pos - r.h / 2;
+                }
+                spike_sl_hide();
+                spike_sl_show(&r);
+                g_seam.track = (int)pos;
             }
         }
         if (new_release) {
             struct ESnapDivider d;
 
+            spike_sl_hide();
             g_divider_dragging = 0;
-#ifdef ES_SEAM_NO_WINDOW
             g_shared.seam_dragging = 0;
-#endif
+            if (g_seam.track != g_divider_line) {
+                LONG rc = ES_CALL(ESnap_MoveDividerAt)((LONG)g_divider_vertical,
+                                                       (LONG)g_divider_line,
+                                                       (LONG)g_seam.track);
+
+                if (rc != ES_OK) {
+                    spike_log("edgesnap: divider gone (%ld)\n", (long)rc);
+                }
+            }
             Delay(10L);                      /* the windows settle */
             spike_divider_sync();
             if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) == ES_OK &&
@@ -2324,7 +2358,7 @@ static void spike_engine_step(void)
             }
             spike_log_flush();
         }
-        return;   /* the windows move because we move them: no engine */
+        return;   /* the engine sits this one out */
     }
 #endif
 
