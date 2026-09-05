@@ -82,6 +82,11 @@ first gesture is the drag.
   under emulation (2026-09-05): drag and hotkey snapping, the preview
   frame, the seams. Testers on real hardware and VirtualBox have the
   preview; the client headers are in `include/aros/`.
+- **Library 2.5 and 2.6:** the calls a tiling client asked for first
+  (the windows as the library sees them, placement in an arbitrary
+  rectangle, a whole layout in one call) and a window identity that
+  survives address reuse, appended on all three systems and exercised
+  by `tools/esnaptest.c`. See "2.5" in the design document.
 - **Phase 1 (portable core): done.** The validated spike behavior lives
   as a portable, host-tested core: `core/engine.c` (drag/snap state
   machine), `core/registry.c` (stale-resistant snap registry + restore),

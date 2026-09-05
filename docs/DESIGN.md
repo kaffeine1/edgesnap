@@ -855,9 +855,17 @@ systems:
   entry, ordered shrinking first and growing last. Ordered, not atomic:
   `ChangeWindowBox` is a request per window.
 
-What follows in that list (window serials, work areas, groups, divider
-tokens, client roles) is the section below, designed in the issue with
-a real client on the other side.
+Window serials came next, as revision 2.6: every window the library
+observes gets a number that is never reused, told apart at the same
+address by its layer and retired when a full walk no longer finds it;
+`ESnap_QueryWindowSerial` and `ESnap_FindWindow` are the two calls, and
+the one case the library cannot see is written in the header. Groups
+that keep state for a whole session need that identity before they
+need anything else.
+
+What follows in that list (work areas, groups, divider tokens, client
+roles) is the section below, designed in the issue with a real client
+on the other side.
 
 ### Before the ABI freeze
 
