@@ -1602,9 +1602,9 @@ static ULONG esb_windows_hash(void)
     struct Window *w;
 
     for (scr = ESB_IBASE->FirstScreen; scr != NULL; scr = scr->NextScreen) {
-        h = esb_hash_mix(h, (ULONG)(IPTR)scr);
+        h = esb_hash_mix(h, (ULONG)(ESTagData)scr);
         for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
-            h = esb_hash_mix(h, (ULONG)(IPTR)w);
+            h = esb_hash_mix(h, (ULONG)(ESTagData)w);
             h = esb_hash_mix(h, (ULONG)(UWORD)w->LeftEdge |
                                 ((ULONG)(UWORD)w->TopEdge << 16));
             h = esb_hash_mix(h, (ULONG)(UWORD)w->Width |
