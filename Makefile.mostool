@@ -6,7 +6,7 @@
 CC = ppc-morphos-gcc
 CFLAGS ?= -Wall -Wextra -O2 -noixemul -Iinclude -Icore
 TARGET ?= build/morphos/esnaptest
-SRC := tools/esnaptest_mos.c
+SRC := tools/esnaptest.c
 
 .PHONY: all clean
 
