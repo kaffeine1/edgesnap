@@ -830,6 +830,23 @@ turned out to be portable rather than AROS-specific:
   The proper system-side fix remains in Wanderer's icon list: its resize
   update must also honor existing layer damage in the old area.
 
+**Where 0.3 stands (2026-09-06).** The prepared release includes the
+AROS x86_64 ABIv11 lane, library API 2.6 on all three systems, the
+window-size and drag-press fixes, Wanderer repaint handling and the
+AROS seam redraw fix. A fresh AROS One 1.3 installation with DualPNG
+icons passed ten left/right hotkey pairs and ten drag pairs, including
+overlap and off-screen starts, without a persistent black 40 by 40
+pixel area; an uncover-only control passed too. The requested current
+AROS trunk paths are unchanged from the May checkout. AmigaOS 4.1 and
+MorphOS 3.20 passed the native upgrade, gestures, seam/pair-fill, live
+preferences, complete API 2.5/2.6 client and automatic-startup checks
+under emulation. The PPC hotkey path now waits for the window change
+before synchronizing the seam. Two things stay open: the real-hardware
+AROS report, which these results do not explain, and stale pixels in
+MorphOS's unpainted seam handle after an overlapping window closes,
+also reproduced with the original 0.2. No release has been published
+as part of this verification.
+
 ### 0.4 - candidates
 
 - **Animated snap**: the window glides into its zone

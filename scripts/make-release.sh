@@ -149,6 +149,21 @@ AROS="$ROOT/build/release-aros"
 rm -rf "$MAIN" "$AROS"
 cp -R "$STAGE" "$MAIN" && rm -rf "$MAIN/EdgeSnap/aros64"
 cp -R "$STAGE" "$AROS" && rm -rf "$AROS/EdgeSnap/os4" "$AROS/EdgeSnap/mos"
+# The combined stage names all three lanes; each archive names only
+# what it contains. Aminet's i386-aros filing workaround belongs in its
+# channel readme, not in the package's actual architecture declaration.
+package_readme() {
+    package_arch="$1"; package_dest="$2/EdgeSnap/EdgeSnap.readme"
+    sed "s/^Architecture:.*/Architecture: $package_arch/" \
+        "$STAGE/EdgeSnap/EdgeSnap.readme" > "$package_dest"
+    if [ "$(grep -c '^Architecture:' "$package_dest")" -ne 1 ] || \
+       ! grep -qxF "Architecture: $package_arch" "$package_dest"; then
+        echo "ERROR: wrong package architecture in $package_dest" >&2
+        exit 1
+    fi
+}
+package_readme 'ppc-amigaos >= 4.0.0; ppc-morphos' "$MAIN"
+package_readme 'x86_64-aros' "$AROS"
 # The AROS archive carries icons in AROS's own PNG format in place of
 # the classic Workbench ones, which AROS's icon.library reads badly:
 # one sent the Installer into an illegal access, another had Wanderer

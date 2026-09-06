@@ -76,17 +76,28 @@ first gesture is the drag.
   2026-08-11) and real MorphOS hardware (2026-08-26): drag detection,
   snapping and the outline preview all work, including the
   MorphOS-specific CxCustom gate.
-- **AROS x86_64 (0.3, in progress):** `edgesnap.library` (generated
+- **AROS x86_64 (0.3):** `edgesnap.library` (generated
   from `library/aros/edgesnap.conf` with AROS's genmodule), the
   commodity as its client and the preferences on Zune run on AROS One
-  under emulation (2026-09-05): drag and hotkey snapping, the preview
-  frame, the seams. Testers on real hardware and VirtualBox have the
-  preview; the client headers are in `include/aros/`.
+  under emulation: drag and hotkey snapping, the preview frame and the
+  seams. A fresh AROS One 1.3 ABIv11 installation passed 40 snaps with
+  DualPNG icons, overlapping drawers and off-screen starting positions
+  (2026-09-06), with no persistent black area of at least 40 by 40 pixels.
+  The real-hardware report of black drawer areas remains open; this
+  result does not establish whether its cause is hardware or an old
+  preview still running. The client headers are in `include/aros/`.
 - **Library 2.5 and 2.6:** the calls a tiling client asked for first
   (the windows as the library sees them, placement in an arbitrary
   rectangle, a whole layout in one call) and a window identity that
   survives address reuse, appended on all three systems and exercised
-  by `tools/esnaptest.c`. See "2.5" in the design document.
+  by `tools/esnaptest.c`, including the full native client on both PPC
+  systems (2026-09-06). See "2.5" in the design document.
+- **0.3 PPC regression pass:** installation over 0.2, drag previews,
+  hotkeys, maximize/restore, seam dragging, pair fill, live preferences
+  and startup passed on AmigaOS 4.1 and MorphOS 3.20 under emulation.
+  MorphOS can retain old pixels in the narrow seam handle after another
+  window covers it; the same case reproduces with the original 0.2.
+  It remains a known graphical limitation, not a new 0.3 regression.
 - **Phase 1 (portable core): done.** The validated spike behavior lives
   as a portable, host-tested core: `core/engine.c` (drag/snap state
   machine), `core/registry.c` (stale-resistant snap registry + restore),

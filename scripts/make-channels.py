@@ -2,7 +2,7 @@
 # Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
 # SPDX-License-Identifier: MIT
 #
-# Build the readme files for the three distribution channels from ONE
+# Build the readme files for the five distribution channels from ONE
 # source, so they cannot drift apart, and check them against the rules
 # each channel enforces before a human ever sees them.
 #
@@ -34,12 +34,19 @@
 
 import hashlib
 import os
+import re
 import shutil
 import sys
 import textwrap
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-VERSION = sys.argv[1] if len(sys.argv) > 1 else "0.3"
+with open(os.path.join(ROOT, "include", "edgesnap_version.h")) as source:
+    PRODUCT_VERSION = re.search(r'^#define ES_VERSION\s+"([^"]+)"',
+                                source.read(), re.M).group(1)
+with open(os.path.join(ROOT, "library", "aros", "edgesnap.conf")) as source:
+    LIBRARY_VERSION = re.search(r'^version\s+(\d+\.\d+)',
+                                source.read(), re.M).group(1)
+VERSION = sys.argv[1] if len(sys.argv) > 1 else PRODUCT_VERSION
 ARCHIVE = os.path.join(ROOT, "build", "EdgeSnap-%s.lha" % VERSION)
 ARCHIVE_AROS = os.path.join(ROOT, "build", "EdgeSnap-%s-AROS64.lha" % VERSION)
 # From the second AROS release on, the previous archive is named here so
@@ -58,36 +65,33 @@ SHORT = "Tile windows by dragging them to an edge"
 
 # ------------------------------------------------------------ the body
 #
-# One text for all three channels. Plain ASCII, wrapped below, no markup:
+# One text for all five channels. Plain ASCII, wrapped below, no markup:
 # these are read in a terminal, an AmigaGuide viewer, or a web page that
 # does no formatting of its own.
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-The seam between tiled windows is a LINE, not a pair. One window filling
-half the screen, faced by two stacked in the other half, shares a single
-seam with both: dragging it moves all three. Four quadrants share one
-seam down the middle and one across, and a split that exists on only one
-side moves just the windows on that side.
+I have added AROS x86_64 ABIv11, with a native shared library, Zune
+preferences and PNG icons. It has its own archive; the AmigaOS 4 and
+MorphOS builds still travel together.
 
-The seam stays out of sight until the pointer reaches it, then lights up
-and can be dragged.
+Library API 2.5 adds window enumeration, change tracking and placement
+of individual windows or complete layouts in arbitrary rectangles.
+API 2.6 adds window serials and lookup, so a client need not use a reused
+window address as its identity.
 
-The preferences windows follow the style guide now: settings are grouped
-into sections, labels take a colon, and the window can be resized. The
-zone checkboxes are a grid instead of one long row.
+Drag detection remembers where the title-bar press began and accepts
+outline drags and tablet motion. Pair fill and seam resizing respect
+each window's size limits, and layout changes shrink before growing.
+The PPC hotkey path lets the window change finish before finding the seam.
 
-Dock detection no longer stops after the sixteenth dock, and the usable
-area can never collapse to nothing however many panels are found. Press
-ctrl alt d and the dump names which window reserved which edge.
-
-EdgeSnap no longer holds the Workbench screen open, which used to stop
-Intuition from changing its screenmode for as long as EdgeSnap ran. And
-when it cannot start at all it now says so instead of disappearing in
-silence.
+On AROS, the preview works with outline dragging, Wanderer receives fresh
+damage after resizing, and hiding the seam preserves repainted pixels.
+The installer retires the first AROS preview in C: before installing
+the current commodity and its icon in SYS:WBStartup.
 """),
     ("WHAT IT IS", """
-EdgeSnap gives AmigaOS 4.x and MorphOS the window snapping that Windows
+EdgeSnap gives AmigaOS 4.x, MorphOS and AROS x86_64 the window snapping that Windows
 and macOS users reach for without thinking. Drag a window against a
 screen edge or corner and it fills that half or quarter of the screen. A
 frame shows where it will land before you let go.
@@ -100,12 +104,17 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. It has been used on AmigaOS 4.1 Final
-Edition and on MorphOS 3.20, on real machines and not only in emulation,
-but the interface below 1.0 is not frozen and your setup is certainly
-not one of the ones it was tried on. If it covers your dock, misses your
-seam, or draws something odd with window transparency switched on, that
-is exactly the report worth having.
+Version %s is still a beta. I checked this build under emulation on
+AmigaOS 4.1, MorphOS 3.20 and a fresh AROS One 1.3 x86_64 installation.
+The AROS test passed 40 snaps with DualPNG icons, overlapping drawers
+and off-screen starts, but that does not resolve the report of black
+drawer areas on real hardware. MorphOS can retain old pixels in the
+narrow seam handle after another window covers it; this also reproduces
+with the original 0.2. Both remain worth reporting and investigating.
+
+The interface below 1.0 is not frozen. If EdgeSnap covers your dock,
+misses your seam or draws something odd, please include the system,
+version banner, steps and a screenshot in your report.
 
 Report it here, or to the address at the top of this file:
 
@@ -114,10 +123,11 @@ Report it here, or to the address at the top of this file:
     ("INSTALLING", """
 Unpack the archive and double-click Install. It recognises the system,
 proposes the matching build, and asks before doing anything: the library
-goes to LIBS:, the commodity to C:, the preferences window to SYS:Prefs/,
-and one line into S:User-Startup so that snapping is there from the next
-boot. Updating is just installing again - the running copy is stopped
-and replaced, with no reboot.
+goes to LIBS: and the preferences window to SYS:Prefs/. On AmigaOS 4 and
+MorphOS the commodity goes to C: with a line in S:User-Startup. On AROS
+it goes to SYS:WBStartup with its icon, and the first preview's copy in
+C: is stopped and removed. Updating is just installing again: the
+running copy is stopped and replaced, with no reboot.
 """),
     ("USING IT", """
   - Drag a window's title bar until the POINTER touches an edge or a
@@ -127,7 +137,7 @@ and replaced, with no reboot.
   - ctrl alt cursor left/right/up snap the active window,
     ctrl alt cursor down puts it back where it was.
   - Settings live in SYS:Prefs/EdgeSnap, native on each system: ReAction
-    on AmigaOS 4, MUI on MorphOS. Change something and EdgeSnap follows
+    on AmigaOS 4, MUI on MorphOS, Zune on AROS. EdgeSnap follows changes
     at once, without being restarted.
   - Exchange enables, disables or removes it, as with any commodity.
   - EdgeSnap QUIT stops it from a Shell or a script.
@@ -138,12 +148,16 @@ commodity is a client of it like any other program can be. Another
 program can ask for a window to be placed, ask where a zone is, or find
 and move the seam between two tiled windows.
 
-The library says 2.2 while EdgeSnap says %s, and that is not a mistake:
+The API also enumerates windows, tracks changes, places whole layouts
+and supplies serials for window identity. The included esnaptest client
+exercises the 2.5 and 2.6 calls on both PPC systems.
+
+The library says %s while EdgeSnap says %s, and that is not a mistake:
 a library's version is its interface, not its product. While EdgeSnap is
 below 1.0 treat that interface as not frozen - methods are only ever
 appended, never moved or removed, but names and arguments may still
 change.
-""" % VERSION),
+""" % (LIBRARY_VERSION, VERSION)),
     ("LICENCE AND SOURCE", """
 MIT. The full text is in the LICENSE file inside the archive.
 
@@ -272,6 +286,7 @@ def arosarchives_readme():
         "submitter:Michele Dipace",
         "email:%s" % EMAIL,
         "url:%s" % URL,
+        # Present in the public submit form checked on 2026-09-06.
         "category:utility/workbench",
         "requirements:AROS x86_64 ABIv11 (AROS One x64)",
         "license:Other",
@@ -306,10 +321,15 @@ def check(path, label, problems, name_max=30):
 
 
 def main():
-    if not os.path.exists(ARCHIVE):
-        print("ERROR: %s missing - run scripts/make-release.sh first" %
-              ARCHIVE, file=sys.stderr)
+    if VERSION != PRODUCT_VERSION:
+        print("ERROR: requested %s but the product header says %s" %
+              (VERSION, PRODUCT_VERSION), file=sys.stderr)
         return 1
+    for archive in (ARCHIVE, ARCHIVE_AROS):
+        if not os.path.exists(archive):
+            print("ERROR: %s missing - run scripts/make-release.sh first" %
+                  archive, file=sys.stderr)
+            return 1
     if len(SHORT) > 40:
         print("ERROR: Short is %d characters, Aminet allows 40" % len(SHORT),
               file=sys.stderr)
@@ -320,16 +340,11 @@ def main():
         ("aminet", ARCHIVE, "edgesnap.lha", "edgesnap.readme", aminet_readme()),
         ("os4depot", ARCHIVE, "edgesnap.lha", "edgesnap_lha.readme", os4depot_readme()),
         ("morphos-storage", ARCHIVE, "edgesnap.lha", "edgesnap.readme", morphos_readme()),
+        ("aminet-aros", ARCHIVE_AROS, "edgesnap.x86_64-aros.lha",
+         "edgesnap.x86_64-aros.readme", aminet_aros_readme()),
+        ("arosarchives", ARCHIVE_AROS, "edgesnap.x86_64-aros-v11.lha",
+         "edgesnap.x86_64-aros-v11_lha.readme", arosarchives_readme()),
     ]
-    if os.path.exists(ARCHIVE_AROS):
-        channels += [
-            ("aminet-aros", ARCHIVE_AROS, "edgesnap.x86_64-aros.lha",
-             "edgesnap.x86_64-aros.readme", aminet_aros_readme()),
-            ("arosarchives", ARCHIVE_AROS, "edgesnap.x86_64-aros-v11.lha",
-             "edgesnap.x86_64-aros-v11_lha.readme", arosarchives_readme()),
-        ]
-    else:
-        print("note: %s missing, the AROS channels are skipped" % ARCHIVE_AROS)
     problems = []
 
     for name, archive, lha, readme, lines in channels:

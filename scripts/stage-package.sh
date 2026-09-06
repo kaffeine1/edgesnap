@@ -9,7 +9,7 @@
 #   EdgeSnap.guide (+icon)  the documentation
 #   EdgeSnap.readme (+icon) the Aminet-style summary
 #   EdgeSnap.prefs          the commented settings template (no icon)
-#   os4/ mos/               one build per system, picked by the installer
+#   os4/ mos/ aros64/       one build per system, picked by the installer
 #
 # Only those three carry icons. The programs themselves are deliberately
 # invisible: the installer knows where they go, and a drawer full of
@@ -85,18 +85,17 @@ cp "$ROOT/assets/icons/readme.info"     "$DEST/EdgeSnap.readme.info"
 "$ROOT/scripts/make-guide.sh" "$DEST/EdgeSnap.guide" >/dev/null
 
 cat > "$DEST/EdgeSnap.readme" <<'EOF'
-Short:        Drag windows to screen edges to tile them
+Short:        Tile windows by dragging them to an edge
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
-Type:         util/wb
+Type:         util/cdity
 Version:      0.3 (beta)
-Architecture: ppc-amigaos >= 4.0; ppc-morphos >= 3.0
-Distribution: Aminet
+Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros
 License:      MIT
 
 EdgeSnap gives AmigaOS 4.x, MorphOS and AROS x86_64 the window snapping
-of Windows and macOS. Drag a window by its title bar until the POINTER touches a
-screen edge or corner: a frame shows where it will land, and letting
+of Windows and macOS. Drag a window by its title bar until the POINTER
+touches a screen edge or corner: a frame shows where it will land, and letting
 go fills that half or quarter of the screen.
 
   - docks and panels are detected and never covered;
@@ -110,10 +109,14 @@ The behaviour lives in edgesnap.library, not in the commodity, so any
 program can ask for the same things - the commodity is a client like
 any other. esnaptest, in the package, is a worked example.
 
+The AROS build requires x86_64 ABIv11, as in AROS One 1.3. It does not
+run on i386 AROS. AmigaOS 4 and MorphOS share a separate archive.
+
 TO INSTALL: double-click the Install icon. It recognises the system,
 proposes the matching build, and puts everything where it belongs -
 including one line in S:User-Startup (on AROS the commodity goes into
-SYS:WBStartup instead), so snapping is simply there from the next boot. Updating is installing again: no reboot needed.
+SYS:WBStartup instead), so snapping is simply there from the next boot.
+Updating is installing again: no reboot needed.
 
 Full documentation is in EdgeSnap.guide.
 EOF
