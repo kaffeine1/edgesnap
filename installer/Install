@@ -329,6 +329,36 @@
 
 (complete 95)
 
+; The first AROS preview was installed by hand: C:EdgeSnap, with a Run
+; line typed into S:User-Startup, and it carried the old code. At boot
+; that copy comes up first, and the new one in SYS:WBStartup, finding
+; the name taken, refuses to start: the user then tests the old code
+; and reports the old defects as still there. So on AROS the copy in C:
+; is stopped and removed here. The Run line was typed by hand, outside
+; the markers this Installer maintains, so it stays; once C:EdgeSnap is
+; gone it does nothing, and the closing text names it for deletion.
+(set #old-preview 0)
+(if (= #system 2)
+    (if (exists "C:EdgeSnap" (noreq))
+        (if (askbool
+              (prompt (cat "A copy of the first AROS preview is in C:EdgeSnap. "
+                           "At boot it would start before the new one and "
+                           "keep it from running.\n\nStop it and remove it?"))
+              (help (cat "The first preview was copied to C: by hand and "
+                         "started by a Run line in S:User-Startup. This "
+                         "installation puts EdgeSnap into SYS:WBStartup "
+                         "instead. The old file is deleted; the Run line "
+                         "stays, and the closing text says which one to "
+                         "remove."))
+              (default 1))
+            (
+              (run "C:EdgeSnap QUIT")
+              (run "C:Wait >NIL: 2")
+              (protect "C:EdgeSnap" "+rwed")
+              (delete "C:EdgeSnap" (optional "force"))
+              (set #old-preview 1)
+            ))))
+
 ; What actually stands between an update and the new version running is
 ; the OLD one, still in memory and still holding the old library open.
 ; So stop it, let the library go, and start what was just installed -
@@ -366,5 +396,10 @@
            "    " (tackon #guide-dest "EdgeSnap.guide") "\n\n"
            "Nothing else was installed into the drawer you ran this "
            "from, so it can be deleted.\n"
+           (if (= #old-preview 1)
+               (cat "\nThe copy of the first preview in C: was removed. Its "
+                    "line in S:User-Startup, Run >NIL: C:EdgeSnap, does "
+                    "nothing now; delete it when you like.\n")
+               "")
            #done-tail-1 #startup-line #done-tail-2)
       (quiet))
