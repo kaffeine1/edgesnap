@@ -2045,15 +2045,29 @@ static void spike_sl_hide(void)
     if (g_sl.shown && g_pf.scr != NULL) {
         Forbid();
         if (g_sl.plain) {
+            /* With no trustworthy readback there is no original pixel to
+             * compare against. The second inversion is the only possible
+             * erase, and it cannot be made safe against repainting below. */
             spike_sl_invert();
         } else {
             const ESRect *r = &g_sl.rect;
-            ULONG n = (ULONG)(r->w * r->h * ES_PF_BPP), k;
+            ULONG n = (ULONG)(r->w * r->h * ES_PF_BPP), k, j;
 
             ES_PF_READ(&g_pf.scr->RastPort, r->x, r->y, g_sl.saved,
                        r->w * ES_PF_BPP, r->w, r->h);
-            for (k = 0; k < n; k++) {
-                g_sl.saved[k] ^= g_sl.mask[k];
+            for (k = 0; k < n; k += ES_PF_BPP) {
+                /* Restore only a pixel that is still our accent. If the
+                 * window below repainted it, that new pixel belongs to the
+                 * window and must be left alone. Byte zero is padding/alpha
+                 * on this path, so it does not participate in the test. */
+                if (g_sl.saved[k + 1] == g_pf.accent[1] &&
+                    g_sl.saved[k + 2] == g_pf.accent[2] &&
+                    g_sl.saved[k + 3] == g_pf.accent[3]) {
+                    for (j = 0; j < ES_PF_BPP; j++) {
+                        g_sl.saved[k + j] =
+                            g_sl.mask[k + j] ^ g_pf.accent[j];
+                    }
+                }
             }
             ES_PF_WRITE(g_sl.saved, r->w * ES_PF_BPP, &g_pf.scr->RastPort,
                         r->x, r->y, r->w, r->h);
@@ -2376,7 +2390,10 @@ static void spike_engine_step(void)
                 }
             }
             Delay(10L);                      /* the windows settle */
-            spike_divider_sync();
+            /* Refresh the geometry, but leave the line dark while the
+             * resized windows may still be repainting. The next real
+             * pointer move calls spike_divider_hover() and may light it. */
+            spike_seam_query();
             if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) == ES_OK &&
                 d.present) {
                 spike_divider_pass_focus(&d);
