@@ -2861,6 +2861,14 @@ static void spike_handle_hotkey(LONG id)
     /* A hotkey changes the snapped set exactly as a drag does, so the
      * divider has to be re-checked here too - forgetting this is why
      * the handle appeared after drags but never after a hotkey. */
+#ifndef __AROS__
+    /* Intuition queues the box change. As after a dragged snap, let
+     * it land before testing the pair against its live geometry.
+     * AROS waits for its repaint inside the library instead. */
+    if (rc == ES_OK) {
+        Delay(10L);
+    }
+#endif
     spike_divider_sync();
     spike_log_flush();
     if (rc != ES_OK) {
