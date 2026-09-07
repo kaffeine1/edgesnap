@@ -44,6 +44,43 @@ if ! make -s -f "$ROOT/Makefile.host" -C "$ROOT" test >/dev/null 2>&1; then
     exit 1
 fi
 echo "host tests: all suites pass"
+
+# Every binary that goes into the package must be newer than every
+# source it is built from. Each lane script builds ONE target, so a
+# lane that was not rebuilt after a change ships the old binary in
+# silence: the first 0.3 package carried PPC libraries still at 2.4
+# for exactly that reason (2026-09-06). The newest source sets the
+# bar; any binary older than it stops the release and names the
+# command that rebuilds everything. include/aros is left out: those
+# headers are generated on the bench and come back with the AROS
+# binaries, so they are newer than the PPC lanes whenever AROS was
+# built last.
+newest=$(find "$ROOT/core" "$ROOT/library" "$ROOT/commodity" "$ROOT/prefs" \
+              "$ROOT/include" "$ROOT/tools/esnaptest.c" "$ROOT"/Makefile.* \
+              -path "$ROOT/include/aros" -prune -o \
+              -type f \( -name '*.c' -o -name '*.h' -o -name '*.conf' \
+                         -o -name 'Makefile.*' \) -print0 \
+         | xargs -0 stat -f '%m %N' | sort -n | tail -1)
+newest_mtime=${newest%% *}
+newest_name=${newest#* }
+stale=0
+for b in os4/EdgeSnap os4/edgesnap.library os4/EdgeSnapPrefs os4/esnaptest \
+         morphos/EdgeSnap morphos/edgesnap.library morphos/EdgeSnapPrefs morphos/esnaptest \
+         aros-x86_64/EdgeSnap aros-x86_64/edgesnap.library aros-x86_64/EdgeSnapPrefs aros-x86_64/esnaptest; do
+    f="$ROOT/build/$b"
+    if [ ! -f "$f" ]; then
+        echo "ERROR: build/$b is missing" >&2
+        stale=1
+    elif [ "$(stat -f '%m' "$f")" -lt "$newest_mtime" ]; then
+        echo "ERROR: build/$b is older than ${newest_name#$ROOT/}" >&2
+        stale=1
+    fi
+done
+if [ "$stale" != "0" ]; then
+    echo "       rebuild every lane first: scripts/build-all.sh" >&2
+    exit 1
+fi
+echo "binaries: all 12 newer than the newest source (${newest_name#$ROOT/})"
 STAGE="$ROOT/build/release"
 OUT="$ROOT/build/EdgeSnap-$VERSION.lha"
 # AROS travels on its own: Aminet has no x86_64 token and the AROS
