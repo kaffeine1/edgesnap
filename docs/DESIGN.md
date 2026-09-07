@@ -845,8 +845,13 @@ before synchronizing the seam. Two things stay open: the real-hardware
 AROS report, which these results do not explain, and stale pixels in
 the unpainted seam handle of AmigaOS 4 and MorphOS after an overlapping
 window closes, also reproduced with the original 0.2 and seen on real
-hardware and in both VMs by the author (2026-09-07). No release has
-been published as part of this verification.
+hardware and in both VMs by the author (2026-09-07). A third, reported
+on 2026-09-07 from VirtualBox: on the NVIDIA Nouveau driver, where the
+preview frame falls back to a plain inversion, thin traces of the frame
+can stay on the desktop after some drags; on VMwareSVGA they are barely
+visible. Whether an unpaired inversion or an inexact one, it needs the
+driver in front of us and goes to 0.4. No release has been published
+as part of this verification.
 
 ### 0.4 - candidates
 

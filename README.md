@@ -99,6 +99,10 @@ first gesture is the drag.
   after another window covers it and goes away; the same case reproduces
   with the original 0.2, and real hardware shows it too (2026-09-07).
   It remains a known graphical limitation, not a new 0.3 regression.
+  On AROS drivers where the screen cannot be read back reliably the
+  preview frame is drawn as a plain inversion, and a tester on the
+  NVIDIA Nouveau driver sees thin traces of it left on the desktop after
+  some drags (2026-09-07); VMwareSVGA shows almost none. Open for 0.4.
 - **Phase 1 (portable core): done.** The validated spike behavior lives
   as a portable, host-tested core: `core/engine.c` (drag/snap state
   machine), `core/registry.c` (stale-resistant snap registry + restore),
