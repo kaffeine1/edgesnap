@@ -40,9 +40,13 @@ cp -R "$STAGE/." "$DEST/"
 cp "$ROOT/assets/EdgeSnapDrawer.info" "$CARD/EdgeSnap.info"
 
 # The archive as it will reach testers, next to the drawer it unpacks
-# to - so both can be tried from the same card.
-if [ -f "$ROOT/build/EdgeSnap-1.0.lha" ]; then
-    cp "$ROOT/build/EdgeSnap-1.0.lha" "$CARD/EdgeSnap-1.0.lha"
+# to - so both can be tried from the same card. The version comes from
+# edgesnap_version.h, as in make-release.sh, so an old archive left in
+# build/ never travels by mistake. Older archives on the card go away.
+VERSION=$(sed -n 's/^#define ES_VERSION  *"\([^"]*\)".*/\1/p' "$ROOT/include/edgesnap_version.h")
+rm -f "$CARD"/EdgeSnap-*.lha
+if [ -f "$ROOT/build/EdgeSnap-$VERSION.lha" ]; then
+    cp "$ROOT/build/EdgeSnap-$VERSION.lha" "$CARD/EdgeSnap-$VERSION.lha"
 fi
 
 # macOS litters removable media with these; on Ambient they show up as
