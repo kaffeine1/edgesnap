@@ -881,6 +881,7 @@ static struct PreviewFrame {
     int plain;               /* XOR: this frame is a plain inversion */
     int shallow;             /* XOR: fewer than 24 bits, reads are lossy */
     int said_plain;          /* XOR: the fallback was logged once */
+    int trust;               /* XOR: reads round-trip? -1 not probed yet */
     ESRect strip[4];
     int strips;
 } g_pf;
@@ -957,6 +958,17 @@ static void spike_pf_accent_bytes(void)
     g_pf.accent[3] = (UBYTE)(rgb[2] >> 24);
     /* on 15 and 16 bits a written colour does not read back as itself */
     g_pf.shallow = GetBitMapAttr(g_pf.scr->RastPort.BitMap, BMA_DEPTH) < 24;
+    g_pf.trust = -1;             /* a new screen: probe again */
+    {
+        /* EDGESNAP_FRAME_PLAIN in ENV: forces the plain inversion, so
+         * the path a driver with untrusted reads takes can be tried on
+         * a driver whose reads are fine. A test hook, not a setting. */
+        char buf[8];
+
+        if (GetVar("EDGESNAP_FRAME_PLAIN", buf, sizeof(buf), 0) > 0) {
+            g_pf.trust = 0;
+        }
+    }
 }
 
 /*
@@ -1005,6 +1017,70 @@ static void spike_pf_invert(void)
                  g_pf.strip[i].x + g_pf.strip[i].w - 1,
                  g_pf.strip[i].y + g_pf.strip[i].h - 1);
     }
+}
+#endif
+
+#ifdef ES_PREVIEW_XOR
+/*
+ * Do reads round-trip on this screen? Decided BEFORE anything
+ * irreversible is written, and once per screen. The masked frame reads
+ * the pixels under a strip, paints the accent over them and gives them
+ * back from what it read: on a driver whose reads return zeros or
+ * garbage, what it gives back is garbage, and the fallback that then
+ * "takes the accent off" writes the same garbage. That is what a tester
+ * on the NVIDIA Nouveau driver saw: thin lines left on the desktop
+ * after every drag, once for each strip of the frame (2026-09-07). The
+ * probe uses nothing but COMPLEMENT, which the second pass undoes bit
+ * for bit whatever the reads do: invert a strip, read it, invert it
+ * back, read again. Reads are trusted only when the two reads are each
+ * other's inverse in every colour byte; zeros, a constant, or a stale
+ * copy all fail. Task context; the strip is the frame's own.
+ */
+static int spike_pf_reads_trusted(const ESRect *st)
+{
+    struct RastPort rp;
+    UBYTE *a, *b;
+    ULONG n, k;
+    int ok = 1;
+
+    if (g_pf.trust >= 0) {
+        return g_pf.trust;
+    }
+    if (g_pf.scr == NULL || st->w <= 0 || st->h <= 0) {
+        return 0;
+    }
+    n = (ULONG)(st->w * st->h * ES_PF_BPP);
+    a = (UBYTE *)AllocVec(n, MEMF_ANY);
+    b = (UBYTE *)AllocVec(n, MEMF_ANY);
+    if (a == NULL || b == NULL) {
+        if (a != NULL) {
+            FreeVec(a);
+        }
+        if (b != NULL) {
+            FreeVec(b);
+        }
+        return 0;                /* no memory: the inversion needs none */
+    }
+    rp = g_pf.scr->RastPort;     /* a copy: leave the screen's own alone */
+    SetDrMd(&rp, COMPLEMENT);
+    Forbid();
+    ES_PF_READ(&g_pf.scr->RastPort, st->x, st->y, a, st->w * ES_PF_BPP,
+               st->w, st->h);
+    RectFill(&rp, st->x, st->y, st->x + st->w - 1, st->y + st->h - 1);
+    ES_PF_READ(&g_pf.scr->RastPort, st->x, st->y, b, st->w * ES_PF_BPP,
+               st->w, st->h);
+    RectFill(&rp, st->x, st->y, st->x + st->w - 1, st->y + st->h - 1);
+    Permit();
+    for (k = 0; k < n; k++) {
+        if ((k & 3) != 0 && (UBYTE)(a[k] ^ b[k]) != 0xFF) {
+            ok = 0;              /* alpha is not compared */
+            break;
+        }
+    }
+    FreeVec(a);
+    FreeVec(b);
+    g_pf.trust = ok;
+    return ok;
 }
 #endif
 
@@ -1173,6 +1249,9 @@ static void spike_pf_cleanup(void)
 static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
 {
     int i;
+#ifdef ES_PREVIEW_XOR
+    int trusted = 1;
+#endif
 
     if (g_pf.drawn &&
         g_pf.rect.x == r->x && g_pf.rect.y == r->y &&
@@ -1232,10 +1311,15 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
      * checked: a driver that returns nothing would leave the mask made
      * of whatever the allocation held, and the second pass would then
      * paint that garbage, black on a fresh system. Such a frame falls
-     * back to the plain inversion, which reads nothing.
+     * back to the plain inversion, which reads nothing. The probe
+     * above all of it: a driver whose reads do not round-trip never
+     * gets the accent written over pixels it cannot give back.
      */
+    if (!g_pf.shallow) {
+        trusted = spike_pf_reads_trusted(&g_pf.strip[0]);
+    }
     Forbid();
-    g_pf.plain = g_pf.shallow;
+    g_pf.plain = g_pf.shallow || !trusted;
     for (i = 0; i < g_pf.strips && !g_pf.plain; i++) {
         const ESRect *st = &g_pf.strip[i];
         UBYTE *p = g_pf.saved[i];
@@ -1992,6 +2076,7 @@ static void spike_sl_show(const ESRect *r)
 {
     ULONG bytes, n, k;
     int ok = 0;
+    int trusted = 1;
 
     if (g_sl.shown || g_pf.scr == NULL || r->w <= 0 || r->h <= 0) {
         return;
@@ -2000,8 +2085,12 @@ static void spike_sl_show(const ESRect *r)
     bytes = (ULONG)(r->w * r->h * ES_PF_BPP);
     g_sl.saved = (UBYTE *)AllocVec(bytes, MEMF_ANY);
     g_sl.mask = (UBYTE *)AllocVec(bytes, MEMF_ANY);
+    if (!g_pf.shallow) {
+        trusted = spike_pf_reads_trusted(r);   /* same probe as the frame */
+    }
     Forbid();
-    g_sl.plain = g_pf.shallow || g_sl.saved == NULL || g_sl.mask == NULL;
+    g_sl.plain = g_pf.shallow || !trusted ||
+                 g_sl.saved == NULL || g_sl.mask == NULL;
     if (!g_sl.plain) {
         n = bytes;
         if (ES_PF_READ(&g_pf.scr->RastPort, r->x, r->y, g_sl.saved,

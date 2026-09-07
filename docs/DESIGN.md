@@ -846,12 +846,21 @@ AROS report, which these results do not explain, and stale pixels in
 the unpainted seam handle of AmigaOS 4 and MorphOS after an overlapping
 window closes, also reproduced with the original 0.2 and seen on real
 hardware and in both VMs by the author (2026-09-07). A third, reported
-on 2026-09-07 from VirtualBox: on the NVIDIA Nouveau driver, where the
-preview frame falls back to a plain inversion, thin traces of the frame
-can stay on the desktop after some drags; on VMwareSVGA they are barely
-visible. Whether an unpaired inversion or an inexact one, it needs the
-driver in front of us and goes to 0.4. No release has been published
-as part of this verification.
+on 2026-09-07 from VirtualBox on the NVIDIA Nouveau driver, where the
+log said "pixel reads not trusted": thin traces of the preview frame
+stayed on the desktop after every drag. The cause was in the fallback
+itself: after the first pass had painted the accent and the read-back
+had failed, "taking the accent off" wrote back what the driver had
+returned, which on such a driver is garbage, and the plain inversion
+then went on and off over pixels already ruined. The fix probes the
+reads before anything irreversible is written: a strip is inverted,
+read, inverted back and read again, and only reads that are each
+other's inverse in every colour byte are trusted; otherwise the frame
+and the seam line use nothing but COMPLEMENT, which the second pass
+undoes bit for bit. Verified in the VM on both paths (the plain one
+forced with EDGESNAP_FRAME_PLAIN in ENV, a test hook); the driver that
+showed it has not confirmed yet. No release has been published as part
+of this verification.
 
 ### 0.4 - candidates
 
