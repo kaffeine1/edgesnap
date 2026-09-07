@@ -95,8 +95,9 @@ first gesture is the drag.
 - **0.3 PPC regression pass:** installation over 0.2, drag previews,
   hotkeys, maximize/restore, seam dragging, pair fill, live preferences
   and startup passed on AmigaOS 4.1 and MorphOS 3.20 under emulation.
-  MorphOS can retain old pixels in the narrow seam handle after another
-  window covers it; the same case reproduces with the original 0.2.
+  On AmigaOS 4 and MorphOS the narrow seam handle can retain old pixels
+  after another window covers it and goes away; the same case reproduces
+  with the original 0.2, and real hardware shows it too (2026-09-07).
   It remains a known graphical limitation, not a new 0.3 regression.
 - **Phase 1 (portable core): done.** The validated spike behavior lives
   as a portable, host-tested core: `core/engine.c` (drag/snap state

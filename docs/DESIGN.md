@@ -843,9 +843,10 @@ preferences, complete API 2.5/2.6 client and automatic-startup checks
 under emulation. The PPC hotkey path now waits for the window change
 before synchronizing the seam. Two things stay open: the real-hardware
 AROS report, which these results do not explain, and stale pixels in
-MorphOS's unpainted seam handle after an overlapping window closes,
-also reproduced with the original 0.2. No release has been published
-as part of this verification.
+the unpainted seam handle of AmigaOS 4 and MorphOS after an overlapping
+window closes, also reproduced with the original 0.2 and seen on real
+hardware and in both VMs by the author (2026-09-07). No release has
+been published as part of this verification.
 
 ### 0.4 - candidates
 

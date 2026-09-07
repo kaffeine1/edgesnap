@@ -108,9 +108,10 @@ Version %s is still a beta. I checked this build under emulation on
 AmigaOS 4.1, MorphOS 3.20 and a fresh AROS One 1.3 x86_64 installation.
 The AROS test passed 40 snaps with DualPNG icons, overlapping drawers
 and off-screen starts, but that does not resolve the report of black
-drawer areas on real hardware. MorphOS can retain old pixels in the
-narrow seam handle after another window covers it; this also reproduces
-with the original 0.2. Both remain worth reporting and investigating.
+drawer areas on real hardware. On AmigaOS 4 and MorphOS the narrow seam
+handle can retain old pixels after another window covers it and goes
+away; this also reproduces with the original 0.2. Both remain worth
+reporting and investigating.
 
 The interface below 1.0 is not frozen. If EdgeSnap covers your dock,
 misses your seam or draws something odd, please include the system,
