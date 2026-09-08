@@ -94,7 +94,7 @@ def main():
             or t.startswith(b"*** DON'T EDIT")]
 
     out = bytearray(blob[:tool_at])
-    if old_tool:
+    if old_tool or tool is not None:
         out += amiga_string(tool if tool is not None else old_tool)
     types = keep + [t.encode("latin-1") for t in new_types]
     if types or old_types:
@@ -103,6 +103,19 @@ def main():
             out += amiga_string(t)
         # the list is terminated by the count above, as Workbench expects
     out += blob[end:]                       # the IFF ColorIcon, verbatim
+
+    # The header says what follows the images: a default tool string
+    # only if do_DefaultTool is non-zero, a tooltype array only if
+    # do_ToolTypes is. An icon that never had them keeps both at zero,
+    # and adding the strings without raising the flags makes the reader
+    # take them for the ColorIcon chunk: Workbench then showed the old
+    # planar image, the selected one, in place of the coloured face
+    # (seen on AmigaOS 4 with a contributed icon, 2026-09-08). The
+    # value only has to be non-zero; 1 is what icon.library writes.
+    if (old_tool or tool is not None) and struct.unpack(">I", out[50:54])[0] == 0:
+        out[50:54] = struct.pack(">I", 1)
+    if (types or old_types) and struct.unpack(">I", out[54:58])[0] == 0:
+        out[54:58] = struct.pack(">I", 1)
 
     open(dst, "wb").write(bytes(out))
     print("%s: tool=%s, %d tooltype(s), %d bytes" %
