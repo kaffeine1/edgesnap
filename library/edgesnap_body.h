@@ -119,5 +119,6 @@ LONG esb_place_windows(struct ESnapPlacement *list, ULONG count,
 /* 2.6: window identity. */
 LONG esb_query_window_serial(struct Window *win, ULONG *serial);
 LONG esb_find_window(ULONG serial, struct Window **window);
+void esb_feed_motion(LONG dx, LONG dy);
 
 #endif /* EDGESNAP_BODY_H */

@@ -206,6 +206,15 @@ AROS_LP2(LONG, ESnap_FindWindow,
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP2(void, ESnap_FeedMotion,
+         AROS_LPA(LONG, dx, D0),
+         AROS_LPA(LONG, dy, D1),
+         LIBBASETYPEPTR, EdgeSnapBase, 26, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* CLIB_EDGESNAP_PROTOS_H */

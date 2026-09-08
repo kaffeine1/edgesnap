@@ -100,6 +100,10 @@ struct EdgeSnapIFace
                                             ULONG *serial);
     LONG APICALL (*ESnap_FindWindow)(struct EdgeSnapIFace *Self,
                                      ULONG serial, struct Window **window);
+
+    /* --- appended for 2.7: the pointer's own travel --- */
+    void APICALL (*ESnap_FeedMotion)(struct EdgeSnapIFace *Self,
+                                     LONG dx, LONG dy);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

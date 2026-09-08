@@ -86,6 +86,10 @@ first gesture is the drag.
   The real-hardware report of black drawer areas remains open; this
   result does not establish whether its cause is hardware or an old
   preview still running. The client headers are in `include/aros/`.
+- **Library 2.7:** the input handler reports the mouse's own travel
+  through `ESnap_FeedMotion`, so a pointer pinned by a window that may
+  not leave the screen (MorphOS as delivered) still reaches the zones
+  once it keeps pushing against the edge (2026-09-08).
 - **Library 2.5 and 2.6:** the calls a tiling client asked for first
   (the windows as the library sees them, placement in an arbitrary
   rectangle, a whole layout in one call) and a window identity that

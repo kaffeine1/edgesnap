@@ -441,4 +441,21 @@ LONG ESnap_PlaceWindowsA(struct ESnapPlacement *list, ULONG count,
 LONG ESnap_QueryWindowSerial(struct Window *win, ULONG *serial);
 LONG ESnap_FindWindow(ULONG serial, struct Window **window);
 
+/*
+ * --- 2.7: the pointer's own travel ---------------------------------
+ *
+ * Where Intuition keeps a window inside the screen (MorphOS as
+ * delivered, AROS with "offscreen move" switched off), a window
+ * dragged against the edge stops there, and the pointer stays pinned
+ * where it grabbed the title bar: it never touches the edge, so no
+ * zone would ever be entered. The mouse keeps moving all the same, and
+ * the frontend's input handler sees that travel. ESnap_FeedMotion
+ * reports it, in pixels and signed, accumulated since the last
+ * ESnap_FeedInput: the engine then treats a pointer that stands still
+ * while the travel keeps pushing against an edge the window is flush
+ * with as being on that edge. A frontend that never calls it loses
+ * nothing but this case.
+ */
+void ESnap_FeedMotion(LONG dx, LONG dy);
+
 #endif /* EDGESNAP_H */

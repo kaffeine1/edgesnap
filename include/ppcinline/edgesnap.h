@@ -134,4 +134,10 @@
         ULONG, __p0, d0, struct Window **, __p1, a0, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+/* --- appended for 2.7 --- */
+#define ESnap_FeedMotion(__p0, __p1) \
+    LP2NR(0x9c, ESnap_FeedMotion, \
+        LONG, __p0, d0, LONG, __p1, d1, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */

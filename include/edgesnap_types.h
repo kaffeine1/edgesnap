@@ -47,6 +47,8 @@
  *   2.6 - window identity: every observed window gets a serial that is
  *       never reused; QueryWindowSerial and FindWindow appended, and
  *       ESnapWindowInfo.serial filled.
+ *   2.7 - FeedMotion appended: the raw travel of the pointer, for a
+ *       pointer pinned by a window that may not leave the screen.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

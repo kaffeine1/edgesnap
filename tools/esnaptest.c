@@ -249,6 +249,10 @@ int main(void)
 
     /* 2.6: identity. The serial must come back to the same window,
      * and a serial nobody was given must be refused. */
+    if (EdgeSnapBase->lib_Revision >= 7) {
+        ES_CALL(ESnap_FeedMotion)(0, 0);
+        printf("esnaptest: ESnap_FeedMotion(0, 0) accepted (2.7)\n");
+    }
     if (EdgeSnapBase->lib_Revision >= 6 && win != NULL) {
         ULONG serial = 0, again = 0;
         struct Window *back = NULL;

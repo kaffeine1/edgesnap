@@ -35,8 +35,8 @@
 
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  2
-#define ES_LIB_REVISION 6
-#define ES_LIB_IDSTRING "edgesnap.library 2.6 (5.9.2026) Michele Dipace\r\n"
+#define ES_LIB_REVISION 7
+#define ES_LIB_IDSTRING "edgesnap.library 2.7 (8.9.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -293,6 +293,12 @@ static LONG G_FindWindow(void)
     return esb_find_window((ULONG)REG_D0, (struct Window **)REG_A0);
 }
 
+/* --- appended for 2.7 --- */
+static void G_FeedMotion(void)
+{
+    esb_feed_motion((LONG)REG_D0, (LONG)REG_D1);
+}
+
 #define ES_GATE(name, fn) \
     static struct EmulLibEntry name = \
         { TRAP_LIB, 0, (void (*)(void))fn }
@@ -322,6 +328,7 @@ ES_GATE(GATE_PlaceWindow, G_PlaceWindow);
 ES_GATE(GATE_PlaceWindowsA, G_PlaceWindowsA);
 ES_GATE(GATE_QueryWindowSerial, G_QueryWindowSerial);
 ES_GATE(GATE_FindWindow, G_FindWindow);
+ES_GATE(GATE_FeedMotion, G_FeedMotion);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -350,6 +357,7 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_PlaceWindowsA,
     (APTR)&GATE_QueryWindowSerial,
     (APTR)&GATE_FindWindow,
+    (APTR)&GATE_FeedMotion,
     (APTR)-1
 };
 

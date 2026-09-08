@@ -830,6 +830,22 @@ turned out to be portable rather than AROS-specific:
   The proper system-side fix remains in Wanderer's icon list: its resize
   update must also honor existing layer damage in the old area.
 
+**2.7, a pointer that may not leave the screen (2026-09-08).** MorphOS
+as delivered keeps a dragged window inside the screen, and Intuition
+then pins the pointer where it grabbed the title bar: the pointer never
+touches the edge, so nothing snapped without Control held. AROS has the
+same switch (IControl, "offscreen move", on by default; with it off
+`rom/intuition/windowclasses.c` sizes the mouse bounds so the pointer
+cannot move either); AmigaOS 4 lets a window leave the screen. Changing
+the preference from a commodity was not an option, it is the user's and
+the call is private. Instead the input handler now sums the mouse's own
+travel, `ESnap_FeedMotion` (appended, 2.7) hands it to the library
+before every `ESnap_FeedInput`, and the engine treats a pointer that
+stands still while the travel keeps pushing against an edge the window
+is flush with as being on that edge, after `push_px` (24) of it. A
+frontend that never calls FeedMotion gets the 2.6 behaviour; the guide
+still names the switch for whoever prefers it.
+
 **Where 0.3 stands (2026-09-06).** The prepared release includes the
 AROS x86_64 ABIv11 lane, library API 2.6 on all three systems, the
 window-size and drag-press fixes, Wanderer repaint handling and the

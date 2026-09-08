@@ -319,3 +319,14 @@ AROS_LH2(LONG, ESnap_FindWindow,
     return esb_find_window(serial, window);
     AROS_LIBFUNC_EXIT
 }
+
+/* --- appended for 2.7 --- */
+AROS_LH2(void, ESnap_FeedMotion,
+         AROS_LHA(LONG, dx, D0),
+         AROS_LHA(LONG, dy, D1),
+         struct EdgeSnapBase *, EdgeSnapBase, 26, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    esb_feed_motion(dx, dy);
+    AROS_LIBFUNC_EXIT
+}

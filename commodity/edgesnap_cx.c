@@ -277,6 +277,8 @@ struct SpikeShared {
     volatile ULONG seam_hot;
     volatile ULONG seam_dragging;
     volatile ULONG seam_grabs;
+    volatile LONG raw_dx;          /* the mouse's own travel, summed  */
+    volatile LONG raw_dy;          /* (relative devices only)         */
 };
 
 static struct SpikeShared g_shared;
@@ -356,6 +358,11 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
 #endif
         g_shared.releases++;
     } else if (ie->ie_Code == IECODE_NOBUTTON) {
+        /* a relative device reports how far the mouse went, whether
+         * or not Intuition let the pointer follow: that is what tells
+         * a pinned pointer from one that stopped */
+        g_shared.raw_dx += ie->ie_X;
+        g_shared.raw_dy += ie->ie_Y;
         g_shared.moves++;
     } else {
         return;
@@ -2505,6 +2512,17 @@ static void spike_engine_step(void)
         spike_preview_hide();
     }
 
+    {
+        static LONG seen_dx, seen_dy;
+        LONG dx = (LONG)g_shared.raw_dx - seen_dx;
+        LONG dy = (LONG)g_shared.raw_dy - seen_dy;
+
+        seen_dx += dx;
+        seen_dy += dy;
+        if ((dx != 0 || dy != 0) && EdgeSnapBase->lib_Revision >= 7) {
+            ES_CALL(ESnap_FeedMotion)(dx, dy);
+        }
+    }
     ES_CALL(ESnap_FeedInput)((ULONG)new_press, (ULONG)new_move,
                              (ULONG)new_release, g_shared.quals, &r);
     spike_apply_report(&r);

@@ -53,6 +53,7 @@
 static struct SignalSemaphore g_sem;
 static ESConfig g_cfg;
 static ESEngine g_engine;
+static LONG g_push_x, g_push_y;   /* raw pointer travel since the last feed */
 static ESRegistry g_registry;
 static void *g_excluded[ESB_EXCLUDE_SLOTS];
 static struct Window *g_ignored[ESB_IGNORE_SLOTS];
@@ -519,6 +520,22 @@ static void esb_change_box(struct Window *win, const ESRect *from,
         esb_refresh_wanderer(win, to);
     }
 #endif
+}
+
+/*
+ * The raw travel of the pointer since the last FeedInput, from the
+ * input handler that sees the mouse itself. Needed where Intuition
+ * pins the pointer to a window that may not leave the screen: the
+ * pointer then stands still at the edge while the mouse keeps moving,
+ * and only this travel says so. Purely additive: a frontend that never
+ * calls it gets the engine of 2.6.
+ */
+void esb_feed_motion(LONG dx, LONG dy)
+{
+    ObtainSemaphore(&g_sem);
+    g_push_x += dx;
+    g_push_y += dy;
+    ReleaseSemaphore(&g_sem);
 }
 
 /* ------------------------------------------------------- public API */
@@ -1300,11 +1317,17 @@ void esb_input(int press, int motion, int release, ULONG quals,
     if (motion && g_engine.button_down && !release) {
         win = esb_sample_active(&s);
         if (win == NULL) {
+            g_push_x = 0;
+            g_push_y = 0;
             es_engine_motion(&g_engine, 0, &a);
         } else {
             ESWinFacts f;
             ULONG bypass = esb_bypass_mask();
 
+            f.push_x = (int)g_push_x;      /* what FeedMotion reported */
+            f.push_y = (int)g_push_y;
+            g_push_x = 0;
+            g_push_y = 0;
             f.ref = win;
             f.box = s.box;
             f.usable = s.usable;

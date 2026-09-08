@@ -377,4 +377,20 @@ static inline LONG __inline_EdgeSnap_ESnap_FindWindow(ULONG __arg1, struct Windo
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+static inline void __inline_EdgeSnap_ESnap_FeedMotion(LONG __arg1, LONG __arg2, APTR __EdgeSnapBase)
+{
+    AROS_LIBREQ(EdgeSnapBase, 2)
+    AROS_LC2NR(void, ESnap_FeedMotion,\
+         AROS_LCA(LONG, (__arg1), D0), \
+         AROS_LCA(LONG, (__arg2), D1), \
+        struct Library *, (__EdgeSnapBase), 26, EdgeSnap    );
+}
+
+#define ESnap_FeedMotion(arg1, arg2) \
+    __inline_EdgeSnap_ESnap_FeedMotion((arg1), (arg2), __EDGESNAP_LIBBASE)
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 #endif /* INLINE_EDGESNAP_H*/

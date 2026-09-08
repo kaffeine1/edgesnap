@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 6
-#define ES_LIB_IDSTRING "edgesnap.library 2.6 (5.9.2026) Michele Dipace"
+#define ES_LIB_REVISION 7
+#define ES_LIB_IDSTRING "edgesnap.library 2.7 (8.9.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -375,6 +375,13 @@ static LONG _ESnap_FindWindow(struct EdgeSnapIFace *Self, ULONG serial,
     return esb_find_window(serial, window);
 }
 
+/* --- appended for 2.7 --- */
+static void _ESnap_FeedMotion(struct EdgeSnapIFace *Self, LONG dx, LONG dy)
+{
+    (void)Self;
+    esb_feed_motion(dx, dy);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -402,6 +409,7 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_PlaceWindowsA,
     (APTR)_ESnap_QueryWindowSerial,
     (APTR)_ESnap_FindWindow,
+    (APTR)_ESnap_FeedMotion,
     (APTR)-1
 };
 
