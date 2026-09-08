@@ -89,7 +89,7 @@ Short:        Tile windows by dragging them to an edge
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/cdity
-Version:      0.3.1 (beta)
+Version:      0.31 (beta)
 Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros
 License:      MIT
 

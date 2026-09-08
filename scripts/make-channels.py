@@ -71,7 +71,7 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-0.3.1 corrects the installer: it was offering to copy the commented
+0.31 corrects the installer: it was offering to copy the commented
 settings template into ENVARC:, with the answer set to yes by default,
 so an update could replace the settings the user had saved. A file
 already in ENVARC: is now left alone and never asked about. Reported by
