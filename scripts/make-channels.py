@@ -80,6 +80,11 @@ of individual windows or complete layouts in arbitrary rectangles.
 API 2.6 adds window serials and lookup, so a client need not use a reused
 window address as its identity.
 
+On MorphOS as delivered a window may not leave the screen, and the pointer
+stayed pinned to it short of the edge: snapping by drag now works there
+too, without holding Control, because the library (2.7) is told how far
+the mouse itself travelled.
+
 Drag detection remembers where the title-bar press began and accepts
 outline drags and tablet motion. Pair fill and seam resizing respect
 each window's size limits, and layout changes shrink before growing.
