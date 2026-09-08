@@ -9,7 +9,7 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-VERSION="${1:-0.3}"
+VERSION="${1:-0.3.1}"
 
 # The version lives in include/edgesnap_version.h; the scripts and the
 # Installer cannot include a C header, so they are checked against it

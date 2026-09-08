@@ -71,6 +71,12 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
+0.3.1 corrects the installer: it was offering to copy the commented
+settings template into ENVARC:, with the answer set to yes by default,
+so an update could replace the settings the user had saved. A file
+already in ENVARC: is now left alone and never asked about. Reported by
+a distribution maintainer reading the 0.3 archive.
+
 I have added AROS x86_64 ABIv11, with a native shared library, Zune
 preferences and PNG icons. It has its own archive; the AmigaOS 4 and
 MorphOS builds still travel together.
