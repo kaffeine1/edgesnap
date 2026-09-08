@@ -118,6 +118,8 @@ including one line in S:User-Startup (on AROS the commodity goes into
 SYS:WBStartup instead), so snapping is simply there from the next boot.
 Updating is installing again: no reboot needed.
 
+The icons are by Carlo Spadoni, who drew them for EdgeSnap.
+
 Full documentation is in EdgeSnap.guide.
 EOF
 

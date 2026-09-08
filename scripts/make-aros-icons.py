@@ -9,7 +9,7 @@
 # the Installer into an illegal access, another had Wanderer open the
 # Install script as a document instead of running the Installer), so
 # the AROS archive gets these instead. The commodity and the
-# preferences icons come from a contributed set in the AROS One style
+# preferences icons were drawn for EdgeSnap by Carlo Spadoni
 # (assets/aros/src/*.png, a dual PNG: the selected image follows the
 # first one's IEND, which is where icon.library looks for it); they
 # get the icOn chunk here, after IHDR, with the rest of the image kept

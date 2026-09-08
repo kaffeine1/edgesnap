@@ -167,6 +167,13 @@ below 1.0 treat that interface as not frozen - methods are only ever
 appended, never moved or removed, but names and arguments may still
 change.
 """ % (LIBRARY_VERSION, VERSION)),
+    ("THANKS", """
+The icons are by Carlo Spadoni, who drew them for EdgeSnap and let me
+ship them with it. The testers on the AROSWorld forum found the black
+areas in Wanderer's drawers, the colour left along the seam and the
+traces of the preview frame on one graphics driver, each with a video
+or a log that made the cause findable.
+"""),
     ("LICENCE AND SOURCE", """
 MIT. The full text is in the LICENSE file inside the archive.
 

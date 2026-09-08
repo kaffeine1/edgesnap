@@ -19,7 +19,8 @@
        "that half or quarter of the screen, the way Windows and macOS "
        "do. Two windows side by side share a seam that can be dragged "
        "to re-balance them. It installs as a commodity that starts "
-       "with the system, so the behaviour is simply there."))
+       "with the system, so the behaviour is simply there.\n\n"
+       "Icons by Carlo Spadoni."))
 
 (set #ask-system "Which system is this?")
 (set #ask-system-help

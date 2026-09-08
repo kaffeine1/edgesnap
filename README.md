@@ -317,6 +317,17 @@ the design doc:
 - behavior with non-resizable windows, MUI windows, shells with size
   increments.
 
+## Thanks
+
+- **Carlo Spadoni** drew the AROS icons EdgeSnap ships with, and the
+  AmigaOS 4 and MorphOS ones offered alongside them. The AROS package
+  carries his commodity and preferences icons, with the icOn chunk added
+  by `scripts/make-aros-icons.py`; the sources are in `assets/aros/src`.
+- The testers on the AROSWorld forum found the black areas in Wanderer's
+  drawers, the colour left along the seam and the traces of the preview
+  frame on the NVIDIA Nouveau driver, each with a video or a log that
+  made the cause findable.
+
 ## Platform notes
 
 - The CxCustom input handler runs in the input.device context: it only
