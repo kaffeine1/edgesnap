@@ -89,6 +89,16 @@ If a window is already snapped to one side, snapping another to the
 other side gives it the space that is actually left, not a rigid
 half - so a sixty/forty split stays sixty/forty.
 
+@{b}Windows that may not leave the screen@{ub}
+On MorphOS the IControl preferences decide whether a window may be
+dragged past the edge of the screen. As delivered they say no, except
+while Control is held, and a window that stops at the edge keeps the
+pointer where it grabbed the title bar: the pointer never touches the
+edge, so nothing snaps. Either hold Control while you drag, or open
+@{b}SYS:Prefs/IControl@{ub} and allow positioning beyond the screen
+limits. AROS has the same switch in its IControl preferences, on by
+default; AmigaOS 4 lets a window leave the screen without asking.
+
 @{b}The seam@{ub}
 Where two snapped windows meet there is nothing to see until the
 pointer comes near: then the join lights up in the same colour as the
