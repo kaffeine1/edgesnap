@@ -268,19 +268,28 @@
 (complete 90)
 
 ; --- the preferences template ---------------------------------------
-(if (askbool
-      (prompt "Install the commented preferences file into ENVARC:?")
-      (help (cat "ENVARC:EdgeSnap.prefs is where EdgeSnap reads its "
-                 "settings. The file installed here changes nothing on "
-                 "its own: every setting in it is commented out.\n\n"))
-      (default 1))
-    (
-      (if (exists "ENVARC:EdgeSnap.prefs" (noreq))
-          (protect "ENVARC:EdgeSnap.prefs" "+rwed"))
-      (copyfiles
-        (source "EdgeSnap.prefs")
-        (dest "ENVARC:"))
-      (protect "ENVARC:EdgeSnap.prefs" "+rwed")))
+;
+; ENVARC:EdgeSnap.prefs belongs to the USER: the preferences window
+; writes it when they press Save. Updating is installing again, so
+; copying the template over that file would throw their settings away,
+; and with the question answered by default nobody would even notice.
+; The template is therefore offered ONLY when there is nothing there.
+; Reported by a distribution maintainer reading the archive, 2026-09-08.
+(if (= (exists "ENVARC:EdgeSnap.prefs" (noreq)) 0)
+    (if (askbool
+          (prompt "Install the commented preferences file into ENVARC:?")
+          (help (cat "ENVARC:EdgeSnap.prefs is where EdgeSnap reads its "
+                     "settings. The file installed here changes nothing "
+                     "on its own: every setting in it is commented out. "
+                     "It is only offered because you have none: a file "
+                     "already there is your own and is never "
+                     "touched.\n\n"))
+          (default 1))
+        (
+          (copyfiles
+            (source "EdgeSnap.prefs")
+            (dest "ENVARC:"))
+          (protect "ENVARC:EdgeSnap.prefs" "+rwed"))))
 
 ; --- the manual -----------------------------------------------------
 ;

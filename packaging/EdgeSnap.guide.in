@@ -69,7 +69,9 @@ open. S:User-Startup only gets a comment saying so.
 
 @{b}Updating@{ub} is installing again. The running copy is stopped,
 the old library is let go of, and the new one takes over - no reboot,
-and nothing for you to type.
+and nothing for you to type. Your settings are left alone: the
+commented template is only offered when ENVARC:EdgeSnap.prefs does not
+exist yet, and a file already there is never touched.
 
 To remove it: delete the two files above and the line between
 @{b};BEGIN EdgeSnap@{ub} and @{b};END EdgeSnap@{ub} in S:User-Startup.
