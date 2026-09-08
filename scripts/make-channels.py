@@ -51,8 +51,8 @@ ARCHIVE = os.path.join(ROOT, "build", "EdgeSnap-%s.lha" % VERSION)
 ARCHIVE_AROS = os.path.join(ROOT, "build", "EdgeSnap-%s-AROS64.lha" % VERSION)
 # From the second AROS release on, the previous archive is named here so
 # the old entry does not survive beside the new one. None for the first.
-AROS_REPLACES_AMINET = None       # e.g. "util/cdity/edgesnap.x86_64-aros.lha"
-AROS_REPLACES_ARCHIVES = None     # e.g. "utility/workbench/edgesnap.x86_64-aros-v11.lha"
+AROS_REPLACES_AMINET = None       # still waiting in /new, no published entry yet
+AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
 AUTHOR = "Michele Dipace <michele.dipace@kaffeine.net>"
