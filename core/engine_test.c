@@ -40,6 +40,8 @@ static void std_facts(ESWinFacts *f, void *ref)
     f->max_h = 0;
     f->bar_h = 0;                /* no bar geometry: classic tests  */
     f->flags = ES_WF_SNAPPABLE | ES_WF_DRAGBAR;
+    f->push_x = 0;
+    f->push_y = 0;
 }
 
 /* Baseline motion, then a correlated window+pointer move: engine must
@@ -428,9 +430,94 @@ static void test_outline_press_in_body_is_not_a_drag(void)
     CHECK(a.do_snap == 0);
 }
 
+/* A window that may not leave the screen: it stops flush with the
+ * left edge and the pointer stays pinned at the grab point, 60 px in.
+ * The raw travel keeps pushing left; after push_px of it the engine
+ * treats the pointer as being on the edge and previews the left half. */
+static void test_pinned_pointer_pushing_at_the_edge(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, i;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+
+    f.box.x = 0;                    /* flush with the left edge        */
+    f.mouse_x = 60;                 /* pinned at the grab point        */
+    f.mouse_y = 240;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone == ES_ZONE_NONE);
+    for (i = 0; i < 3; i++) {       /* three pushes of 10 px: 30 > 24 */
+        f.push_x = -10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone_changed == 1 && a.zone == ES_ZONE_LEFT);
+    CHECK(a.show_preview == 1 && a.preview_rect.x == 0);
+
+    /* let go while pushing: it snaps */
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 1 && a.snap_zone == ES_ZONE_LEFT);
+
+    /* the pointer moving on that axis frees it: the count restarts and
+     * the zone is left, exactly as a pointer leaving the edge */
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+    f.box.x = 0;
+    f.mouse_x = 60;
+    f.mouse_y = 240;
+    es_engine_motion(&e, &f, &a);
+    for (i = 0; i < 3; i++) {
+        f.push_x = -10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_LEFT);
+    f.mouse_x = 70;
+    es_engine_motion(&e, &f, &a);
+    CHECK(e.push_acc_x == 0);
+    CHECK(a.zone == ES_ZONE_NONE && a.hide_preview == 1);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 0);
+}
+
+/* Pushing while the window is NOT at the edge, or pushing the wrong
+ * way, changes nothing: only a wall counts. */
+static void test_push_without_a_wall_is_ignored(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, i;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+    f.box.x = 40;                   /* not flush                       */
+    f.mouse_x = 60;
+    f.mouse_y = 240;
+    es_engine_motion(&e, &f, &a);
+    for (i = 0; i < 5; i++) {
+        f.push_x = -10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_NONE && a.show_preview == 0);
+    f.box.x = 0;                    /* flush, but pushing away from it */
+    for (i = 0; i < 5; i++) {
+        f.push_x = 10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_NONE && a.show_preview == 0);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 0);
+}
+
 int main(void)
 {
     test_happy_left_snap();
+    test_pinned_pointer_pushing_at_the_edge();
+    test_push_without_a_wall_is_ignored();
     test_click_without_drag();
     test_app_moves_window_alone();
     test_no_dragbar_never_drags();

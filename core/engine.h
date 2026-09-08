@@ -39,6 +39,8 @@ typedef struct ESWinFacts {
     int max_w, max_h;
     int bar_h;             /* height of the drag bar (top border), px   */
     unsigned flags;        /* ES_WF_*                                   */
+    int push_x, push_y;    /* raw pointer travel since the last motion, */
+                           /* signed, in pixels; 0 when unknown         */
 } ESWinFacts;
 
 typedef struct ESEngineConfig {
@@ -46,6 +48,7 @@ typedef struct ESEngineConfig {
     int corner_div;   /* corner length = usable height / corner_div     */
     int drag_min_px;  /* pointer travel needed to call it a drag        */
     unsigned zones_mask; /* ES_ZONEBIT() set of zones that react        */
+    int push_px;      /* raw travel against a pinned edge = at the edge */
 } ESEngineConfig;
 
 void es_engine_config_defaults(ESEngineConfig *cfg);
@@ -78,6 +81,7 @@ typedef struct ESEngine {
     int zone;
     ESRect zone_rect;   /* fitted target of the current zone            */
     ESWinFacts last;    /* facts snapshot from the latest motion        */
+    int push_acc_x, push_acc_y; /* raw travel while the pointer stood   */
 } ESEngine;
 
 /* cfg == NULL uses defaults. */

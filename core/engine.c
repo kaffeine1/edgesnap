@@ -21,6 +21,7 @@ void es_engine_config_defaults(ESEngineConfig *cfg)
     cfg->edge_px = 12;
     cfg->corner_div = 4;
     cfg->drag_min_px = 4;
+    cfg->push_px = 24;
     cfg->zones_mask = ES_ZONEMASK_ALL;
 }
 
@@ -49,6 +50,8 @@ static void es_engine_clear_tracking(ESEngine *e)
     e->press_my = -1;
     e->candidate = 0;
     e->zone = ES_ZONE_NONE;
+    e->push_acc_x = 0;
+    e->push_acc_y = 0;
 }
 
 void es_engine_init(ESEngine *e, const ESEngineConfig *cfg)
@@ -77,6 +80,8 @@ void es_engine_press(ESEngine *e, int mx, int my, ESEngineActions *out)
 void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
                       ESEngineActions *out)
 {
+    int prev_mx, prev_my;
+
     es_actions_clear(out);
     out->zone = e->zone;
 
@@ -87,6 +92,8 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
         e->candidate = 0;
         return;
     }
+    prev_mx = e->last.mouse_x;
+    prev_my = e->last.mouse_y;
     e->last = *facts;
 
     if (e->candidate != facts->ref) {
@@ -136,9 +143,48 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
     }
 
     if (e->dragging) {
-        int z = es_zone_from_pointer(&facts->usable, facts->mouse_x,
-                                     facts->mouse_y, e->cfg.edge_px,
-                                     facts->usable.h / e->cfg.corner_div);
+        int mx = facts->mouse_x;
+        int my = facts->mouse_y;
+        const ESRect *u = &facts->usable;
+        const ESRect *b = &facts->box;
+        int z;
+
+        /*
+         * A window that may not leave the screen (MorphOS as delivered,
+         * AROS with "offscreen move" off) stops at the edge, and
+         * Intuition keeps the pointer where it grabbed the title bar:
+         * the pointer never reaches the edge, and nothing would ever
+         * snap. The raw travel of the mouse still arrives. So while the
+         * pointer stands still on an axis and the raw travel keeps
+         * pushing, it is accumulated; once it has pushed far enough
+         * against an edge the window is flush with, the pointer counts
+         * as being ON that edge. A pointer that moves on that axis is
+         * free, and the count starts over.
+         */
+        if (facts->push_x != 0 && mx == prev_mx) {
+            e->push_acc_x += facts->push_x;
+        } else {
+            e->push_acc_x = 0;
+        }
+        if (facts->push_y != 0 && my == prev_my) {
+            e->push_acc_y += facts->push_y;
+        } else {
+            e->push_acc_y = 0;
+        }
+        if (e->push_acc_x <= -e->cfg.push_px && b->x <= u->x) {
+            mx = u->x;
+        } else if (e->push_acc_x >= e->cfg.push_px &&
+                   b->x + b->w >= u->x + u->w) {
+            mx = u->x + u->w - 1;
+        }
+        if (e->push_acc_y <= -e->cfg.push_px && b->y <= u->y) {
+            my = u->y;
+        } else if (e->push_acc_y >= e->cfg.push_px &&
+                   b->y + b->h >= u->y + u->h) {
+            my = u->y + u->h - 1;
+        }
+        z = es_zone_from_pointer(u, mx, my, e->cfg.edge_px,
+                                 u->h / e->cfg.corner_div);
 
         /* Holding the bypass qualifier, or landing in a zone the user
          * switched off, means "just move the window". */
