@@ -40,6 +40,13 @@ static ESRegistryEntry *es_registry_lookup(ESRegistry *reg, void *ref)
 int es_registry_remember(ESRegistry *reg, void *ref, const ESRect *prebox,
                          const ESRect *snapped, int zone)
 {
+    return es_registry_remember_step(reg, ref, prebox, snapped, zone, 0);
+}
+
+int es_registry_remember_step(ESRegistry *reg, void *ref,
+                              const ESRect *prebox, const ESRect *snapped,
+                              int zone, int step)
+{
     ESRegistryEntry *e;
     int i;
 
@@ -48,6 +55,7 @@ int es_registry_remember(ESRegistry *reg, void *ref, const ESRect *prebox,
         /* re-snap: keep the original prebox, track the new placement */
         e->snapped = *snapped;
         e->zone = zone;
+        e->step = step;
         return ES_OK;
     }
     for (i = 0; i < ES_REGISTRY_SLOTS; i++) {
@@ -57,10 +65,23 @@ int es_registry_remember(ESRegistry *reg, void *ref, const ESRect *prebox,
             reg->slot[i].prebox = *prebox;
             reg->slot[i].snapped = *snapped;
             reg->slot[i].zone = zone;
+            reg->slot[i].step = step;
             return ES_OK;
         }
     }
     return ES_ERR_NO_MEMORY;
+}
+
+int es_registry_step(const ESRegistry *reg, void *ref)
+{
+    int i;
+
+    for (i = 0; i < ES_REGISTRY_SLOTS; i++) {
+        if (reg->slot[i].used && reg->slot[i].ref == ref) {
+            return reg->slot[i].step;
+        }
+    }
+    return 0;
 }
 
 int es_registry_zone(const ESRegistry *reg, void *ref)

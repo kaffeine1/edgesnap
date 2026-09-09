@@ -569,21 +569,42 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
     } else if (esb_is_excluded(win) || !esb_snappable(&s)) {
         rc = ES_ERR_REJECTED;
     } else {
+        int step = 0;
+
         if (want != NULL) {
             r = *want;
         } else {
-            es_fit_zone_rect((int)zone, &s.usable, s.min_w, s.min_h,
-                             s.max_w, s.max_h, &r);
+            /*
+             * The same side asked for twice runs the width cycle:
+             * half, two thirds, one third, half again. Only when the
+             * window is already on that side and the caller named no
+             * rectangle, which is the hotkey path: a drag that lands
+             * on the same edge means "put it back", not "narrow it".
+             */
+            if (g_cfg.cycle_sizes &&
+                es_registry_zone(&g_registry, win) == (int)zone) {
+                step = es_registry_step(&g_registry, win) + 1;
+                if (step >= ES_STEP_COUNT) {
+                    step = 0;
+                }
+            }
+            es_fit_zone_rect_step((int)zone, &s.usable, step, s.min_w,
+                                  s.min_h, s.max_w, s.max_h, &r);
         }
         /* Fill what the opposite side is not using, like Windows and
          * macOS: after a pair has been re-balanced to 70/30, the next
-         * window snapped to the narrow side gets that 30%. */
-        ObtainSemaphore(&g_sem);
-        es_pair_fill(&g_registry, win, (int)zone, &s.usable, s.min_w, s.max_w, &r);
-        ReleaseSemaphore(&g_sem);
+         * window snapped to the narrow side gets that 30%. A width the
+         * user asked for by cycling is not up for negotiation, so the
+         * fill is skipped there. */
+        if (step == 0) {
+            ObtainSemaphore(&g_sem);
+            es_pair_fill(&g_registry, win, (int)zone, &s.usable, s.min_w, s.max_w, &r);
+            ReleaseSemaphore(&g_sem);
+        }
         /* Refuse rather than snap without a way back: a full registry
          * would make ESnap_UnsnapWindow silently impossible. */
-        rc = es_registry_remember(&g_registry, win, &s.box, &r, (int)zone);
+        rc = es_registry_remember_step(&g_registry, win, &s.box, &r,
+                                       (int)zone, step);
         if (rc == ES_OK) {
             esb_change_box(win, &s.box, &r, 1);
         }

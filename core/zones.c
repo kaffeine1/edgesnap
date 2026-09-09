@@ -49,8 +49,31 @@ int es_zone_from_pointer(const ESRect *u, int px, int py,
 
 void es_zone_rect(int zone, const ESRect *u, ESRect *out)
 {
+    es_zone_rect_step(zone, u, 0, out);
+}
+
+void es_zone_rect_step(int zone, const ESRect *u, int step, ESRect *out)
+{
     int half_w = u->w / 2;
     int half_h = u->h / 2;
+
+    /*
+     * The cycle, for the two side zones only: half, two thirds, one
+     * third. The right side takes the remainder, as the halves do, so
+     * a left and a right at complementary steps still tile exactly.
+     */
+    if (step > 0 && (zone == ES_ZONE_LEFT || zone == ES_ZONE_RIGHT)) {
+        /*
+         * half_w is the LEFT column: the right zone takes what is left
+         * of it, so the fraction is mirrored there. Step 1 gives the
+         * side that was asked for two thirds, step 2 gives it one.
+         */
+        if (zone == ES_ZONE_LEFT) {
+            half_w = (step == 1) ? (u->w * 2) / 3 : u->w / 3;
+        } else {
+            half_w = (step == 1) ? u->w / 3 : (u->w * 2) / 3;
+        }
+    }
 
     out->x = u->x;
     out->y = u->y;
@@ -95,9 +118,16 @@ void es_fit_zone_rect(int zone, const ESRect *u,
                       int min_w, int min_h, int max_w, int max_h,
                       ESRect *out)
 {
+    es_fit_zone_rect_step(zone, u, 0, min_w, min_h, max_w, max_h, out);
+}
+
+void es_fit_zone_rect_step(int zone, const ESRect *u, int step,
+                           int min_w, int min_h, int max_w, int max_h,
+                           ESRect *out)
+{
     int right_edge, bottom_edge;
 
-    es_zone_rect(zone, u, out);
+    es_zone_rect_step(zone, u, step, out);
     right_edge = out->x + out->w;
     bottom_edge = out->y + out->h;
 

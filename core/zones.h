@@ -36,6 +36,26 @@ int es_zone_from_pointer(const ESRect *usable, int px, int py,
 void es_zone_rect(int zone, const ESRect *usable, ESRect *out);
 
 /*
+ * How many widths the left and right zones cycle through, and the
+ * cycle itself: a half, then two thirds, then one third, then round
+ * again. Asking for the same side twice is how Magnet and Rectangle
+ * let a window take more or less of the screen without a second
+ * gesture, and it is the cheapest way to reach a third of the width
+ * with the hotkeys we already have.
+ */
+#define ES_STEP_COUNT 3
+
+/*
+ * es_zone_rect with a step. Step 0 is exactly es_zone_rect, so every
+ * old caller keeps its geometry; steps 1 and 2 narrow or widen the
+ * LEFT and RIGHT zones only. Corners stay quarters: a cycling corner
+ * would have to choose between width and height, and neither answer
+ * is obviously right.
+ */
+void es_zone_rect_step(int zone, const ESRect *usable, int step,
+                       ESRect *out);
+
+/*
  * es_zone_rect plus window size limits. min/max <= 0 means "no limit"
  * (callers translate the Amiga 0xFFFF "unlimited" convention to 0).
  * When clamping shrinks the rectangle, it stays anchored to the zone's
@@ -45,6 +65,11 @@ void es_zone_rect(int zone, const ESRect *usable, ESRect *out);
 void es_fit_zone_rect(int zone, const ESRect *usable,
                       int min_w, int min_h, int max_w, int max_h,
                       ESRect *out);
+
+/* es_fit_zone_rect with the step of es_zone_rect_step. */
+void es_fit_zone_rect_step(int zone, const ESRect *usable, int step,
+                           int min_w, int min_h, int max_w, int max_h,
+                           ESRect *out);
 
 /*
  * Fit an arbitrary rectangle to a window's size limits (2.5, the

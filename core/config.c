@@ -19,6 +19,7 @@ void es_config_defaults(ESConfig *cfg)
     cfg->panel_detect = 1;
     cfg->panel_margin = ES_PANEL_MARGIN_PX;
     cfg->preview = 1;
+    cfg->cycle_sizes = 1;
     cfg->bypass_qual = ES_QUAL_NONE;
 }
 
@@ -307,6 +308,13 @@ int es_config_set(ESConfig *cfg, const char *key, const char *value)
         cfg->preview = iv;
         return ES_OK;
     }
+    if (es_key_eq(key, "cyclesizes")) {
+        if (!es_parse_bool(value, &iv)) {
+            return ES_ERR_BAD_ARGS;
+        }
+        cfg->cycle_sizes = iv;
+        return ES_OK;
+    }
     if (es_key_eq(key, "zones")) {
         if (!es_parse_zones(value, &mask)) {
             return ES_ERR_BAD_ARGS;
@@ -406,6 +414,10 @@ static const ESSetting es_setting_table[] = {
     { "BYPASSQUAL", "Zones", "Hold to ignore zones",
       "Qualifier that lets a window be dragged past the zones.",
       ES_SET_CHOICE, 0, 0, es_qual_choices },
+    { "CYCLESIZES", "Zones", "Repeat a hotkey for a third",
+      "Pressing the same side hotkey again gives the window two "
+      "thirds of the screen, then one third, then a half again.",
+      ES_SET_BOOL, 0, 0, 0 },
     { "EDGEPX", "Sensitivity", "Edge distance",
       "How close to an edge the pointer must come, in pixels.",
       ES_SET_INT, ES_EDGE_PX_MIN, ES_EDGE_PX_MAX, 0 },
@@ -481,6 +493,9 @@ int es_setting_value(const ESConfig *cfg, int index)
         }
         if (es_key_eq(key, "preview")) {
             return cfg->preview;
+        }
+        if (es_key_eq(key, "cyclesizes")) {
+            return cfg->cycle_sizes;
         }
         if (es_key_eq(key, "paneldetect")) {
             return cfg->panel_detect;

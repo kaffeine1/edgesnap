@@ -115,6 +115,10 @@ four windows that share one line share one seam.
 @{b}Hotkeys@{ub}
   @{b}ctrl alt cursor left@{ub}    snap the active window left
   @{b}ctrl alt cursor right@{ub}   snap it right
+      Press the same one again and the window takes two thirds of the
+      screen, again and it takes one third, again and it is back to a
+      half. Turn that off with @{b}CYCLESIZES@{ub} if you would rather
+      have halves only.
   @{b}ctrl alt cursor up@{ub}      maximise it
   @{b}ctrl alt cursor down@{ub}    put it back where it was
   @{b}ctrl alt d@{ub}              print a window dump, to diagnose dock detection

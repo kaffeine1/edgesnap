@@ -880,6 +880,16 @@ of this verification.
 
 ### 0.4 - candidates
 
+- **A width cycle on the side hotkeys (done, 2026-09-09).** Asking for
+  the same side again gives two thirds, then one third, then a half:
+  the cheapest way to reach a third without inventing zones, gestures
+  or a popup, and what Magnet and Rectangle taught their users to
+  expect. It lives in the geometry (`es_zone_rect_step`) and in the
+  registry, which now remembers which step a window took; the drag path
+  never cycles, because a drag to the edge it already occupies means
+  "put it back", not "narrow it". A cycled width is the user's explicit
+  choice, so the pair fill leaves it alone. `CYCLESIZES` switches it off.
+
 - **Animated snap**: the window glides into its zone
   instead of jumping. Recorded here so it is neither forgotten nor
   promised. It arrived sideways: someone on Discord (2026-08-30) asked

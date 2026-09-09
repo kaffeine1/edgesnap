@@ -39,6 +39,7 @@ typedef struct ESRegistryEntry {
     ESRect prebox;   /* geometry to restore (first pre-snap box)  */
     ESRect snapped;  /* geometry the snap established             */
     int zone;
+    int step;        /* which width of the zone's cycle it took   */
     int used;
 } ESRegistryEntry;
 
@@ -58,8 +59,17 @@ void es_registry_init(ESRegistry *reg);
 int es_registry_remember(ESRegistry *reg, void *ref, const ESRect *prebox,
                          const ESRect *snapped, int zone);
 
+/* As es_registry_remember, recording which step of the zone's width
+ * cycle this snap took (see ES_STEP_COUNT). */
+int es_registry_remember_step(ESRegistry *reg, void *ref,
+                              const ESRect *prebox, const ESRect *snapped,
+                              int zone, int step);
+
 /* Current zone for ref, or ES_ZONE_NONE when unknown. */
 int es_registry_zone(const ESRegistry *reg, void *ref);
+
+/* Step this window last took, 0 when unknown. */
+int es_registry_step(const ESRegistry *reg, void *ref);
 
 /*
  * Restore lookup: given where the window is NOW, decide.

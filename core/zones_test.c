@@ -107,8 +107,57 @@ static void test_fit_zone_rect(void)
     CHECK(out.x + out.w == 640);
 }
 
+/* Asking for the same side again walks the cycle: half, two thirds,
+ * one third, and back. Left and right at complementary steps still
+ * tile the usable area exactly, with no gap and no overlap. */
+static void test_side_zones_cycle_widths(void)
+{
+    ESRect u, a, b;
+
+    u.x = 0; u.y = 20; u.w = 1000; u.h = 700;
+
+    es_zone_rect_step(ES_ZONE_LEFT, &u, 0, &a);
+    CHECK(a.x == 0 && a.w == 500);
+    es_zone_rect_step(ES_ZONE_LEFT, &u, 1, &a);
+    CHECK(a.x == 0 && a.w == 666);
+    es_zone_rect_step(ES_ZONE_LEFT, &u, 2, &a);
+    CHECK(a.x == 0 && a.w == 333);
+
+    es_zone_rect_step(ES_ZONE_RIGHT, &u, 1, &a);   /* two thirds, right */
+    CHECK(a.x == 333 && a.w == 667);
+    es_zone_rect_step(ES_ZONE_RIGHT, &u, 2, &a);   /* one third, right  */
+    CHECK(a.x == 666 && a.w == 334);
+
+    /* two thirds on the left, one third on the right: they meet */
+    es_zone_rect_step(ES_ZONE_LEFT, &u, 1, &a);
+    es_zone_rect_step(ES_ZONE_RIGHT, &u, 2, &b);
+    CHECK(a.x + a.w == b.x);
+    CHECK(b.x + b.w == u.x + u.w);
+
+    /* the height never moves, and corners keep their quarters */
+    CHECK(a.y == 20 && a.h == 700);
+    es_zone_rect_step(ES_ZONE_TOP_LEFT, &u, 1, &a);
+    CHECK(a.w == 500 && a.h == 350);
+    es_zone_rect_step(ES_ZONE_MAX, &u, 2, &a);
+    CHECK(a.w == 1000 && a.h == 700);
+}
+
+/* A step still respects a window that cannot be that narrow, and the
+ * right side stays anchored to the right edge when it is clamped. */
+static void test_stepped_zone_honours_limits(void)
+{
+    ESRect u, r;
+
+    u.x = 0; u.y = 20; u.w = 1000; u.h = 700;
+    es_fit_zone_rect_step(ES_ZONE_RIGHT, &u, 2, 500, 0, 0, 0, &r);
+    CHECK(r.w == 500);       /* one third would be 334: the limit wins */
+    CHECK(r.x + r.w == u.x + u.w);
+}
+
 int main(void)
 {
+    test_side_zones_cycle_widths();
+    test_stepped_zone_honours_limits();
     test_zone_from_pointer();
     test_zone_rect_tiles();
     test_fit_zone_rect();
