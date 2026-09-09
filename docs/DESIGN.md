@@ -880,6 +880,17 @@ of this verification.
 
 ### 0.4 - candidates
 
+- **The seam handle gives its damage back (done, 2026-09-09).** The
+  handle is a window that paints nothing: whatever covered it and went
+  away left ITS pixels in our layer, and with `WFLG_NOCAREREFRESH` the
+  refresh message never came, so they stayed for as long as the pair
+  existed. It now takes `IDCMP_REFRESHWINDOW`, acknowledges the damage
+  and closes and reopens itself, which hands the strip back to the two
+  windows underneath: they own those pixels and repaint them. Never
+  during a drag, because closing a window under a held button froze
+  AROS once. Verified in the AmigaOS 4 and MorphOS VMs, zero pixels
+  changed by a cover and uncover, and on real MorphOS hardware.
+
 - **A width cycle on the side hotkeys (done, 2026-09-09).** Asking for
   the same side again gives two thirds, then one third, then a half:
   the cheapest way to reach a third without inventing zones, gestures
@@ -889,6 +900,10 @@ of this verification.
   never cycles, because a drag to the edge it already occupies means
   "put it back", not "narrow it". A cycled width is the user's explicit
   choice, so the pair fill leaves it alone. `CYCLESIZES` switches it off.
+  The library revision moved to 8 with it: the behaviour of an existing
+  call changed, and the first test on real hardware failed only because
+  the old library was still resident and nothing said so. A library
+  whose behaviour moves must say a different number.
 
 - **Animated snap**: the window glides into its zone
   instead of jumping. Recorded here so it is neither forgotten nor
