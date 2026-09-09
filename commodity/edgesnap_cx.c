@@ -1896,12 +1896,23 @@ static void spike_divider_sync(void)
                                 * two window edges that were already
                                 * there.
                                 */
+                               /*
+                                * NOT NOCAREREFRESH: the strip paints
+                                * nothing, so whatever covers it and
+                                * goes away leaves ITS pixels in our
+                                * layer, and with the refresh ignored
+                                * they stayed there for as long as the
+                                * pair existed (seen on AmigaOS 4 and
+                                * MorphOS, and on real MorphOS hardware,
+                                * 2026-09-07). Hearing the damage is
+                                * what lets us hand it back, below.
+                                */
                                WA_Flags, WFLG_BORDERLESS |
                                          WFLG_SIMPLE_REFRESH |
-                                         WFLG_NOCAREREFRESH |
                                          WFLG_REPORTMOUSE | WFLG_RMBTRAP,
                                WA_IDCMP, IDCMP_MOUSEBUTTONS |
-                                         IDCMP_MOUSEMOVE,
+                                         IDCMP_MOUSEMOVE |
+                                         IDCMP_REFRESHWINDOW,
                                WA_Activate, FALSE,
                                WA_BackFill, LAYERS_NOBACKFILL,
                                TAG_DONE);
@@ -1946,6 +1957,26 @@ static void spike_divider_events(void)
         UWORD code = im->Code;
         ReplyMsg((struct Message *)im);
 
+        if (cls == IDCMP_REFRESHWINDOW) {
+            /*
+             * Something covered the strip and went away. The damage is
+             * ours and we have nothing to paint with: the pixels under
+             * a transparent window belong to the windows below. So
+             * acknowledge the damage, then close the handle and open a
+             * new one - closing hands the area back, and they repaint
+             * it themselves. Never during a drag: closing a window
+             * under a held button is how AROS was frozen once, and the
+             * drag needs the handle it is holding.
+             */
+            BeginRefresh(g_divider);
+            EndRefresh(g_divider, TRUE);
+            if (!g_divider_dragging) {
+                spike_divider_close();
+                spike_divider_sync();
+                return;
+            }
+            continue;
+        }
         if (cls == IDCMP_MOUSEBUTTONS) {
             if (code == SELECTDOWN) {
 #ifdef ES_SEAM_DRAG_BLIND
