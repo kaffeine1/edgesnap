@@ -49,6 +49,12 @@
  *       ESnapWindowInfo.serial filled.
  *   2.7 - FeedMotion appended: the raw travel of the pointer, for a
  *       pointer pinned by a window that may not leave the screen.
+ *   2.8 - no new vector, changed behaviour: asking SnapWindow for the
+ *       side a window already occupies now walks a width cycle (half,
+ *       two thirds, one third). A client that wants the old geometry
+ *       every time passes the rectangle itself, through PlaceWindow.
+ *       The revision moves so that a machine can be asked which
+ *       library it is actually running.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the
