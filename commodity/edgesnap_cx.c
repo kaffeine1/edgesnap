@@ -1394,6 +1394,13 @@ static void spike_pf_show(struct Screen *dragscr, const ESRect *r)
                             st->x, st->y, st->w, st->h);
             }
             g_pf.plain = 1;
+            /*
+             * And never again on this screen. Without this the next
+             * drag tried the masked frame once more, wrote the accent
+             * over pixels it could not give back, and left another
+             * trace: the tester saw one per drag, not one in total.
+             */
+            g_pf.trust = 0;
         }
     }
     if (g_pf.plain) {
