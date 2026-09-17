@@ -187,6 +187,18 @@ int main(void)
         rc = ES_CALL(ESnap_SnapWindow)(win, 99);
         printf("esnaptest: snap to zone 99 -> %s (expected "
                "ES_ERR_BAD_ARGS)\n", rcname(rc));
+
+        /* 2.9: the middle, at the window's own size. An older library
+         * answers BAD_ARGS here, which is the point of the revision. */
+        if (EdgeSnapBase->lib_Revision >= 9) {
+            rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_CENTRE);
+            printf("esnaptest: ESnap_SnapWindow(centre) -> %s\n",
+                   rcname(rc));
+            Delay(75L);
+            rc = ES_CALL(ESnap_UnsnapWindow)(win);
+            printf("esnaptest: ESnap_UnsnapWindow after centre -> %s\n",
+                   rcname(rc));
+        }
     }
 
     /* 2.5: the calls a tiler makes. Only on a library that has them. */

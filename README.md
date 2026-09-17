@@ -184,7 +184,8 @@ What the spike does today:
   the startup banner echoes the settings in force;
 - hotkeys (no drag heuristics involved):
   `ctrl alt cursor left/right/up` = snap left / right / maximize,
-  `ctrl alt cursor down` = restore pre-snap geometry;
+  `ctrl alt cursor down` = restore pre-snap geometry,
+  `ctrl alt c` = the window's own size in the middle of the screen area;
 - `EdgeSnap QUIT` stops a running instance from a Shell or a script -
   which is how an update replaces itself without a reboot; launching it
   twice by accident is simply refused, and the running one carries on;

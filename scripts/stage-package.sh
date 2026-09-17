@@ -101,7 +101,8 @@ go fills that half or quarter of the screen.
   - docks and panels are detected and never covered;
   - two windows side by side share their edge: press the seam and the
     pointer becomes a double arrow, drag it and both are resized;
-  - hotkeys for those who prefer them (ctrl alt cursor keys);
+  - hotkeys for those who prefer them (ctrl alt cursor keys, and
+    ctrl alt c for the middle of the screen);
   - it is a commodity: it starts with the system and Exchange enables,
     disables or removes it like any other.
 

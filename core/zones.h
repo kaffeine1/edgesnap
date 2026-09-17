@@ -81,6 +81,19 @@ void es_fit_rect(const ESRect *want, const ESRect *usable,
                  int min_w, int min_h, int max_w, int max_h, ESRect *out);
 
 /*
+ * The window's own size, in the middle of the usable area
+ * (ES_ZONE_CENTRE). Nothing in the word "centre" says how big a window
+ * should be, so it keeps the size it has; a window larger than the area
+ * is cut down to it, and the window's own limits win over both, which
+ * is how a window that cannot be that narrow still ends up centred.
+ * An odd remainder leaves the extra pixel on the right and at the
+ * bottom, the rounding the halves already use.
+ */
+void es_centre_rect(const ESRect *usable, const ESRect *win,
+                    int min_w, int min_h, int max_w, int max_h,
+                    ESRect *out);
+
+/*
  * Order placements so that windows which shrink go first and windows
  * which grow go last: an overlap on screen is then transient at worst.
  * delta[i] is the new area minus the old one; order[] receives the

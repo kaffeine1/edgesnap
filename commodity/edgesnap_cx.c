@@ -2916,6 +2916,7 @@ static void spike_config_reload(void)
 #define HK_RESTORE     4
 #define HK_DUMP        5
 #define HK_FRAME       6   /* ctrl alt f: the preview frame, no drag */
+#define HK_CENTRE      7   /* ctrl alt c: its own size, in the middle */
 
 static int spike_add_hotkey(CxObj *broker, struct MsgPort *port,
                             STRPTR descr, LONG id)
@@ -2996,6 +2997,9 @@ static void spike_handle_hotkey(LONG id)
         break;
     case HK_SNAP_MAX:
         rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_MAX);
+        break;
+    case HK_CENTRE:
+        rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_CENTRE);
         break;
     case HK_RESTORE:
         rc = ES_CALL(ESnap_UnsnapWindow)(win);
@@ -3201,6 +3205,7 @@ int main(int argc, char **argv)
                           HK_SNAP_MAX) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_down",
                           HK_RESTORE) ||
+        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt c", HK_CENTRE) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt d", HK_DUMP) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt f", HK_FRAME) ||
         CxObjError(broker) != 0) {
@@ -3237,8 +3242,15 @@ int main(int argc, char **argv)
     spike_out("  screen edge or corner, then release.\n");
     spike_out("  hotkeys: ctrl alt cursor left/right/up = snap, down = "
            "restore,\n");
-    spike_out("           ctrl alt d = window dump (dock diagnosis).\n");
+    spike_out("           ctrl alt c = centre, ctrl alt d = window dump.\n");
     spike_out("  quit: Ctrl-C here, or remove it from Exchange.\n");
+    /* The centre is a zone the library learned in 2.9. An older one in
+     * LIBS: answers BAD_ARGS, and the width cycle taught us that a
+     * refusal nobody explains costs an evening. */
+    if (EdgeSnapBase->lib_Revision < 9) {
+        spike_out("edgesnap: the library in LIBS: is older than 2.9, "
+                  "so ctrl alt c (centre) will be refused.\n");
+    }
     spike_out("edgesnap: prefs: zones %04x, edge %d px, corner 1/%d, "
            "drag %d px,\n", (unsigned)g_cfg.engine.zones_mask,
            g_cfg.engine.edge_px, g_cfg.engine.corner_div,

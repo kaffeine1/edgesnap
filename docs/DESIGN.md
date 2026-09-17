@@ -905,6 +905,28 @@ of this verification.
   the old library was still resident and nothing said so. A library
   whose behaviour moves must say a different number.
 
+- **The centre, on a hotkey (done, 2026-09-17).** `ctrl alt c` puts the
+  active window in the middle of the usable area at the size it has.
+  Nothing in the word says how big a window should be, so the centre
+  invents no size: it keeps the window's own, cuts it down when it is
+  larger than the area, and lets the window's own limits win over both,
+  which is how a window that cannot be that narrow ends up centred and
+  sticking out. It is a zone (`ES_ZONE_CENTRE`) and not a special case
+  in the commodity, so the registry puts it back like any other snap and
+  a client can ask for it; the width cycle and the pair fill both step
+  aside, because the middle is not an edge: there is no "the same side
+  again" to cycle with and no opposite number to share with. Library
+  revision 9: SnapWindow now takes a value an older library refuses, and
+  a machine must be able to say which of the two it is running.
+
+- **A popup selector on a hotkey (open).** The macOS tiling menu a
+  tester posted (2026-09-06) puts the choices in front of the pointer:
+  halves, quarters, and the arrangements that place several windows at
+  once. The library has that second half already, `PlaceWindowsA` since
+  2.5; what is missing is a small window that draws the choices and
+  takes one, and the first question it has to answer is what opening it
+  under the pointer costs on a slow machine.
+
 - **Animated snap**: the window glides into its zone
   instead of jumping. Recorded here so it is neither forgotten nor
   promised. It arrived sideways: someone on Discord (2026-08-30) asked

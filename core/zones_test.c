@@ -154,8 +154,56 @@ static void test_stepped_zone_honours_limits(void)
     CHECK(r.x + r.w == u.x + u.w);
 }
 
+/* The centre keeps the window's size and puts it in the middle; with an
+ * odd remainder the extra pixel goes right and down. */
+static void test_centre_keeps_the_size(void)
+{
+    ESRect u, w, r;
+
+    u.x = 0; u.y = 20; u.w = 1000; u.h = 700;
+    w.x = 7; w.y = 500; w.w = 400; w.h = 300;
+    es_centre_rect(&u, &w, 0, 0, 0, 0, &r);
+    CHECK(r.w == 400 && r.h == 300);
+    CHECK(r.x == 300 && r.y == 220);
+    CHECK(r.x - u.x == u.x + u.w - (r.x + r.w));     /* exactly centred */
+
+    w.w = 401; w.h = 301;
+    es_centre_rect(&u, &w, 0, 0, 0, 0, &r);
+    CHECK(r.x == 299 && r.w == 401);                 /* odd pixel to the right */
+    CHECK(u.x + u.w - (r.x + r.w) == 300);
+    CHECK(r.y == 219 && r.h == 301);
+}
+
+/* A window larger than the area is cut down to it, and the limits win
+ * over the area: one that cannot be that narrow stays wider. */
+static void test_centre_honours_area_and_limits(void)
+{
+    ESRect u, w, r;
+
+    u.x = 0; u.y = 20; u.w = 1000; u.h = 700;
+    w.x = -50; w.y = 0; w.w = 1400; w.h = 900;
+    es_centre_rect(&u, &w, 0, 0, 0, 0, &r);
+    CHECK(r.x == 0 && r.y == 20 && r.w == 1000 && r.h == 700);
+
+    w.w = 300; w.h = 200;
+    es_centre_rect(&u, &w, 500, 0, 0, 0, &r);
+    CHECK(r.w == 500 && r.x == 250);                 /* min width wins */
+    es_centre_rect(&u, &w, 0, 0, 200, 0, &r);
+    CHECK(r.w == 200 && r.x == 400);                 /* max width wins */
+
+    w.w = 1400; w.h = 300;
+    es_centre_rect(&u, &w, 1200, 0, 0, 0, &r);
+    CHECK(r.w == 1200);                              /* wider than the area */
+    CHECK(r.x == u.x);                               /* as centred as it can */
+
+    /* the logs name it: a zone nobody can name reads as "?" */
+    CHECK(es_zone_name(ES_ZONE_CENTRE)[0] == 'c');
+}
+
 int main(void)
 {
+    test_centre_keeps_the_size();
+    test_centre_honours_area_and_limits();
     test_side_zones_cycle_widths();
     test_stepped_zone_honours_limits();
     test_zone_from_pointer();

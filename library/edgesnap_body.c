@@ -559,7 +559,8 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
     ESRect r;
     LONG rc = ES_OK;
 
-    if (win == NULL || zone == ES_ZONE_NONE || zone > ES_ZONE_MAX) {
+    if (win == NULL || zone == ES_ZONE_NONE ||
+        (zone > ES_ZONE_MAX && zone != ES_ZONE_CENTRE)) {
         return ES_ERR_BAD_ARGS;
     }
     ObtainSemaphore(&g_sem);
@@ -573,6 +574,15 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
 
         if (want != NULL) {
             r = *want;
+        } else if (zone == ES_ZONE_CENTRE) {
+            /*
+             * The middle is not an edge. No width cycle, because there
+             * is no "the same side again" to cycle with, and no pair
+             * fill, because a centred window has no opposite number.
+             * It keeps the size it has: the only size the centre implies.
+             */
+            es_centre_rect(&s.usable, &s.box, s.min_w, s.min_h,
+                           s.max_w, s.max_h, &r);
         } else {
             /*
              * The same side asked for twice runs the width cycle:
@@ -596,7 +606,7 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
          * window snapped to the narrow side gets that 30%. A width the
          * user asked for by cycling is not up for negotiation, so the
          * fill is skipped there. */
-        if (step == 0) {
+        if (step == 0 && zone != ES_ZONE_CENTRE) {
             ObtainSemaphore(&g_sem);
             es_pair_fill(&g_registry, win, (int)zone, &s.usable, s.min_w, s.max_w, &r);
             ReleaseSemaphore(&g_sem);

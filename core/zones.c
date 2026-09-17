@@ -184,6 +184,8 @@ const char *es_zone_name(int zone)
         return "maximize";
     case ES_ZONE_RECT:
         return "rect";
+    case ES_ZONE_CENTRE:
+        return "centre";
     default:
         return "?";
     }
@@ -217,6 +219,45 @@ void es_fit_rect(const ESRect *want, const ESRect *usable,
     }
     if (out->h != want->h && touch_b && !touch_t) {
         out->y = bottom - out->h;
+    }
+}
+
+void es_centre_rect(const ESRect *u, const ESRect *win,
+                    int min_w, int min_h, int max_w, int max_h,
+                    ESRect *out)
+{
+    int w = win->w;
+    int h = win->h;
+
+    if (w > u->w) {
+        w = u->w;
+    }
+    if (h > u->h) {
+        h = u->h;
+    }
+    /* The limits come last: a window that cannot be that small stays
+     * larger than the area and sticks out, centred as far as it can. */
+    if (min_w > 0 && w < min_w) {
+        w = min_w;
+    }
+    if (max_w > 0 && w > max_w) {
+        w = max_w;
+    }
+    if (min_h > 0 && h < min_h) {
+        h = min_h;
+    }
+    if (max_h > 0 && h > max_h) {
+        h = max_h;
+    }
+    out->w = w;
+    out->h = h;
+    out->x = u->x + (u->w - w) / 2;
+    out->y = u->y + (u->h - h) / 2;
+    if (out->x < u->x) {
+        out->x = u->x;
+    }
+    if (out->y < u->y) {
+        out->y = u->y;
     }
 }
 

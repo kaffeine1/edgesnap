@@ -55,6 +55,10 @@
  *       every time passes the rectangle itself, through PlaceWindow.
  *       The revision moves so that a machine can be asked which
  *       library it is actually running.
+ *   2.9 - one more zone, ES_ZONE_CENTRE: the window's own size in the
+ *       middle of the usable area. No new vector, but SnapWindow now
+ *       accepts a value an older library answers with BAD_ARGS, so the
+ *       revision has to say which of the two is running.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the
@@ -75,8 +79,11 @@
 #define ES_ZONE_BOTTOM_RIGHT 6
 #define ES_ZONE_MAX          7
 #define ES_ZONE_RECT         8   /* placed in a rectangle by a client (2.5) */
+#define ES_ZONE_CENTRE       9   /* its own size, in the middle (2.9)       */
 
-/* Zone sets (which zones react to a drag) travel as a bit mask. */
+/* Zone sets (which zones react to a drag) travel as a bit mask. The
+ * mask names the zones a DRAG can reach, which is why ES_ZONE_RECT and
+ * ES_ZONE_CENTRE have no bit in it: no edge leads to either. */
 #define ES_ZONEBIT(z)        (1u << (z))
 #define ES_ZONEMASK_ALL      0x00FEu   /* every zone but ES_ZONE_NONE */
 
