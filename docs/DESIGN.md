@@ -1011,6 +1011,18 @@ Four structural changes. Each one moves a public signature, which is why
    only a bigger buffer on that day. The identity is what item 5 of the
    issue builds on. Telling displays apart is still open, and needs a
    machine that has more than one.*
+   *Groups followed as library 2.12, the same day: `CreateGroup`,
+   `DeleteGroup`, `GroupAddWindow`, `GroupRemoveWindow`, `QueryGroupOf`.
+   A group is these windows, in this work area, owned by the layout
+   client that made it, and membership is by serial, so a window that
+   closed and another at its address are never confused. `ES_GF_LOCKED`
+   is the coexistence rule the issue asked for: the owner snaps and
+   places its own windows as usual, everyone else is refused, the
+   commodity's drag included, and the generation moves when a drag
+   reaches for a locked window, so the owner learns that the user
+   wanted something and decides what. A group dies with its client.
+   The names the issue mentioned are kept but do nothing yet, and gaps
+   per group (item 9) are still to come.*
 2. **Divider tokens.** `QueryDivider` reports one global seam and
    `MoveDivider` takes only a position, then re-finds the first pair it
    can. With more than one work area that does not hold. A token must

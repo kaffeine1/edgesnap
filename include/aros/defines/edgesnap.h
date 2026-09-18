@@ -420,6 +420,82 @@ __BEGIN_DECLS
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_CreateGroup_WB(__EdgeSnapBase, __arg1, __arg2, __arg3, __arg4) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC4(LONG, ESnap_CreateGroup,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(const char *, (__arg2), A0), \
+         AROS_LCA(ULONG, (__arg3), D1), \
+         AROS_LCA(ULONG *, (__arg4), A1), \
+        struct Library *, (__EdgeSnapBase), 30, EdgeSnap);\
+})
+
+#define ESnap_CreateGroup(arg1, arg2, arg3, arg4) \
+    __ESnap_CreateGroup_WB(__EDGESNAP_LIBBASE, (arg1), (arg2), (arg3), (arg4))
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_DeleteGroup_WB(__EdgeSnapBase, __arg1) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC1(LONG, ESnap_DeleteGroup,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+        struct Library *, (__EdgeSnapBase), 31, EdgeSnap);\
+})
+
+#define ESnap_DeleteGroup(arg1) \
+    __ESnap_DeleteGroup_WB(__EDGESNAP_LIBBASE, (arg1))
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_GroupAddWindow_WB(__EdgeSnapBase, __arg1, __arg2) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC2(LONG, ESnap_GroupAddWindow,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(struct Window *, (__arg2), A0), \
+        struct Library *, (__EdgeSnapBase), 32, EdgeSnap);\
+})
+
+#define ESnap_GroupAddWindow(arg1, arg2) \
+    __ESnap_GroupAddWindow_WB(__EDGESNAP_LIBBASE, (arg1), (arg2))
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_GroupRemoveWindow_WB(__EdgeSnapBase, __arg1, __arg2) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC2(LONG, ESnap_GroupRemoveWindow,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(struct Window *, (__arg2), A0), \
+        struct Library *, (__EdgeSnapBase), 33, EdgeSnap);\
+})
+
+#define ESnap_GroupRemoveWindow(arg1, arg2) \
+    __ESnap_GroupRemoveWindow_WB(__EDGESNAP_LIBBASE, (arg1), (arg2))
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_QueryGroupOf_WB(__EdgeSnapBase, __arg1, __arg2) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC2(LONG, ESnap_QueryGroupOf,\
+         AROS_LCA(struct Window *, (__arg1), A0), \
+         AROS_LCA(ULONG *, (__arg2), A1), \
+        struct Library *, (__EdgeSnapBase), 34, EdgeSnap);\
+})
+
+#define ESnap_QueryGroupOf(arg1, arg2) \
+    __ESnap_QueryGroupOf_WB(__EDGESNAP_LIBBASE, (arg1), (arg2))
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* DEFINES_EDGESNAP_H*/

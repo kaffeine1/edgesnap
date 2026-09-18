@@ -364,3 +364,55 @@ AROS_LH4(LONG, ESnap_QueryWorkAreas,
     return esb_query_work_areas(screen, buf, count, needed);
     AROS_LIBFUNC_EXIT
 }
+
+/* --- appended for 2.12: layout groups --- */
+AROS_LH4(LONG, ESnap_CreateGroup,
+         AROS_LHA(ULONG, workArea, D0),
+         AROS_LHA(const char *, name, A0),
+         AROS_LHA(ULONG, flags, D1),
+         AROS_LHA(ULONG *, group_out, A1),
+         struct EdgeSnapBase *, EdgeSnapBase, 30, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_create_group(workArea, name, flags, group_out);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH1(LONG, ESnap_DeleteGroup,
+         AROS_LHA(ULONG, group, D0),
+         struct EdgeSnapBase *, EdgeSnapBase, 31, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_delete_group(group);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH2(LONG, ESnap_GroupAddWindow,
+         AROS_LHA(ULONG, group, D0),
+         AROS_LHA(struct Window *, win, A0),
+         struct EdgeSnapBase *, EdgeSnapBase, 32, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_group_add_window(group, win);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH2(LONG, ESnap_GroupRemoveWindow,
+         AROS_LHA(ULONG, group, D0),
+         AROS_LHA(struct Window *, win, A0),
+         struct EdgeSnapBase *, EdgeSnapBase, 33, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_group_remove_window(group, win);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH2(LONG, ESnap_QueryGroupOf,
+         AROS_LHA(struct Window *, win, A0),
+         AROS_LHA(ULONG *, group_out, A1),
+         struct EdgeSnapBase *, EdgeSnapBase, 34, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_query_group_of(win, group_out);
+    AROS_LIBFUNC_EXIT
+}

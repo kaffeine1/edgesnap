@@ -79,6 +79,12 @@ struct ESBClient {
 static struct ESBClient g_clients[ESB_CLIENT_SLOTS];
 static ULONG g_client_next = 1;
 
+/* groups (2.12) live further down, next to the identities they use */
+static int esb_locked_for(struct Window *win);
+static void esb_groups_drop_owner(ULONG client);
+static void esb_groups_clear(void);
+static ULONG g_gen_touch;      /* drags that reached for a locked window */
+
 /* Facts sampled from a live window; ESB internal. */
 struct ESBSnap {
     struct Window *win;
@@ -117,6 +123,7 @@ int esb_init(void)
         for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
             g_clients[i].id = 0;
         }
+        esb_groups_clear();
     }
     g_enabled = 1;
     g_ready = 1;
@@ -138,6 +145,7 @@ void esb_cleanup(void)
             g_clients[i].id = 0;
         }
     }
+    esb_groups_clear();
     ReleaseSemaphore(&g_sem);
     g_ready = 0;
 }
@@ -193,9 +201,23 @@ static void esb_clients_sweep(void)
 
     for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
         if (g_clients[i].id != 0 && !esb_task_alive(g_clients[i].task)) {
+            esb_groups_drop_owner(g_clients[i].id);
             g_clients[i].id = 0;
         }
     }
+}
+
+/* g_sem held. The registration behind an id, or NULL. */
+static struct ESBClient *esb_client_by_id(ULONG id)
+{
+    int i;
+
+    for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
+        if (g_clients[i].id != 0 && g_clients[i].id == id) {
+            return &g_clients[i];
+        }
+    }
+    return NULL;
 }
 
 /* g_sem held. The registration of a task, or NULL. */
@@ -301,6 +323,7 @@ LONG esb_unregister_client(ULONG client)
     esb_clients_sweep();
     for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
         if (g_clients[i].id != 0 && g_clients[i].id == client) {
+            esb_groups_drop_owner(client);
             g_clients[i].id = 0;
             rc = ES_OK;
             break;
@@ -770,7 +793,8 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
     if (!esb_sample(win, &s)) {
         es_registry_forget(&g_registry, win);
         rc = ES_ERR_STALE;
-    } else if (esb_is_excluded(win) || !esb_snappable(&s)) {
+    } else if (esb_is_excluded(win) || !esb_snappable(&s) ||
+               esb_locked_for(win)) {
         rc = ES_ERR_REJECTED;
     } else {
         int step = 0;
@@ -1738,6 +1762,7 @@ void esb_input(int press, int motion, int release, ULONG quals,
             mx = ps.mouse_x;
             my = ps.mouse_y;
         }
+        esb_clients_sweep();   /* a dead owner locks nothing; once per press */
         es_engine_press(&g_engine, mx, my, &a);
         esb_absorb(&a, out);
     }
@@ -1768,7 +1793,11 @@ void esb_input(int press, int motion, int release, ULONG quals,
             f.bar_h = s.bar_h;
             f.flags = 0;
             if (esb_snappable(&s) && !esb_is_excluded(win)) {
-                f.flags |= ES_WF_SNAPPABLE;
+                if (esb_locked_for(win)) {
+                    g_gen_touch++;     /* the owner will want to know */
+                } else {
+                    f.flags |= ES_WF_SNAPPABLE;
+                }
             }
             if (s.flags & WFLG_DRAGBAR) {
                 f.flags |= ES_WF_DRAGBAR;
@@ -2052,7 +2081,7 @@ static ULONG esb_hash_mix(ULONG h, ULONG v)
 /* Under LockIBase only. */
 static ULONG esb_windows_hash(void)
 {
-    ULONG h = 2166136261UL;
+    ULONG h = esb_hash_mix(2166136261UL, g_gen_touch);
     struct Screen *scr;
     struct Window *w;
 
@@ -2196,7 +2225,7 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
         es_registry_forget(&g_registry, win);
         return ES_ERR_STALE;
     }
-    if (esb_is_excluded(win) || !esb_snappable(&s)) {
+    if (esb_is_excluded(win) || !esb_snappable(&s) || esb_locked_for(win)) {
         return ES_ERR_REJECTED;
     }
     es_fit_rect(want, &s.usable, s.min_w, s.min_h, s.max_w, s.max_h, &r);
@@ -2221,6 +2250,376 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
 }
 
 #define ESB_PF_ALL (ES_PF_NO_RESTORE | ES_PF_KEEP_ZORDER)
+
+/* ---------------------------------------------------------- groups (2.12) */
+
+/*
+ * A group: these windows, in this work area, owned by this client.
+ * Membership is by serial, the identity of 2.6, so a window that
+ * closes and another that opens at its address are never confused;
+ * a member whose serial no longer finds a window is dropped whenever
+ * the group is touched. Sixteen groups of thirty-two, ids never reused.
+ */
+#define ESB_GROUP_SLOTS   16
+#define ESB_GROUP_NAME    32
+#define ESB_GROUP_MEMBERS 32
+struct ESBGroup {
+    ULONG id;                  /* 0 = free */
+    ULONG area;                /* a work area id, 0 for wherever */
+    ULONG owner;               /* the client that made it */
+    struct Task *task;         /* its task: the only one that may touch it */
+    ULONG flags;               /* ES_GF_* */
+    char name[ESB_GROUP_NAME];
+    ULONG member[ESB_GROUP_MEMBERS];
+    int members;
+};
+static struct ESBGroup g_groups[ESB_GROUP_SLOTS];
+static ULONG g_group_next = 1;
+
+/* g_sem held. The serial of a window the library has already seen,
+ * without observing: 0 for one it never met, which is in no group. */
+static ULONG esb_serial_of_ptr(struct Window *win)
+{
+    int i;
+
+    for (i = 0; i < ESB_IDENT_SLOTS; i++) {
+        if (g_ident[i].win == win && win != NULL) {
+            return g_ident[i].serial;
+        }
+    }
+    return 0;
+}
+
+/* g_sem held. Is this serial still a window the library knows? */
+static int esb_serial_known(ULONG serial)
+{
+    int i;
+
+    for (i = 0; i < ESB_IDENT_SLOTS; i++) {
+        if (g_ident[i].win != NULL && g_ident[i].serial == serial) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* g_sem held. */
+static struct ESBGroup *esb_group_by_id(ULONG id)
+{
+    int i;
+
+    for (i = 0; i < ESB_GROUP_SLOTS; i++) {
+        if (g_groups[i].id != 0 && g_groups[i].id == id) {
+            return &g_groups[i];
+        }
+    }
+    return NULL;
+}
+
+/* g_sem held. The group a serial belongs to, or NULL. */
+static struct ESBGroup *esb_group_of_serial(ULONG serial)
+{
+    int i, k;
+
+    if (serial == 0) {
+        return NULL;
+    }
+    for (i = 0; i < ESB_GROUP_SLOTS; i++) {
+        struct ESBGroup *g = &g_groups[i];
+
+        if (g->id == 0) {
+            continue;
+        }
+        for (k = 0; k < g->members; k++) {
+            if (g->member[k] == serial) {
+                return g;
+            }
+        }
+    }
+    return NULL;
+}
+
+/* g_sem held, identities observed: members that closed leave. */
+static void esb_group_sweep_members(struct ESBGroup *g)
+{
+    int k = 0;
+
+    while (k < g->members) {
+        if (!esb_serial_known(g->member[k])) {
+            g->member[k] = g->member[--g->members];
+        } else {
+            k++;
+        }
+    }
+}
+
+static void esb_groups_clear(void)
+{
+    int i;
+
+    for (i = 0; i < ESB_GROUP_SLOTS; i++) {
+        g_groups[i].id = 0;
+    }
+}
+
+/* g_sem held. */
+static void esb_groups_drop_owner(ULONG client)
+{
+    int i;
+
+    for (i = 0; i < ESB_GROUP_SLOTS; i++) {
+        if (g_groups[i].id != 0 && g_groups[i].owner == client) {
+            g_groups[i].id = 0;
+        }
+    }
+}
+
+/*
+ * g_sem held. Is win in a group that keeps everyone else out? The
+ * owner's own task passes. An owner that switched its layout off, or
+ * one whose registration is gone (the sweep at every press takes its
+ * groups with it), keeps nobody out.
+ */
+static int esb_locked_for(struct Window *win)
+{
+    struct ESBGroup *g = esb_group_of_serial(esb_serial_of_ptr(win));
+    struct ESBClient *c;
+
+    if (g == NULL || (g->flags & ES_GF_LOCKED) == 0) {
+        return 0;
+    }
+    if (g->task == FindTask(NULL)) {
+        return 0;
+    }
+    c = esb_client_by_id(g->owner);
+    return c != NULL && c->layout_on;
+}
+
+/* g_sem held. Is this an id QueryWorkAreas handed out? */
+static int esb_area_known(ULONG area)
+{
+    int i;
+
+    for (i = 0; i < ESB_SCREEN_SLOTS; i++) {
+        if (g_screens[i].id != 0 && g_screens[i].id == area) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+LONG esb_create_group(ULONG area, const char *name, ULONG flags,
+                      ULONG *group_out)
+{
+    struct ESBClient *c;
+    struct ESBGroup *g = NULL;
+    LONG rc = ES_OK;
+    int i;
+
+    if (group_out == NULL || (flags & ~ES_GF_LOCKED) != 0) {
+        return ES_ERR_BAD_ARGS;
+    }
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    *group_out = 0;
+    ObtainSemaphore(&g_sem);
+    esb_clients_sweep();
+    c = esb_client_of(FindTask(NULL));
+    if (c == NULL || (c->roles & ES_CL_LAYOUT) == 0) {
+        rc = ES_ERR_REJECTED;          /* the role is what says "mine" */
+    } else if (area != 0 && !esb_area_known(area)) {
+        rc = ES_ERR_STALE;
+    } else {
+        for (i = 0; i < ESB_GROUP_SLOTS; i++) {
+            if (g_groups[i].id == 0) {
+                g = &g_groups[i];
+                break;
+            }
+        }
+        if (g == NULL) {
+            rc = ES_ERR_NO_MEMORY;
+        } else {
+            g->id = g_group_next++;
+            if (g_group_next == 0) {
+                g_group_next = 1;
+            }
+            g->area = area;
+            g->owner = c->id;
+            g->task = c->task;
+            g->flags = flags;
+            g->members = 0;
+            for (i = 0; i < ESB_GROUP_NAME - 1 && name != NULL && name[i] != '\0'; i++) {
+                g->name[i] = name[i];
+            }
+            g->name[i] = '\0';
+            *group_out = g->id;
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
+/* g_sem held. The group, when the caller may touch it: rc says why not. */
+static struct ESBGroup *esb_group_mine(ULONG group, LONG *rc)
+{
+    struct ESBGroup *g = esb_group_by_id(group);
+
+    if (g == NULL) {
+        *rc = ES_ERR_STALE;
+        return NULL;
+    }
+    if (g->task != FindTask(NULL)) {
+        *rc = ES_ERR_REJECTED;
+        return NULL;
+    }
+    *rc = ES_OK;
+    return g;
+}
+
+LONG esb_delete_group(ULONG group)
+{
+    struct ESBGroup *g;
+    LONG rc;
+
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    g = esb_group_mine(group, &rc);
+    if (g != NULL) {
+        g->id = 0;
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
+/* g_sem held. The serial of a live window, observing it, or 0. */
+static ULONG esb_serial_observe(struct Window *win)
+{
+    ULONG ilock, serial = 0;
+    struct Screen *scr;
+    struct Window *w;
+    int found = 0;
+
+    ilock = LockIBase(0);
+    esb_ident_observe_all();
+    for (scr = ESB_IBASE->FirstScreen; scr != NULL && !found;
+         scr = scr->NextScreen) {
+        for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+            if (w == win) {
+                serial = esb_ident_touch(w);
+                found = 1;
+                break;
+            }
+        }
+    }
+    UnlockIBase(ilock);
+    return serial;
+}
+
+LONG esb_group_add_window(ULONG group, struct Window *win)
+{
+    struct ESBGroup *g, *other;
+    ULONG serial;
+    LONG rc;
+    int k;
+
+    if (win == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    g = esb_group_mine(group, &rc);
+    if (g != NULL) {
+        serial = esb_serial_observe(win);
+        if (serial == 0) {
+            rc = ES_ERR_STALE;
+        } else {
+            for (k = 0; k < ESB_GROUP_SLOTS; k++) {
+                if (g_groups[k].id != 0) {
+                    esb_group_sweep_members(&g_groups[k]);
+                }
+            }
+            other = esb_group_of_serial(serial);
+            if (other == g) {
+                rc = ES_OK;                    /* already here */
+            } else if (other != NULL) {
+                rc = ES_ERR_REJECTED;          /* one group at a time */
+            } else if (g->members >= ESB_GROUP_MEMBERS) {
+                rc = ES_ERR_NO_MEMORY;
+            } else {
+                g->member[g->members++] = serial;
+                rc = ES_OK;
+            }
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
+LONG esb_group_remove_window(ULONG group, struct Window *win)
+{
+    struct ESBGroup *g;
+    ULONG serial;
+    LONG rc;
+    int k;
+
+    if (win == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    g = esb_group_mine(group, &rc);
+    if (g != NULL) {
+        rc = ES_ERR_STALE;
+        serial = esb_serial_of_ptr(win);
+        for (k = 0; k < g->members; k++) {
+            if (serial != 0 && g->member[k] == serial) {
+                g->member[k] = g->member[--g->members];
+                rc = ES_OK;
+                break;
+            }
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
+LONG esb_query_group_of(struct Window *win, ULONG *group_out)
+{
+    struct ESBGroup *g;
+    ULONG serial;
+    LONG rc = ES_OK;
+    int k;
+
+    if (win == NULL || group_out == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    *group_out = 0;
+    ObtainSemaphore(&g_sem);
+    serial = esb_serial_observe(win);
+    if (serial == 0) {
+        rc = ES_ERR_STALE;
+    } else {
+        for (k = 0; k < ESB_GROUP_SLOTS; k++) {
+            if (g_groups[k].id != 0) {
+                esb_group_sweep_members(&g_groups[k]);
+            }
+        }
+        g = esb_group_of_serial(serial);
+        *group_out = (g != NULL) ? g->id : 0;
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
 
 LONG esb_place_window(struct Window *win, const struct ESnapRect *rect,
                       ULONG flags)

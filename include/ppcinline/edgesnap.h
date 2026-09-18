@@ -157,4 +157,27 @@
         ULONG, __p2, d0, ULONG *, __p3, a2, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+/* --- appended for 2.12: layout groups --- */
+#define ESnap_CreateGroup(__p0, __p1, __p2, __p3) \
+    LP4(0xb4, LONG, ESnap_CreateGroup, \
+        ULONG, __p0, d0, const char *, __p1, a0, \
+        ULONG, __p2, d1, ULONG *, __p3, a1, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+#define ESnap_DeleteGroup(__p0) \
+    LP1(0xba, LONG, ESnap_DeleteGroup, \
+        ULONG, __p0, d0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+#define ESnap_GroupAddWindow(__p0, __p1) \
+    LP2(0xc0, LONG, ESnap_GroupAddWindow, \
+        ULONG, __p0, d0, struct Window *, __p1, a0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+#define ESnap_GroupRemoveWindow(__p0, __p1) \
+    LP2(0xc6, LONG, ESnap_GroupRemoveWindow, \
+        ULONG, __p0, d0, struct Window *, __p1, a0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+#define ESnap_QueryGroupOf(__p0, __p1) \
+    LP2(0xcc, LONG, ESnap_QueryGroupOf, \
+        struct Window *, __p0, a0, ULONG *, __p1, a1, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */

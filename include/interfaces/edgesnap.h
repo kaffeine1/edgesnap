@@ -117,6 +117,19 @@ struct EdgeSnapIFace
                                          struct Screen *screen,
                                          struct ESnapWorkArea *buf,
                                          ULONG count, ULONG *needed);
+
+    /* --- appended for 2.12: layout groups --- */
+    LONG APICALL (*ESnap_CreateGroup)(struct EdgeSnapIFace *Self,
+                                      ULONG workArea, const char *name,
+                                      ULONG flags, ULONG *group_out);
+    LONG APICALL (*ESnap_DeleteGroup)(struct EdgeSnapIFace *Self,
+                                      ULONG group);
+    LONG APICALL (*ESnap_GroupAddWindow)(struct EdgeSnapIFace *Self,
+                                         ULONG group, struct Window *win);
+    LONG APICALL (*ESnap_GroupRemoveWindow)(struct EdgeSnapIFace *Self,
+                                            ULONG group, struct Window *win);
+    LONG APICALL (*ESnap_QueryGroupOf)(struct EdgeSnapIFace *Self,
+                                       struct Window *win, ULONG *group_out);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

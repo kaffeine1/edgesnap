@@ -129,4 +129,12 @@ LONG esb_unregister_client(ULONG client);
 LONG esb_query_work_areas(struct Screen *scr, struct ESnapWorkArea *buf,
                           ULONG count, ULONG *needed);
 
+/* 2.12: layout groups */
+LONG esb_create_group(ULONG area, const char *name, ULONG flags,
+                      ULONG *group_out);
+LONG esb_delete_group(ULONG group);
+LONG esb_group_add_window(ULONG group, struct Window *win);
+LONG esb_group_remove_window(ULONG group, struct Window *win);
+LONG esb_query_group_of(struct Window *win, ULONG *group_out);
+
 #endif /* EDGESNAP_BODY_H */

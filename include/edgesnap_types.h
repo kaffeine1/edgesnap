@@ -70,6 +70,12 @@
  *       change; a private one by its address for as long as it is open.
  *       The monitor field is there for a screen that spans displays
  *       and reads 0 until the library can tell displays apart.
+ *   2.12 - layout groups: CreateGroup, DeleteGroup, GroupAddWindow,
+ *       GroupRemoveWindow and QueryGroupOf appended. A group is these
+ *       windows, in this work area, owned by this client; a locked
+ *       group keeps every other client, the commodity's drag included,
+ *       off its windows, and the generation moves when a drag touches
+ *       one. Groups die with the client that made them.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

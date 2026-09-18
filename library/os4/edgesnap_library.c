@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 11
-#define ES_LIB_IDSTRING "edgesnap.library 2.11 (18.9.2026) Michele Dipace"
+#define ES_LIB_REVISION 12
+#define ES_LIB_IDSTRING "edgesnap.library 2.12 (18.9.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -407,6 +407,42 @@ static LONG _ESnap_QueryWorkAreas(struct EdgeSnapIFace *Self,
     return esb_query_work_areas(screen, buf, count, needed);
 }
 
+/* --- appended for 2.12: layout groups --- */
+static LONG _ESnap_CreateGroup(struct EdgeSnapIFace *Self, ULONG workArea,
+                               const char *name, ULONG flags,
+                               ULONG *group_out)
+{
+    (void)Self;
+    return esb_create_group(workArea, name, flags, group_out);
+}
+
+static LONG _ESnap_DeleteGroup(struct EdgeSnapIFace *Self, ULONG group)
+{
+    (void)Self;
+    return esb_delete_group(group);
+}
+
+static LONG _ESnap_GroupAddWindow(struct EdgeSnapIFace *Self, ULONG group,
+                                  struct Window *win)
+{
+    (void)Self;
+    return esb_group_add_window(group, win);
+}
+
+static LONG _ESnap_GroupRemoveWindow(struct EdgeSnapIFace *Self, ULONG group,
+                                     struct Window *win)
+{
+    (void)Self;
+    return esb_group_remove_window(group, win);
+}
+
+static LONG _ESnap_QueryGroupOf(struct EdgeSnapIFace *Self,
+                                struct Window *win, ULONG *group_out)
+{
+    (void)Self;
+    return esb_query_group_of(win, group_out);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -438,6 +474,11 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_RegisterClient,
     (APTR)_ESnap_UnregisterClient,
     (APTR)_ESnap_QueryWorkAreas,
+    (APTR)_ESnap_CreateGroup,
+    (APTR)_ESnap_DeleteGroup,
+    (APTR)_ESnap_GroupAddWindow,
+    (APTR)_ESnap_GroupRemoveWindow,
+    (APTR)_ESnap_QueryGroupOf,
     (APTR)-1
 };
 

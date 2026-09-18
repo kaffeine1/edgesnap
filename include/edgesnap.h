@@ -532,4 +532,51 @@ struct ESnapWorkArea {
 LONG ESnap_QueryWorkAreas(struct Screen *screen, struct ESnapWorkArea *buf,
                           ULONG count, ULONG *needed);
 
+/*
+ * --- 2.12: layout groups --------------------------------------------
+ *
+ * A tiler's unit of state: these windows, in this work area, owned by
+ * this client. The library keeps the membership, by window serial, so
+ * that the interactive engine can tell a window a tiler owns from one
+ * it may snap.
+ *
+ * ESnap_CreateGroup: the caller must hold ES_CL_LAYOUT, that is what
+ * the role is for. workArea is an id from QueryWorkAreas or 0 for
+ * "wherever"; name is for logs and may be NULL; flags:
+ *   ES_GF_LOCKED  keep everyone else off these windows. The owner's
+ *                 own SnapWindow, PlaceWindow and PlaceWindowsA work as
+ *                 usual; from any other task, the commodity included,
+ *                 they answer ES_ERR_REJECTED, and the interactive
+ *                 engine does not snap a locked window when the user
+ *                 drags it. It does count the touch: QueryGeneration
+ *                 moves, so the owner learns that the user reached for
+ *                 its window and can decide what that means. A locked
+ *                 group whose owner switched its layout off
+ *                 (ESnap_Enable(FALSE) from a layout client) keeps
+ *                 nobody out until it switches back on.
+ *   ES_OK / ES_ERR_BAD_ARGS / ES_ERR_REJECTED (no layout role) /
+ *   ES_ERR_STALE (no such work area) / ES_ERR_NO_MEMORY (sixteen groups).
+ *
+ * ESnap_DeleteGroup, ESnap_GroupAddWindow, ESnap_GroupRemoveWindow:
+ * the owner's task only (ES_ERR_REJECTED otherwise), ES_ERR_STALE for
+ * a group that does not exist or a window that does not. A window
+ * belongs to one group at a time: adding it to a second one is
+ * ES_ERR_REJECTED, removing it first is the way. Thirty-two windows
+ * per group. A window that closes leaves its group by itself.
+ *
+ * ESnap_QueryGroupOf: *group_out receives the group of win, or 0.
+ *   ES_OK / ES_ERR_BAD_ARGS / ES_ERR_STALE.
+ *
+ * A group dies with the client that made it, when that client
+ * unregisters or its task is gone. Group ids are never reused.
+ */
+#define ES_GF_LOCKED   0x0001UL
+
+LONG ESnap_CreateGroup(ULONG workArea, const char *name, ULONG flags,
+                       ULONG *group_out);
+LONG ESnap_DeleteGroup(ULONG group);
+LONG ESnap_GroupAddWindow(ULONG group, struct Window *win);
+LONG ESnap_GroupRemoveWindow(ULONG group, struct Window *win);
+LONG ESnap_QueryGroupOf(struct Window *win, ULONG *group_out);
+
 #endif /* EDGESNAP_H */

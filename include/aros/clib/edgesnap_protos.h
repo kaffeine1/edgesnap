@@ -244,6 +244,52 @@ AROS_LP4(LONG, ESnap_QueryWorkAreas,
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP4(LONG, ESnap_CreateGroup,
+         AROS_LPA(ULONG, workArea, D0),
+         AROS_LPA(const char *, name, A0),
+         AROS_LPA(ULONG, flags, D1),
+         AROS_LPA(ULONG *, group_out, A1),
+         LIBBASETYPEPTR, EdgeSnapBase, 30, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP1(LONG, ESnap_DeleteGroup,
+         AROS_LPA(ULONG, group, D0),
+         LIBBASETYPEPTR, EdgeSnapBase, 31, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP2(LONG, ESnap_GroupAddWindow,
+         AROS_LPA(ULONG, group, D0),
+         AROS_LPA(struct Window *, win, A0),
+         LIBBASETYPEPTR, EdgeSnapBase, 32, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP2(LONG, ESnap_GroupRemoveWindow,
+         AROS_LPA(ULONG, group, D0),
+         AROS_LPA(struct Window *, win, A0),
+         LIBBASETYPEPTR, EdgeSnapBase, 33, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP2(LONG, ESnap_QueryGroupOf,
+         AROS_LPA(struct Window *, win, A0),
+         AROS_LPA(ULONG *, group_out, A1),
+         LIBBASETYPEPTR, EdgeSnapBase, 34, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* CLIB_EDGESNAP_PROTOS_H */

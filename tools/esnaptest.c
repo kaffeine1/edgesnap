@@ -74,7 +74,7 @@ static const char *rcname(LONG rc)
     }
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     struct Window *win;
     ULONG caps, zone;
@@ -162,6 +162,41 @@ int main(void)
         win = ((struct IntuitionBase *)IntuitionBase)->ActiveWindow;
         UnlockIBase(ilock);
     }
+    /*
+     * esnaptest LOCK: keep the active window in a locked group for
+     * twenty seconds, so that a drag by hand (or by a tester's script)
+     * can show that the commodity leaves it alone and the generation
+     * moves. Then clean up and exit.
+     */
+    if (argc > 1 && argv[1][0] == 'L' && EdgeSnapBase->lib_Revision >= 12 &&
+        win != NULL) {
+        ULONG me = 0, grp = 0, g0, g1;
+
+        ES_CALL(ESnap_RegisterClient)("esnaptest", ES_CL_LAYOUT, &me);
+        rc = ES_CALL(ESnap_CreateGroup)(0, "lock", ES_GF_LOCKED, &grp);
+        rc = ES_CALL(ESnap_GroupAddWindow)(grp, win);
+        g0 = ES_CALL(ESnap_QueryGeneration)(NULL);
+        printf("esnaptest: window %p locked in group %lu (%s), generation "
+               "%lu: drag it now, you have twenty seconds\n", (void *)win,
+               (unsigned long)grp, rcname(rc), (unsigned long)g0);
+        Delay(50L * 20);
+        g1 = ES_CALL(ESnap_QueryGeneration)(NULL);
+        printf("esnaptest: generation now %lu (%s)\n", (unsigned long)g1,
+               g1 != g0 ? "moved: a drag touched it" : "unchanged");
+        ES_CALL(ESnap_DeleteGroup)(grp);
+        ES_CALL(ESnap_UnregisterClient)(me);
+#if defined(__amigaos4__)
+        DropInterface((struct Interface *)IEdgeSnap);
+#endif
+        CloseLibrary(EdgeSnapBase);
+#if defined(__amigaos4__)
+        DropInterface((struct Interface *)IIntuition);
+#endif
+        CloseLibrary((struct Library *)IntuitionBase);
+        printf("esnaptest: done\n");
+        return RETURN_OK;
+    }
+
     if (win == NULL) {
         printf("esnaptest: no active window to play with\n");
     } else {
@@ -344,6 +379,52 @@ int main(void)
         printf("esnaptest: asked again -> %s, id %lu (%s)\n", rcname(rc),
                (unsigned long)wa[0].id,
                wa[0].id == first ? "same, as it should" : "DIFFERENT");
+    }
+
+    /* 2.12: groups. Made by a layout client, in a work area, by serial;
+     * the owner may still snap its own locked window; a window is in
+     * one group at a time; a deleted group is stale. */
+    if (EdgeSnapBase->lib_Revision >= 12 && win != NULL) {
+        ULONG me = 0, area = 0, grp = 0, grp2 = 0, of = 0, need = 0;
+        struct ESnapWorkArea wa[1];
+
+        rc = ES_CALL(ESnap_CreateGroup)(0, "orphan", 0, &grp);
+        printf("esnaptest: ESnap_CreateGroup without a role -> %s (expected "
+               "ES_ERR_REJECTED)\n", rcname(rc));
+        ES_CALL(ESnap_RegisterClient)("esnaptest", ES_CL_LAYOUT, &me);
+        if (ES_CALL(ESnap_QueryWorkAreas)(NULL, wa, 1, &need) == ES_OK) {
+            area = wa[0].id;
+        }
+        rc = ES_CALL(ESnap_CreateGroup)(area, "test", ES_GF_LOCKED, &grp);
+        printf("esnaptest: ESnap_CreateGroup(area %lu, locked) -> %s, id %lu\n",
+               (unsigned long)area, rcname(rc), (unsigned long)grp);
+        rc = ES_CALL(ESnap_GroupAddWindow)(grp, win);
+        printf("esnaptest: ESnap_GroupAddWindow -> %s\n", rcname(rc));
+        rc = ES_CALL(ESnap_QueryGroupOf)(win, &of);
+        printf("esnaptest: ESnap_QueryGroupOf -> %s, group %lu (%s)\n",
+               rcname(rc), (unsigned long)of,
+               of == grp ? "the one we made" : "ANOTHER");
+        rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_LEFT);
+        printf("esnaptest: the owner snaps its locked window -> %s\n",
+               rcname(rc));
+        Delay(50L);
+        ES_CALL(ESnap_UnsnapWindow)(win);
+        rc = ES_CALL(ESnap_CreateGroup)(0, "second", 0, &grp2);
+        rc = ES_CALL(ESnap_GroupAddWindow)(grp2, win);
+        printf("esnaptest: the same window into a second group -> %s "
+               "(expected ES_ERR_REJECTED)\n", rcname(rc));
+        rc = ES_CALL(ESnap_GroupRemoveWindow)(grp, win);
+        printf("esnaptest: ESnap_GroupRemoveWindow -> %s\n", rcname(rc));
+        rc = ES_CALL(ESnap_QueryGroupOf)(win, &of);
+        printf("esnaptest: ESnap_QueryGroupOf after removing -> %s, group %lu "
+               "(expected 0)\n", rcname(rc), (unsigned long)of);
+        rc = ES_CALL(ESnap_DeleteGroup)(grp);
+        printf("esnaptest: ESnap_DeleteGroup -> %s\n", rcname(rc));
+        rc = ES_CALL(ESnap_DeleteGroup)(grp);
+        printf("esnaptest: deleted twice -> %s (expected ES_ERR_STALE)\n",
+               rcname(rc));
+        ES_CALL(ESnap_DeleteGroup)(grp2);
+        ES_CALL(ESnap_UnregisterClient)(me);
     }
 
 #if defined(__amigaos4__)

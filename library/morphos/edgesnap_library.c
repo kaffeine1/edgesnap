@@ -35,8 +35,8 @@
 
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  2
-#define ES_LIB_REVISION 11
-#define ES_LIB_IDSTRING "edgesnap.library 2.11 (18.9.2026) Michele Dipace\r\n"
+#define ES_LIB_REVISION 12
+#define ES_LIB_IDSTRING "edgesnap.library 2.12 (18.9.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -319,6 +319,33 @@ static LONG G_QueryWorkAreas(void)
                                 (ULONG)REG_D0, (ULONG *)REG_A2);
 }
 
+/* --- appended for 2.12: layout groups --- */
+static LONG G_CreateGroup(void)
+{
+    return esb_create_group((ULONG)REG_D0, (const char *)REG_A0,
+                            (ULONG)REG_D1, (ULONG *)REG_A1);
+}
+
+static LONG G_DeleteGroup(void)
+{
+    return esb_delete_group((ULONG)REG_D0);
+}
+
+static LONG G_GroupAddWindow(void)
+{
+    return esb_group_add_window((ULONG)REG_D0, (struct Window *)REG_A0);
+}
+
+static LONG G_GroupRemoveWindow(void)
+{
+    return esb_group_remove_window((ULONG)REG_D0, (struct Window *)REG_A0);
+}
+
+static LONG G_QueryGroupOf(void)
+{
+    return esb_query_group_of((struct Window *)REG_A0, (ULONG *)REG_A1);
+}
+
 #define ES_GATE(name, fn) \
     static struct EmulLibEntry name = \
         { TRAP_LIB, 0, (void (*)(void))fn }
@@ -352,6 +379,11 @@ ES_GATE(GATE_FeedMotion, G_FeedMotion);
 ES_GATE(GATE_RegisterClient, G_RegisterClient);
 ES_GATE(GATE_UnregisterClient, G_UnregisterClient);
 ES_GATE(GATE_QueryWorkAreas, G_QueryWorkAreas);
+ES_GATE(GATE_CreateGroup, G_CreateGroup);
+ES_GATE(GATE_DeleteGroup, G_DeleteGroup);
+ES_GATE(GATE_GroupAddWindow, G_GroupAddWindow);
+ES_GATE(GATE_GroupRemoveWindow, G_GroupRemoveWindow);
+ES_GATE(GATE_QueryGroupOf, G_QueryGroupOf);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -384,6 +416,11 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_RegisterClient,
     (APTR)&GATE_UnregisterClient,
     (APTR)&GATE_QueryWorkAreas,
+    (APTR)&GATE_CreateGroup,
+    (APTR)&GATE_DeleteGroup,
+    (APTR)&GATE_GroupAddWindow,
+    (APTR)&GATE_GroupRemoveWindow,
+    (APTR)&GATE_QueryGroupOf,
     (APTR)-1
 };
 

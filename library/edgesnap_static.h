@@ -46,5 +46,10 @@
 #define ESnap_RegisterClient    esb_register_client
 #define ESnap_UnregisterClient  esb_unregister_client
 #define ESnap_QueryWorkAreas    esb_query_work_areas
+#define ESnap_CreateGroup       esb_create_group
+#define ESnap_DeleteGroup       esb_delete_group
+#define ESnap_GroupAddWindow    esb_group_add_window
+#define ESnap_GroupRemoveWindow esb_group_remove_window
+#define ESnap_QueryGroupOf      esb_query_group_of
 
 #endif /* EDGESNAP_STATIC_H */
