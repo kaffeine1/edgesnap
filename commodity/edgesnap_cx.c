@@ -828,10 +828,11 @@ static struct Preview g_preview;
  * frame bars have exactly a dock's shape. The OS4 frame is drawn XOR
  * on the screen, so there is nothing to ignore there. */
 static struct Window *g_divider;   /* forward: defined with the divider */
+static struct Window *g_selector;  /* forward: defined with the selector */
 
 static void spike_publish_ignored(void)
 {
-    struct Window *mine[5];
+    struct Window *mine[6];
     int n = 0;
 
 #ifdef ES_PREVIEW_WINDOWS
@@ -842,6 +843,7 @@ static void spike_publish_ignored(void)
     }
 #endif
     mine[n++] = g_divider;
+    mine[n++] = g_selector;
     ES_CALL(ESnap_IgnoreWindows)(mine, (ULONG)n);
 }
 
@@ -2917,6 +2919,7 @@ static void spike_config_reload(void)
 #define HK_DUMP        5
 #define HK_FRAME       6   /* ctrl alt f: the preview frame, no drag */
 #define HK_CENTRE      7   /* ctrl alt c: its own size, in the middle */
+#define HK_SELECT      8   /* ctrl alt space: the selector, under the pointer */
 
 static int spike_add_hotkey(CxObj *broker, struct MsgPort *port,
                             STRPTR descr, LONG id)
@@ -2951,11 +2954,403 @@ static struct Window *spike_active_window(void)
     return win;
 }
 
+
+/* ------------------------------------------------------------- selector */
+
+/*
+ * The selector: a palette that is the map of the screen. Nine cells in
+ * three rows, each in the place the window would go: the corners in
+ * the corners, the halves at the sides, maximise at the top in the
+ * middle (the top edge maximises in a drag too), the centre in the
+ * middle, and "put it back" at the bottom, where the cursor-down hotkey
+ * lives. Each cell shows a miniature of its zone, drawn by the same
+ * geometry that places the window, so the picture cannot lie.
+ *
+ * It opens under the pointer on ctrl alt space, takes the mouse and the
+ * cursor keys, and goes away on a choice, on Esc or the right button,
+ * on the hotkey again, or when anything else is activated. Plain
+ * Intuition and graphics.library, so it is the same window on all
+ * three systems, and the choice goes through the calls the hotkeys
+ * use. It acts on the window that was active when it opened, held by
+ * serial where the library gives one: a window may go away while the
+ * palette is up, and the library is the one that knows.
+ */
+#define SEL_CELL_W   36
+#define SEL_CELL_H   24
+#define SEL_GAP       4
+#define SEL_PAD       6
+#define SEL_COLS      3
+#define SEL_ROWS      3
+#define SEL_CELLS    (SEL_COLS * SEL_ROWS)
+#define SEL_W  (SEL_PAD * 2 + SEL_COLS * SEL_CELL_W + (SEL_COLS - 1) * SEL_GAP)
+#define SEL_H  (SEL_PAD * 2 + SEL_ROWS * SEL_CELL_H + (SEL_ROWS - 1) * SEL_GAP)
+#define SEL_RESTORE  (-1)              /* the cell that puts it back */
+#define SEL_HOME      4                /* the middle cell, under the pointer */
+
+static const int sel_zone[SEL_CELLS] = {
+    ES_ZONE_TOP_LEFT,    ES_ZONE_MAX,    ES_ZONE_TOP_RIGHT,
+    ES_ZONE_LEFT,        ES_ZONE_CENTRE, ES_ZONE_RIGHT,
+    ES_ZONE_BOTTOM_LEFT, SEL_RESTORE,    ES_ZONE_BOTTOM_RIGHT
+};
+
+static struct Window *g_selector;
+
+static struct Selector {
+    struct Window *target;   /* active when the palette opened */
+    ULONG serial;            /* its serial, 0 when the library has none */
+    int hot;                 /* the highlighted cell, -1 for none */
+    LONG pen_bg;             /* the screen's own pens, taken when it opens */
+    LONG pen_line;
+} g_sel;
+
+static void spike_sel_cell(int i, ESRect *r)
+{
+    r->x = SEL_PAD + (i % SEL_COLS) * (SEL_CELL_W + SEL_GAP);
+    r->y = SEL_PAD + (i / SEL_COLS) * (SEL_CELL_H + SEL_GAP);
+    r->w = SEL_CELL_W;
+    r->h = SEL_CELL_H;
+}
+
+static int spike_sel_cell_at(int x, int y)
+{
+    ESRect r;
+    int i;
+
+    for (i = 0; i < SEL_CELLS; i++) {
+        spike_sel_cell(i, &r);
+        if (x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void spike_sel_box(struct RastPort *rp, const ESRect *r)
+{
+    Move(rp, r->x, r->y);
+    Draw(rp, r->x + r->w - 1, r->y);
+    Draw(rp, r->x + r->w - 1, r->y + r->h - 1);
+    Draw(rp, r->x, r->y + r->h - 1);
+    Draw(rp, r->x, r->y);
+}
+
+static void spike_sel_paint(void)
+{
+    struct RastPort *rp;
+    ESRect whole;
+    int i;
+
+    if (g_selector == NULL) {
+        return;
+    }
+    rp = g_selector->RPort;
+    SetDrMd(rp, JAM1);
+    SetAPen(rp, (ULONG)g_sel.pen_bg);
+    RectFill(rp, 0, 0, SEL_W - 1, SEL_H - 1);
+    SetAPen(rp, (ULONG)g_sel.pen_line);
+    whole.x = 0;
+    whole.y = 0;
+    whole.w = SEL_W;
+    whole.h = SEL_H;
+    spike_sel_box(rp, &whole);
+    for (i = 0; i < SEL_CELLS; i++) {
+        ESRect c, z;
+        LONG pen = (i == g_sel.hot) ? g_accent.pen : g_sel.pen_line;
+
+        spike_sel_cell(i, &c);
+        SetAPen(rp, (ULONG)pen);
+        spike_sel_box(rp, &c);
+        /* the miniature: the zone inside the cell, by the real geometry */
+        c.x += 3;
+        c.y += 3;
+        c.w -= 6;
+        c.h -= 6;
+        if (sel_zone[i] == SEL_RESTORE) {
+            z.w = c.w / 2;
+            z.h = c.h / 2;
+            z.x = c.x + c.w / 4;
+            z.y = c.y + c.h / 4;
+            spike_sel_box(rp, &z);     /* a window, wherever it was */
+        } else {
+            if (sel_zone[i] == ES_ZONE_CENTRE) {
+                ESRect w;
+
+                w.x = 0;
+                w.y = 0;
+                w.w = c.w / 2;
+                w.h = c.h / 2;
+                es_centre_rect(&c, &w, 0, 0, 0, 0, &z);
+            } else {
+                es_zone_rect(sel_zone[i], &c, &z);
+            }
+            RectFill(rp, z.x, z.y, z.x + z.w - 1, z.y + z.h - 1);
+        }
+    }
+}
+
+/* The window the palette acts on, as the library sees it now. */
+static struct Window *spike_sel_target(void)
+{
+    struct Window *w = NULL;
+
+    if (g_sel.serial != 0) {
+        if (ES_CALL(ESnap_FindWindow)(g_sel.serial, &w) != ES_OK) {
+            return NULL;
+        }
+        return w;
+    }
+    return g_sel.target;   /* an old library: the call validates it */
+}
+
+static void spike_sel_close(void)
+{
+    struct IntuiMessage *im;
+    struct Window *target;
+
+    if (g_selector == NULL) {
+        return;
+    }
+    while ((im = (struct IntuiMessage *)GetMsg(g_selector->UserPort)) != NULL) {
+        ReplyMsg((struct Message *)im);
+    }
+    CloseWindow(g_selector);
+    g_selector = NULL;
+    spike_publish_ignored();
+    /* The keyboard goes back where it was, when that window is still
+     * there; without a serial nobody can say, so it is left alone. */
+    if (g_sel.serial != 0 && (target = spike_sel_target()) != NULL) {
+        ActivateWindow(target);
+    }
+}
+
+static void spike_after_snap(LONG rc);
+
+static void spike_sel_choose(int i)
+{
+    struct Window *target;
+    int zone;
+    LONG rc;
+
+    if (i < 0 || i >= SEL_CELLS) {
+        return;
+    }
+    zone = sel_zone[i];
+    target = spike_sel_target();
+    spike_sel_close();
+    if (target == NULL) {
+        spike_out("edgesnap: the window went away\n");
+        return;
+    }
+    if (zone == SEL_RESTORE) {
+        rc = ES_CALL(ESnap_UnsnapWindow)(target);
+    } else {
+        rc = ES_CALL(ESnap_SnapWindow)(target, (ULONG)zone);
+    }
+    spike_after_snap(rc);
+}
+
+static void spike_sel_open(void)
+{
+    struct Screen *scr;
+    struct DrawInfo *dri;
+    struct Window *target = spike_active_window();
+    int x, y, mx, my;
+
+    if (target == NULL) {
+        spike_out("edgesnap: no active window\n");
+        return;
+    }
+    spike_accent_recheck();
+    scr = LockPubScreen(NULL);
+    if (scr == NULL) {
+        return;
+    }
+    g_sel.target = target;
+    g_sel.serial = 0;
+    if (EdgeSnapBase->lib_Revision >= 6) {
+        ULONG serial = 0;
+
+        if (ES_CALL(ESnap_QueryWindowSerial)(target, &serial) == ES_OK) {
+            g_sel.serial = serial;
+        }
+    }
+    g_sel.pen_bg = 0;
+    g_sel.pen_line = 1;
+    dri = GetScreenDrawInfo(scr);
+    if (dri != NULL) {
+        if (dri->dri_NumPens > BACKGROUNDPEN) {
+            g_sel.pen_bg = dri->dri_Pens[BACKGROUNDPEN];
+            g_sel.pen_line = dri->dri_Pens[SHADOWPEN];
+        }
+        FreeScreenDrawInfo(scr, dri);
+    }
+    /* under the pointer, whole, on the screen */
+    mx = scr->MouseX;
+    my = scr->MouseY;
+    x = mx - SEL_W / 2;
+    y = my - SEL_H / 2;
+    if (x + SEL_W > scr->Width) {
+        x = scr->Width - SEL_W;
+    }
+    if (y + SEL_H > scr->Height) {
+        y = scr->Height - SEL_H;
+    }
+    if (x < 0) {
+        x = 0;
+    }
+    if (y < 0) {
+        y = 0;
+    }
+    g_selector = OpenWindowTags(NULL,
+                                WA_CustomScreen, scr,
+                                WA_Left, x,
+                                WA_Top, y,
+                                WA_Width, SEL_W,
+                                WA_Height, SEL_H,
+                                WA_Flags, WFLG_BORDERLESS |
+                                          WFLG_SMART_REFRESH |
+                                          WFLG_ACTIVATE |
+                                          WFLG_RMBTRAP |
+                                          WFLG_REPORTMOUSE,
+                                WA_IDCMP, IDCMP_MOUSEBUTTONS |
+                                          IDCMP_MOUSEMOVE |
+                                          IDCMP_RAWKEY |
+                                          IDCMP_INACTIVEWINDOW |
+                                          IDCMP_REFRESHWINDOW,
+                                TAG_DONE);
+    UnlockPubScreen(NULL, scr);
+    if (g_selector == NULL) {
+        spike_out("edgesnap: the selector would not open\n");
+        return;
+    }
+    g_sel.hot = spike_sel_cell_at(mx - x, my - y);
+    if (g_sel.hot < 0) {
+        g_sel.hot = SEL_HOME;
+    }
+    spike_publish_ignored();
+    spike_sel_paint();
+}
+
+/*
+ * One IDCMP round for the palette. A choice is made on the button's
+ * release, never on its press: closing a window under a held button
+ * froze AROS once (the seam handle, 2026-09-05).
+ */
+static void spike_sel_events(void)
+{
+    struct IntuiMessage *im;
+
+    while (g_selector != NULL &&
+           (im = (struct IntuiMessage *)GetMsg(g_selector->UserPort)) != NULL) {
+        ULONG cls = im->Class;
+        UWORD code = im->Code;
+        int mx = im->MouseX, my = im->MouseY;
+
+        ReplyMsg((struct Message *)im);
+        if (cls == IDCMP_REFRESHWINDOW) {
+            BeginRefresh(g_selector);
+            spike_sel_paint();
+            EndRefresh(g_selector, TRUE);
+        } else if (cls == IDCMP_INACTIVEWINDOW) {
+            spike_sel_close();
+        } else if (cls == IDCMP_MOUSEMOVE) {
+            int hot = spike_sel_cell_at(mx, my);
+
+            if (hot != g_sel.hot) {
+                g_sel.hot = hot;
+                spike_sel_paint();
+            }
+        } else if (cls == IDCMP_MOUSEBUTTONS) {
+            if (code == SELECTUP) {
+                int hit = spike_sel_cell_at(mx, my);
+
+                if (hit >= 0) {
+                    spike_sel_choose(hit);
+                }
+            } else if (code == MENUDOWN) {
+                spike_sel_close();       /* the right button says no */
+            }
+        } else if (cls == IDCMP_RAWKEY && (code & 0x80) == 0) {
+            int hot = g_sel.hot < 0 ? SEL_HOME : g_sel.hot;
+            int row = hot / SEL_COLS, col = hot % SEL_COLS;
+
+            switch (code) {
+            case 0x4C:                                     /* cursor up */
+                if (row > 0) {
+                    row--;
+                }
+                break;
+            case 0x4D:                                     /* cursor down */
+                if (row < SEL_ROWS - 1) {
+                    row++;
+                }
+                break;
+            case 0x4E:                                     /* cursor right */
+                if (col < SEL_COLS - 1) {
+                    col++;
+                }
+                break;
+            case 0x4F:                                     /* cursor left */
+                if (col > 0) {
+                    col--;
+                }
+                break;
+            case 0x44:                                     /* return */
+            case 0x43:                                     /* enter */
+            case 0x40:                                     /* space */
+                spike_sel_choose(hot);
+                continue;
+            case 0x45:                                     /* esc */
+                spike_sel_close();
+                continue;
+            default:
+                continue;
+            }
+            hot = row * SEL_COLS + col;
+            if (hot != g_sel.hot) {
+                g_sel.hot = hot;
+                spike_sel_paint();
+            }
+        }
+    }
+}
+
+/*
+ * What every snap made by a key has to do next. A hotkey or a choice
+ * from the palette changes the snapped set exactly as a drag does, so
+ * the divider has to be re-checked here too - forgetting this is why
+ * the handle appeared after drags but never after a hotkey.
+ */
+static void spike_after_snap(LONG rc)
+{
+#ifndef __AROS__
+    /* Intuition queues the box change. As after a dragged snap, let
+     * it land before testing the pair against its live geometry.
+     * AROS waits for its repaint inside the library instead. */
+    if (rc == ES_OK) {
+        Delay(10L);
+    }
+#endif
+    spike_divider_sync();
+    spike_log_flush();
+    if (rc != ES_OK) {
+        spike_out("edgesnap: hotkey refused (%ld)\n", (long)rc);
+    }
+}
+
 static void spike_handle_hotkey(LONG id)
 {
     struct Window *win;
     LONG rc = ES_OK;
 
+    if (id == HK_SELECT) {
+        if (g_selector != NULL) {
+            spike_sel_close();
+        } else {
+            spike_sel_open();
+        }
+        return;
+    }
     if (id == HK_FRAME) {
         /*
          * Diagnostic: the preview frame with no drag in flight. Shows
@@ -3007,22 +3402,7 @@ static void spike_handle_hotkey(LONG id)
     default:
         return;
     }
-    /* A hotkey changes the snapped set exactly as a drag does, so the
-     * divider has to be re-checked here too - forgetting this is why
-     * the handle appeared after drags but never after a hotkey. */
-#ifndef __AROS__
-    /* Intuition queues the box change. As after a dragged snap, let
-     * it land before testing the pair against its live geometry.
-     * AROS waits for its repaint inside the library instead. */
-    if (rc == ES_OK) {
-        Delay(10L);
-    }
-#endif
-    spike_divider_sync();
-    spike_log_flush();
-    if (rc != ES_OK) {
-        spike_out("edgesnap: hotkey refused (%ld)\n", (long)rc);
-    }
+    spike_after_snap(rc);
 }
 
 static void spike_close_libs(void)
@@ -3206,6 +3586,7 @@ int main(int argc, char **argv)
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_down",
                           HK_RESTORE) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt c", HK_CENTRE) ||
+        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt space", HK_SELECT) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt d", HK_DUMP) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt f", HK_FRAME) ||
         CxObjError(broker) != 0) {
@@ -3242,7 +3623,8 @@ int main(int argc, char **argv)
     spike_out("  screen edge or corner, then release.\n");
     spike_out("  hotkeys: ctrl alt cursor left/right/up = snap, down = "
            "restore,\n");
-    spike_out("           ctrl alt c = centre, ctrl alt d = window dump.\n");
+    spike_out("           ctrl alt c = centre, ctrl alt space = selector,\n");
+    spike_out("           ctrl alt d = window dump.\n");
     spike_out("  quit: Ctrl-C here, or remove it from Exchange.\n");
     /* The centre is a zone the library learned in 2.9. An older one in
      * LIBS: answers BAD_ARGS, and the width cycle taught us that a
@@ -3274,8 +3656,14 @@ int main(int argc, char **argv)
          * its port joins the wait mask fresh on every round. */
         ULONG div_mask = (g_divider != NULL) ?
             (1UL << g_divider->UserPort->mp_SigBit) : 0UL;
-        ULONG sigs = Wait(port_mask | engine_mask | div_mask |
+        ULONG sel_mask = (g_selector != NULL) ?
+            (1UL << g_selector->UserPort->mp_SigBit) : 0UL;
+        ULONG sigs = Wait(port_mask | engine_mask | div_mask | sel_mask |
                           prefs_mask | SIGBREAKF_CTRL_C);
+
+        if (sel_mask != 0 && (sigs & sel_mask) != 0) {
+            spike_sel_events();
+        }
 
         if (prefs_mask != 0UL && (sigs & prefs_mask) != 0) {
             spike_config_reload();
@@ -3370,6 +3758,7 @@ out:
     }
     spike_preview_hide();
 #if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
+    spike_sel_close();
     spike_pf_cleanup();
 #endif
     spike_divider_close();

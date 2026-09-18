@@ -149,8 +149,9 @@ running copy is stopped and replaced, with no reboot.
   - Grab the seam between two tiled windows - the pointer becomes a
     double arrow - and drag it to re-balance them.
   - ctrl alt cursor left/right/up snap the active window,
-    ctrl alt cursor down puts it back where it was, and ctrl alt c
-    puts it in the middle at the size it has.
+    ctrl alt cursor down puts it back where it was, ctrl alt c puts
+    it in the middle at the size it has, and ctrl alt space opens a
+    selector under the pointer with all of that on nine cells.
   - Settings live in SYS:Prefs/EdgeSnap, native on each system: ReAction
     on AmigaOS 4, MUI on MorphOS, Zune on AROS. EdgeSnap follows changes
     at once, without being restarted.

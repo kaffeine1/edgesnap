@@ -919,13 +919,27 @@ of this verification.
   revision 9: SnapWindow now takes a value an older library refuses, and
   a machine must be able to say which of the two it is running.
 
-- **A popup selector on a hotkey (open).** The macOS tiling menu a
-  tester posted (2026-09-06) puts the choices in front of the pointer:
-  halves, quarters, and the arrangements that place several windows at
-  once. The library has that second half already, `PlaceWindowsA` since
-  2.5; what is missing is a small window that draws the choices and
-  takes one, and the first question it has to answer is what opening it
-  under the pointer costs on a slow machine.
+- **A selector on a hotkey (first cut done, 2026-09-18).** The macOS
+  tiling menu a tester posted (2026-09-06) puts the choices in front
+  of the pointer. `ctrl alt space` opens a palette under the pointer
+  that is the map of the screen: nine cells in three rows, each where
+  the window would go, the corners in the corners, the halves at the
+  sides, maximise at the top in the middle (the top edge maximises in
+  a drag too), the centre in the middle and "put it back" at the
+  bottom, under it, where the cursor-down hotkey lives. Each cell
+  shows a miniature of its zone drawn by the same geometry that places
+  the window, so the picture cannot lie. Mouse or cursor keys and
+  Return; Esc, the right button, the hotkey again or any other window
+  taking the keyboard closes it. Plain Intuition and graphics.library,
+  so it is one window on all three systems and no toolkit is involved;
+  the choice goes through the calls the hotkeys use, and the window it
+  acts on is held by serial, because a window may go away while the
+  palette is up and the library is the one that knows. A choice is
+  taken on the button's release, never on its press: closing a window
+  under a held button froze AROS once. What is not in it yet: the
+  arrangements that place several windows at once, `PlaceWindowsA`
+  already has them, the palette does not; a second row for them is the
+  natural next step once the first one has been used for a while.
 
 - **Animated snap**: the window glides into its zone
   instead of jumping. Recorded here so it is neither forgotten nor
