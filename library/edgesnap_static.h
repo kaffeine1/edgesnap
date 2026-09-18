@@ -43,5 +43,7 @@
 #define ESnap_QueryWindowSerial esb_query_window_serial
 #define ESnap_FindWindow        esb_find_window
 #define ESnap_FeedMotion        esb_feed_motion
+#define ESnap_RegisterClient    esb_register_client
+#define ESnap_UnregisterClient  esb_unregister_client
 
 #endif /* EDGESNAP_STATIC_H */

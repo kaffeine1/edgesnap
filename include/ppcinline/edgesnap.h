@@ -140,4 +140,14 @@
         LONG, __p0, d0, LONG, __p1, d1, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+/* --- appended for 2.10: client roles --- */
+#define ESnap_RegisterClient(__p0, __p1, __p2) \
+    LP3(0xa2, LONG, ESnap_RegisterClient, \
+        const char *, __p0, a0, ULONG, __p1, d0, ULONG *, __p2, a1, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+#define ESnap_UnregisterClient(__p0) \
+    LP1(0xa8, LONG, ESnap_UnregisterClient, \
+        ULONG, __p0, d0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */

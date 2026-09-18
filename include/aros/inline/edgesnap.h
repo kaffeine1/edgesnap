@@ -393,4 +393,36 @@ static inline void __inline_EdgeSnap_ESnap_FeedMotion(LONG __arg1, LONG __arg2, 
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+static inline LONG __inline_EdgeSnap_ESnap_RegisterClient(const char * __arg1, ULONG __arg2, ULONG * __arg3, APTR __EdgeSnapBase)
+{
+    AROS_LIBREQ(EdgeSnapBase, 2)
+    return AROS_LC3(LONG, ESnap_RegisterClient,\
+         AROS_LCA(const char *, (__arg1), A0), \
+         AROS_LCA(ULONG, (__arg2), D0), \
+         AROS_LCA(ULONG *, (__arg3), A1), \
+        struct Library *, (__EdgeSnapBase), 27, EdgeSnap    );
+}
+
+#define ESnap_RegisterClient(arg1, arg2, arg3) \
+    __inline_EdgeSnap_ESnap_RegisterClient((arg1), (arg2), (arg3), __EDGESNAP_LIBBASE)
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+static inline LONG __inline_EdgeSnap_ESnap_UnregisterClient(ULONG __arg1, APTR __EdgeSnapBase)
+{
+    AROS_LIBREQ(EdgeSnapBase, 2)
+    return AROS_LC1(LONG, ESnap_UnregisterClient,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+        struct Library *, (__EdgeSnapBase), 28, EdgeSnap    );
+}
+
+#define ESnap_UnregisterClient(arg1) \
+    __inline_EdgeSnap_ESnap_UnregisterClient((arg1), __EDGESNAP_LIBBASE)
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 #endif /* INLINE_EDGESNAP_H*/

@@ -215,6 +215,24 @@ AROS_LP2(void, ESnap_FeedMotion,
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP3(LONG, ESnap_RegisterClient,
+         AROS_LPA(const char *, name, A0),
+         AROS_LPA(ULONG, wants, D0),
+         AROS_LPA(ULONG *, client_out, A1),
+         LIBBASETYPEPTR, EdgeSnapBase, 27, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP1(LONG, ESnap_UnregisterClient,
+         AROS_LPA(ULONG, client, D0),
+         LIBBASETYPEPTR, EdgeSnapBase, 28, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* CLIB_EDGESNAP_PROTOS_H */

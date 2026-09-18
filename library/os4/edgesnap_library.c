@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 9
-#define ES_LIB_IDSTRING "edgesnap.library 2.9 (17.9.2026) Michele Dipace"
+#define ES_LIB_REVISION 10
+#define ES_LIB_IDSTRING "edgesnap.library 2.10 (18.9.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -382,6 +382,21 @@ static void _ESnap_FeedMotion(struct EdgeSnapIFace *Self, LONG dx, LONG dy)
     esb_feed_motion(dx, dy);
 }
 
+/* --- appended for 2.10: client roles --- */
+static LONG _ESnap_RegisterClient(struct EdgeSnapIFace *Self,
+                                  const char *name, ULONG wants,
+                                  ULONG *client_out)
+{
+    (void)Self;
+    return esb_register_client(name, wants, client_out);
+}
+
+static LONG _ESnap_UnregisterClient(struct EdgeSnapIFace *Self, ULONG client)
+{
+    (void)Self;
+    return esb_unregister_client(client);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -410,6 +425,8 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_QueryWindowSerial,
     (APTR)_ESnap_FindWindow,
     (APTR)_ESnap_FeedMotion,
+    (APTR)_ESnap_RegisterClient,
+    (APTR)_ESnap_UnregisterClient,
     (APTR)-1
 };
 

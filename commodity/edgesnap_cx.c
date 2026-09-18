@@ -196,6 +196,8 @@ struct Library *EdgeSnapBase;
 #define ES_CALL(fn) fn
 #endif
 
+static ULONG g_client_id;     /* our registration with the library (2.10) */
+
 /* ---------------------------------------------------------------- tuning */
 
 /* Drag/zone tuning lives in the core (ESEngineConfig defaults). */
@@ -2831,11 +2833,31 @@ static int spike_open_edgesnap(void)
         return 0;
     }
 #endif
+    /*
+     * The commodity is the drag engine's owner (2.10): from now on the
+     * library takes the input from this task only, and a tiler's
+     * ESnap_Enable cannot switch us off. An older library has no
+     * roles and behaves as it always did.
+     */
+    if (EdgeSnapBase->lib_Revision >= 10) {
+        LONG rc = ES_CALL(ESnap_RegisterClient)("EdgeSnap", ES_CL_ENGINE,
+                                                &g_client_id);
+        if (rc != ES_OK) {
+            g_client_id = 0;
+            spike_out("edgesnap: another client owns the drag engine "
+                      "(%ld): drags will do nothing until it lets go\n",
+                      (long)rc);
+        }
+    }
     return 1;
 }
 
 static void spike_close_edgesnap(void)
 {
+    if (g_client_id != 0 && EdgeSnapBase != NULL) {
+        ES_CALL(ESnap_UnregisterClient)(g_client_id);
+        g_client_id = 0;
+    }
 #ifdef __amigaos4__
     if (IEdgeSnap != NULL) {
         DropInterface((struct Interface *)IEdgeSnap);

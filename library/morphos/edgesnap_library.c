@@ -35,8 +35,8 @@
 
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  2
-#define ES_LIB_REVISION 9
-#define ES_LIB_IDSTRING "edgesnap.library 2.9 (17.9.2026) Michele Dipace\r\n"
+#define ES_LIB_REVISION 10
+#define ES_LIB_IDSTRING "edgesnap.library 2.10 (18.9.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -299,6 +299,18 @@ static void G_FeedMotion(void)
     esb_feed_motion((LONG)REG_D0, (LONG)REG_D1);
 }
 
+/* --- appended for 2.10: client roles --- */
+static LONG G_RegisterClient(void)
+{
+    return esb_register_client((const char *)REG_A0, (ULONG)REG_D0,
+                               (ULONG *)REG_A1);
+}
+
+static LONG G_UnregisterClient(void)
+{
+    return esb_unregister_client((ULONG)REG_D0);
+}
+
 #define ES_GATE(name, fn) \
     static struct EmulLibEntry name = \
         { TRAP_LIB, 0, (void (*)(void))fn }
@@ -329,6 +341,8 @@ ES_GATE(GATE_PlaceWindowsA, G_PlaceWindowsA);
 ES_GATE(GATE_QueryWindowSerial, G_QueryWindowSerial);
 ES_GATE(GATE_FindWindow, G_FindWindow);
 ES_GATE(GATE_FeedMotion, G_FeedMotion);
+ES_GATE(GATE_RegisterClient, G_RegisterClient);
+ES_GATE(GATE_UnregisterClient, G_UnregisterClient);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -358,6 +372,8 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_QueryWindowSerial,
     (APTR)&GATE_FindWindow,
     (APTR)&GATE_FeedMotion,
+    (APTR)&GATE_RegisterClient,
+    (APTR)&GATE_UnregisterClient,
     (APTR)-1
 };
 

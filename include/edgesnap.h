@@ -460,4 +460,41 @@ LONG ESnap_FindWindow(ULONG serial, struct Window **window);
  */
 void ESnap_FeedMotion(LONG dx, LONG dy);
 
+/*
+ * --- 2.10: client roles ---------------------------------------------
+ *
+ * A tiler and the commodity run at the same time, and neither may
+ * switch the other off. A client says what it is, once, from the task
+ * that will make its calls:
+ *
+ *   ES_CL_ENGINE  "I own the interactive drag engine". One holder at a
+ *                 time; a second asker gets ES_ERR_IN_USE. While a
+ *                 holder exists, FeedInput, FeedMotion and ResetInput
+ *                 are taken from its task only and ignored from any
+ *                 other, and its ESnap_Enable is the engine's switch.
+ *   ES_CL_LAYOUT  "I own the layout of the groups I create". Any
+ *                 number of holders. Its ESnap_Enable switches only its
+ *                 own layout on and off, which is what the groups of a
+ *                 later revision will honour; the engine is not touched.
+ *
+ * SnapWindow, UnsnapWindow, PlaceWindow, PlaceWindowsA and every query
+ * stay open to everyone, registered or not. A caller that never
+ * registers keeps the behaviour it always had: its ESnap_Enable moves
+ * the engine's switch, as in 2.2, so a client written before roles
+ * existed does not change meaning. A registration belongs to the task
+ * that made it and is dropped once that task is gone, the same rule
+ * that lets windows go stale: the id is never reused.
+ *
+ * ESnap_RegisterClient: name is for logs and may be NULL; wants is one
+ * or both roles; *client_out receives the id. Registering again from
+ * the same task changes its roles and returns the same id.
+ *   ES_OK / ES_ERR_BAD_ARGS / ES_ERR_IN_USE / ES_ERR_NO_MEMORY.
+ * ESnap_UnregisterClient: ES_OK / ES_ERR_STALE for an id nobody holds.
+ */
+#define ES_CL_ENGINE   0x0001UL
+#define ES_CL_LAYOUT   0x0002UL
+
+LONG ESnap_RegisterClient(const char *name, ULONG wants, ULONG *client_out);
+LONG ESnap_UnregisterClient(ULONG client);
+
 #endif /* EDGESNAP_H */

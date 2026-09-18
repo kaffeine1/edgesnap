@@ -27,6 +27,7 @@
 
 #include <exec/types.h>
 #include <exec/semaphores.h>
+#include <exec/execbase.h>     /* the task lists, for clients that went away */
 #include <devices/inputevent.h>
 #include <intuition/intuition.h>
 #include <graphics/layers.h>
@@ -60,6 +61,23 @@ static struct Window *g_ignored[ESB_IGNORE_SLOTS];
 static int g_enabled;
 static int g_ready;
 
+/*
+ * Clients and their roles (2.10). A registration belongs to the task
+ * that made it; ids are never reused, so an id kept by a client that
+ * is gone can only be stale, never somebody else's.
+ */
+#define ESB_CLIENT_SLOTS 8
+#define ESB_CLIENT_NAME  32
+struct ESBClient {
+    ULONG id;                  /* 0 = free */
+    struct Task *task;
+    ULONG roles;               /* ES_CL_* */
+    int layout_on;             /* the LAYOUT role's own switch */
+    char name[ESB_CLIENT_NAME];
+};
+static struct ESBClient g_clients[ESB_CLIENT_SLOTS];
+static ULONG g_client_next = 1;
+
 /* Facts sampled from a live window; ESB internal. */
 struct ESBSnap {
     struct Window *win;
@@ -92,6 +110,13 @@ int esb_init(void)
             g_ignored[i] = NULL;
         }
     }
+    {
+        int i;
+
+        for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
+            g_clients[i].id = 0;
+        }
+    }
     g_enabled = 1;
     g_ready = 1;
     return 1;
@@ -105,8 +130,183 @@ void esb_cleanup(void)
     ObtainSemaphore(&g_sem);
     es_registry_init(&g_registry);
     g_enabled = 0;
+    {
+        int i;
+
+        for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
+            g_clients[i].id = 0;
+        }
+    }
     ReleaseSemaphore(&g_sem);
     g_ready = 0;
+}
+
+/* -------------------------------------------------------- clients (2.10) */
+
+/*
+ * Is this task still around? The current task is; any other one is on
+ * exec's ready or waiting list, and a pointer on neither list belongs
+ * to a task that ended. Under Disable, because those lists move under
+ * the scheduler's hands. Not for hot paths: the input feed compares
+ * pointers and leaves the walk to the calls that register.
+ */
+static int esb_task_alive(struct Task *t)
+{
+    /* AmigaOS 4 reaches exec through its interface and the library
+     * has no SysBase symbol of its own: the base is behind IExec */
+#ifdef __amigaos4__
+    struct ExecBase *eb = (struct ExecBase *)IExec->Data.LibBase;
+#else
+    struct ExecBase *eb = (struct ExecBase *)SysBase;
+#endif
+    struct Node *n;
+    int found = 0;
+
+    if (t == NULL) {
+        return 0;
+    }
+    if (t == FindTask(NULL)) {
+        return 1;
+    }
+    Disable();
+    for (n = eb->TaskReady.lh_Head; n->ln_Succ != NULL; n = n->ln_Succ) {
+        if ((struct Task *)n == t) {
+            found = 1;
+            break;
+        }
+    }
+    for (n = eb->TaskWait.lh_Head; !found && n->ln_Succ != NULL;
+         n = n->ln_Succ) {
+        if ((struct Task *)n == t) {
+            found = 1;
+        }
+    }
+    Enable();
+    return found;
+}
+
+/* g_sem held. Drop the registrations of tasks that are gone. */
+static void esb_clients_sweep(void)
+{
+    int i;
+
+    for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
+        if (g_clients[i].id != 0 && !esb_task_alive(g_clients[i].task)) {
+            g_clients[i].id = 0;
+        }
+    }
+}
+
+/* g_sem held. The registration of a task, or NULL. */
+static struct ESBClient *esb_client_of(struct Task *t)
+{
+    int i;
+
+    for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
+        if (g_clients[i].id != 0 && g_clients[i].task == t) {
+            return &g_clients[i];
+        }
+    }
+    return NULL;
+}
+
+/* g_sem held. Whoever holds the engine role, or NULL. */
+static struct ESBClient *esb_engine_owner(void)
+{
+    int i;
+
+    for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
+        if (g_clients[i].id != 0 && (g_clients[i].roles & ES_CL_ENGINE)) {
+            return &g_clients[i];
+        }
+    }
+    return NULL;
+}
+
+/*
+ * g_sem held. May this task feed the engine? Yes when nobody owns it,
+ * which is every library before 2.10 and every frontend that never
+ * registered; otherwise only the owner's task. A pointer comparison,
+ * no walk: this runs on every mouse event.
+ */
+static int esb_engine_input_ok(void)
+{
+    struct ESBClient *owner = esb_engine_owner();
+
+    return owner == NULL || owner->task == FindTask(NULL);
+}
+
+LONG esb_register_client(const char *name, ULONG wants, ULONG *client_out)
+{
+    struct Task *me = FindTask(NULL);
+    struct ESBClient *c, *owner;
+    LONG rc = ES_OK;
+    int i;
+
+    if (client_out == NULL || wants == 0 ||
+        (wants & ~(ES_CL_ENGINE | ES_CL_LAYOUT)) != 0) {
+        return ES_ERR_BAD_ARGS;
+    }
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    esb_clients_sweep();
+    owner = esb_engine_owner();
+    c = esb_client_of(me);
+    if ((wants & ES_CL_ENGINE) && owner != NULL && owner != c) {
+        rc = ES_ERR_IN_USE;
+    } else {
+        if (c == NULL) {
+            for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
+                if (g_clients[i].id == 0) {
+                    c = &g_clients[i];
+                    break;
+                }
+            }
+        }
+        if (c == NULL) {
+            rc = ES_ERR_NO_MEMORY;
+        } else {
+            if (c->id == 0) {
+                c->id = g_client_next++;
+                if (g_client_next == 0) {
+                    g_client_next = 1;     /* never 0 */
+                }
+                c->task = me;
+                c->layout_on = 1;
+            }
+            c->roles = wants;
+            for (i = 0; i < ESB_CLIENT_NAME - 1 && name != NULL && name[i] != '\0'; i++) {
+                c->name[i] = name[i];
+            }
+            c->name[i] = '\0';
+            *client_out = c->id;
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
+LONG esb_unregister_client(ULONG client)
+{
+    LONG rc = ES_ERR_STALE;
+    int i;
+
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    esb_clients_sweep();
+    for (i = 0; i < ESB_CLIENT_SLOTS; i++) {
+        if (g_clients[i].id != 0 && g_clients[i].id == client) {
+            g_clients[i].id = 0;
+            rc = ES_OK;
+            break;
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
 }
 
 /* ------------------------------------------------------- exclusions */
@@ -533,8 +733,10 @@ static void esb_change_box(struct Window *win, const ESRect *from,
 void esb_feed_motion(LONG dx, LONG dy)
 {
     ObtainSemaphore(&g_sem);
-    g_push_x += dx;
-    g_push_y += dy;
+    if (esb_engine_input_ok()) {       /* the engine's owner, or nobody's */
+        g_push_x += dx;
+        g_push_y += dy;
+    }
     ReleaseSemaphore(&g_sem);
 }
 
@@ -849,8 +1051,18 @@ LONG esb_set_options(const struct TagItem *tags)
 
 LONG esb_enable(BOOL on)
 {
+    struct ESBClient *c;
+
     ObtainSemaphore(&g_sem);
-    g_enabled = on ? 1 : 0;
+    esb_clients_sweep();
+    c = esb_client_of(FindTask(NULL));
+    if (c != NULL && (c->roles & ES_CL_ENGINE) == 0) {
+        /* a layout client switches its own layout, never the engine */
+        c->layout_on = on ? 1 : 0;
+    } else {
+        /* the engine's owner, or a caller from before roles existed */
+        g_enabled = on ? 1 : 0;
+    }
     ReleaseSemaphore(&g_sem);
     return ES_OK;
 }
@@ -1322,6 +1534,10 @@ void esb_input(int press, int motion, int release, ULONG quals,
     }
 
     ObtainSemaphore(&g_sem);
+    if (!esb_engine_input_ok()) {
+        ReleaseSemaphore(&g_sem);    /* not the engine's owner: ignored */
+        return;
+    }
     if (!g_enabled) {
         /* disabled mid-drag: make sure no frame is left behind */
         es_engine_reset(&g_engine, &a);
@@ -1421,6 +1637,10 @@ void esb_input_reset(struct ESnapReport *out)
         return;
     }
     ObtainSemaphore(&g_sem);
+    if (!esb_engine_input_ok()) {
+        ReleaseSemaphore(&g_sem);      /* not the engine's owner: ignored */
+        return;
+    }
     es_engine_reset(&g_engine, &a);
     ReleaseSemaphore(&g_sem);
     esb_absorb(&a, out);

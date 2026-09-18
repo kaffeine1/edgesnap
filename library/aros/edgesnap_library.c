@@ -330,3 +330,24 @@ AROS_LH2(void, ESnap_FeedMotion,
     esb_feed_motion(dx, dy);
     AROS_LIBFUNC_EXIT
 }
+
+/* --- appended for 2.10: client roles --- */
+AROS_LH3(LONG, ESnap_RegisterClient,
+         AROS_LHA(const char *, name, A0),
+         AROS_LHA(ULONG, wants, D0),
+         AROS_LHA(ULONG *, client_out, A1),
+         struct EdgeSnapBase *, EdgeSnapBase, 27, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_register_client(name, wants, client_out);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH1(LONG, ESnap_UnregisterClient,
+         AROS_LHA(ULONG, client, D0),
+         struct EdgeSnapBase *, EdgeSnapBase, 28, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_unregister_client(client);
+    AROS_LIBFUNC_EXIT
+}

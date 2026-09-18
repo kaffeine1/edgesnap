@@ -27,4 +27,6 @@ ESnap_PlaceWindowsA(list,count,flags)(a0,d0,d1)
 ESnap_QueryWindowSerial(win,serial)(a0,a1)
 ESnap_FindWindow(serial,window)(d0,a0)
 ESnap_FeedMotion(dx,dy)(d0,d1)
+ESnap_RegisterClient(name,wants,client_out)(a0,d0,a1)
+ESnap_UnregisterClient(client)(d0)
 ##end

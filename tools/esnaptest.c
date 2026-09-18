@@ -69,6 +69,7 @@ static const char *rcname(LONG rc)
     case ES_ERR_CHANGED:     return "ES_ERR_CHANGED";
     case ES_ERR_NO_MEMORY:   return "ES_ERR_NO_MEMORY";
     case ES_ERR_BAD_ARGS:    return "ES_ERR_BAD_ARGS";
+    case ES_ERR_IN_USE:      return "ES_ERR_IN_USE";
     default:                 return "?";
     }
 }
@@ -282,6 +283,37 @@ int main(void)
                back == win ? "the same window" : "ANOTHER window");
         rc = ES_CALL(ESnap_FindWindow)(serial + 1000000UL, &back);
         printf("esnaptest: ESnap_FindWindow(unknown) -> %s (expected "
+               "ES_ERR_STALE)\n", rcname(rc));
+    }
+
+    /* 2.10: roles. A layout client may always register; the engine
+     * role is taken when the commodity runs, free when it does not;
+     * a layout client's Enable must leave the engine alone; an id
+     * given back twice is stale the second time. */
+    if (EdgeSnapBase->lib_Revision >= 10) {
+        ULONG me = 0, engine = 0;
+
+        rc = ES_CALL(ESnap_RegisterClient)("esnaptest", ES_CL_LAYOUT, &me);
+        printf("esnaptest: ESnap_RegisterClient(layout) -> %s, id %lu\n",
+               rcname(rc), (unsigned long)me);
+        rc = ES_CALL(ESnap_Enable)(FALSE);
+        printf("esnaptest: ESnap_Enable(FALSE) as a layout client -> %s "
+               "(the commodity must keep snapping)\n", rcname(rc));
+        ES_CALL(ESnap_Enable)(TRUE);
+        rc = ES_CALL(ESnap_RegisterClient)("esnaptest", ES_CL_ENGINE, &engine);
+        printf("esnaptest: ESnap_RegisterClient(engine) -> %s (ES_ERR_IN_USE "
+               "while the commodity runs, ES_OK when it does not)\n",
+               rcname(rc));
+        if (rc == ES_OK) {
+            rc = ES_CALL(ESnap_RegisterClient)("esnaptest", ES_CL_LAYOUT, &me);
+            printf("esnaptest: back to layout only -> %s, id %lu (%s)\n",
+                   rcname(rc), (unsigned long)me,
+                   me == engine ? "same id, as it should" : "DIFFERENT id");
+        }
+        rc = ES_CALL(ESnap_UnregisterClient)(me);
+        printf("esnaptest: ESnap_UnregisterClient -> %s\n", rcname(rc));
+        rc = ES_CALL(ESnap_UnregisterClient)(me);
+        printf("esnaptest: unregistered twice -> %s (expected "
                "ES_ERR_STALE)\n", rcname(rc));
     }
 

@@ -121,4 +121,8 @@ LONG esb_query_window_serial(struct Window *win, ULONG *serial);
 LONG esb_find_window(ULONG serial, struct Window **window);
 void esb_feed_motion(LONG dx, LONG dy);
 
+/* 2.10: client roles */
+LONG esb_register_client(const char *name, ULONG wants, ULONG *client_out);
+LONG esb_unregister_client(ULONG client);
+
 #endif /* EDGESNAP_BODY_H */

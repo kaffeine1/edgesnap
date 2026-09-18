@@ -104,6 +104,13 @@ struct EdgeSnapIFace
     /* --- appended for 2.7: the pointer's own travel --- */
     void APICALL (*ESnap_FeedMotion)(struct EdgeSnapIFace *Self,
                                      LONG dx, LONG dy);
+
+    /* --- appended for 2.10: client roles --- */
+    LONG APICALL (*ESnap_RegisterClient)(struct EdgeSnapIFace *Self,
+                                         const char *name, ULONG wants,
+                                         ULONG *client_out);
+    LONG APICALL (*ESnap_UnregisterClient)(struct EdgeSnapIFace *Self,
+                                           ULONG client);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

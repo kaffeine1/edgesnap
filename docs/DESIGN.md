@@ -1020,6 +1020,20 @@ Four structural changes. Each one moves a public signature, which is why
    for everyone. Register one frontend that owns the interactive engine
    and leave SnapWindow / UnsnapWindow / QueryWindow open to every
    caller.
+   *Done, library 2.10 (2026-09-18), on the shape the tiler's author
+   sketched in issue #2: `RegisterClient` with two roles, `ES_CL_ENGINE`
+   for one holder (a second asker gets `ES_ERR_IN_USE`) and
+   `ES_CL_LAYOUT` for any number; `Enable` acts on the caller's role, so
+   a tiler cannot switch the commodity off and the commodity cannot
+   switch a tiler off; while an engine owner exists the input feed is
+   taken from its task only. A caller that never registers keeps the
+   2.2 meaning of `Enable`, because a client written before roles
+   existed must not change meaning under it. A registration belongs to
+   the task that made it and is dropped when that task is gone, the
+   same validate-per-call rule windows follow, and ids are never
+   reused. The commodity registers as the engine's owner at start.
+   What is not decided yet is what a layout client's own switch does,
+   because that is the groups' business (item 5 of the issue).*
 4. **Exclusions that cannot be inherited.** *Verified, and the
    reviewer was right where I first said otherwise*: I had checked
    `IgnoreWindows`, which promises nothing, but `ExcludeWindow` DID say

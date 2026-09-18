@@ -59,6 +59,11 @@
  *       middle of the usable area. No new vector, but SnapWindow now
  *       accepts a value an older library answers with BAD_ARGS, so the
  *       revision has to say which of the two is running.
+ *   2.10 - client roles: RegisterClient and UnregisterClient appended.
+ *       One client may own the interactive engine, any number may own
+ *       the layout of their groups; Enable acts on the caller's role,
+ *       and the engine's input is taken only from its owner. A caller
+ *       that never registers keeps the 2.x behaviour it always had.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the
@@ -111,6 +116,7 @@
 #define ES_ERR_CHANGED      (-5)
 #define ES_ERR_NO_MEMORY    (-6)
 #define ES_ERR_BAD_ARGS     (-7)
+#define ES_ERR_IN_USE       (-8)   /* a role only one client may hold (2.10) */
 
 /* ------------------------------------------------------ capabilities */
 
