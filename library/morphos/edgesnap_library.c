@@ -35,8 +35,8 @@
 
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  2
-#define ES_LIB_REVISION 10
-#define ES_LIB_IDSTRING "edgesnap.library 2.10 (18.9.2026) Michele Dipace\r\n"
+#define ES_LIB_REVISION 11
+#define ES_LIB_IDSTRING "edgesnap.library 2.11 (18.9.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -311,6 +311,14 @@ static LONG G_UnregisterClient(void)
     return esb_unregister_client((ULONG)REG_D0);
 }
 
+/* --- appended for 2.11: work areas --- */
+static LONG G_QueryWorkAreas(void)
+{
+    return esb_query_work_areas((struct Screen *)REG_A0,
+                                (struct ESnapWorkArea *)REG_A1,
+                                (ULONG)REG_D0, (ULONG *)REG_A2);
+}
+
 #define ES_GATE(name, fn) \
     static struct EmulLibEntry name = \
         { TRAP_LIB, 0, (void (*)(void))fn }
@@ -343,6 +351,7 @@ ES_GATE(GATE_FindWindow, G_FindWindow);
 ES_GATE(GATE_FeedMotion, G_FeedMotion);
 ES_GATE(GATE_RegisterClient, G_RegisterClient);
 ES_GATE(GATE_UnregisterClient, G_UnregisterClient);
+ES_GATE(GATE_QueryWorkAreas, G_QueryWorkAreas);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -374,6 +383,7 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_FeedMotion,
     (APTR)&GATE_RegisterClient,
     (APTR)&GATE_UnregisterClient,
+    (APTR)&GATE_QueryWorkAreas,
     (APTR)-1
 };
 

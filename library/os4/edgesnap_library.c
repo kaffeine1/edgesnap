@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 10
-#define ES_LIB_IDSTRING "edgesnap.library 2.10 (18.9.2026) Michele Dipace"
+#define ES_LIB_REVISION 11
+#define ES_LIB_IDSTRING "edgesnap.library 2.11 (18.9.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -397,6 +397,16 @@ static LONG _ESnap_UnregisterClient(struct EdgeSnapIFace *Self, ULONG client)
     return esb_unregister_client(client);
 }
 
+/* --- appended for 2.11: work areas --- */
+static LONG _ESnap_QueryWorkAreas(struct EdgeSnapIFace *Self,
+                                  struct Screen *screen,
+                                  struct ESnapWorkArea *buf, ULONG count,
+                                  ULONG *needed)
+{
+    (void)Self;
+    return esb_query_work_areas(screen, buf, count, needed);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -427,6 +437,7 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_FeedMotion,
     (APTR)_ESnap_RegisterClient,
     (APTR)_ESnap_UnregisterClient,
+    (APTR)_ESnap_QueryWorkAreas,
     (APTR)-1
 };
 

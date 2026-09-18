@@ -64,6 +64,12 @@
  *       the layout of their groups; Enable acts on the caller's role,
  *       and the engine's input is taken only from its owner. A caller
  *       that never registers keeps the 2.x behaviour it always had.
+ *   2.11 - work areas: QueryWorkAreas appended. One area per screen for
+ *       now, with an identity a client can keep: a public screen by its
+ *       name, so the Workbench screen keeps its id across a screen-mode
+ *       change; a private one by its address for as long as it is open.
+ *       The monitor field is there for a screen that spans displays
+ *       and reads 0 until the library can tell displays apart.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

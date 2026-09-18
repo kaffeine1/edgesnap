@@ -150,4 +150,11 @@
         ULONG, __p0, d0, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+/* --- appended for 2.11: work areas --- */
+#define ESnap_QueryWorkAreas(__p0, __p1, __p2, __p3) \
+    LP4(0xae, LONG, ESnap_QueryWorkAreas, \
+        struct Screen *, __p0, a0, struct ESnapWorkArea *, __p1, a1, \
+        ULONG, __p2, d0, ULONG *, __p3, a2, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */

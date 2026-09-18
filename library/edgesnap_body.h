@@ -125,4 +125,8 @@ void esb_feed_motion(LONG dx, LONG dy);
 LONG esb_register_client(const char *name, ULONG wants, ULONG *client_out);
 LONG esb_unregister_client(ULONG client);
 
+/* 2.11: work areas */
+LONG esb_query_work_areas(struct Screen *scr, struct ESnapWorkArea *buf,
+                          ULONG count, ULONG *needed);
+
 #endif /* EDGESNAP_BODY_H */

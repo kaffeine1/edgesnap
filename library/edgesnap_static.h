@@ -45,5 +45,6 @@
 #define ESnap_FeedMotion        esb_feed_motion
 #define ESnap_RegisterClient    esb_register_client
 #define ESnap_UnregisterClient  esb_unregister_client
+#define ESnap_QueryWorkAreas    esb_query_work_areas
 
 #endif /* EDGESNAP_STATIC_H */

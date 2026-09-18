@@ -1003,6 +1003,14 @@ Four structural changes. Each one moves a public signature, which is why
    sits on, and a half-screen snap across two displays straddles the
    bezel, which is the opposite of what the user asked for. Screens,
    work areas and layout groups need identities the API can name.
+   *The shape is in, library 2.11 (2026-09-18): `QueryWorkAreas` with
+   an id per area that outlives the screen pointer (a public screen by
+   its name, a private one by its address while open) and a monitor
+   field. It reports one area per screen and monitor 0 until the
+   library can tell displays apart; a client written against it needs
+   only a bigger buffer on that day. The identity is what item 5 of the
+   issue builds on. Telling displays apart is still open, and needs a
+   machine that has more than one.*
 2. **Divider tokens.** `QueryDivider` reports one global seam and
    `MoveDivider` takes only a position, then re-finds the first pair it
    can. With more than one work area that does not hold. A token must

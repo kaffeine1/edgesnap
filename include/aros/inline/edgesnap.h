@@ -425,4 +425,22 @@ static inline LONG __inline_EdgeSnap_ESnap_UnregisterClient(ULONG __arg1, APTR _
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+static inline LONG __inline_EdgeSnap_ESnap_QueryWorkAreas(struct Screen * __arg1, struct ESnapWorkArea * __arg2, ULONG __arg3, ULONG * __arg4, APTR __EdgeSnapBase)
+{
+    AROS_LIBREQ(EdgeSnapBase, 2)
+    return AROS_LC4(LONG, ESnap_QueryWorkAreas,\
+         AROS_LCA(struct Screen *, (__arg1), A0), \
+         AROS_LCA(struct ESnapWorkArea *, (__arg2), A1), \
+         AROS_LCA(ULONG, (__arg3), D0), \
+         AROS_LCA(ULONG *, (__arg4), A2), \
+        struct Library *, (__EdgeSnapBase), 29, EdgeSnap    );
+}
+
+#define ESnap_QueryWorkAreas(arg1, arg2, arg3, arg4) \
+    __inline_EdgeSnap_ESnap_QueryWorkAreas((arg1), (arg2), (arg3), (arg4), __EDGESNAP_LIBBASE)
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 #endif /* INLINE_EDGESNAP_H*/

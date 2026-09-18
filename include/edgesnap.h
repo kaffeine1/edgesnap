@@ -497,4 +497,39 @@ void ESnap_FeedMotion(LONG dx, LONG dy);
 LONG ESnap_RegisterClient(const char *name, ULONG wants, ULONG *client_out);
 LONG ESnap_UnregisterClient(ULONG client);
 
+/*
+ * --- 2.11: work areas -----------------------------------------------
+ *
+ * A tiler lays windows out per work area, and it needs an identity
+ * for one that survives what a struct Screen pointer does not: the
+ * Workbench screen is closed and reopened by a screen-mode change,
+ * and comes back at another address. So an area has an id: a public
+ * screen is known by its name and keeps its id for as long as the
+ * library is loaded, a private screen is known by its address for as
+ * long as it stays open. Same id, same area, as far as the library can
+ * tell. Ids are never reused.
+ *
+ * One area per screen for now: monitor reads 0. A screen spanning
+ * several displays (MorphOS 3.20) is the case this call exists for,
+ * and it will report one area per display, each with its monitor,
+ * once the library can tell them apart; a client written against the
+ * shape below needs no change for that day, only a bigger buffer.
+ *
+ * ESnap_QueryWorkAreas: the areas of screen (NULL: the frontmost).
+ * Up to count entries are written to buf; *needed receives how many
+ * there are in all, so a short buffer shows as *needed > count.
+ *   ES_OK / ES_ERR_BAD_ARGS (needed NULL, or buf NULL with a count) /
+ *   ES_ERR_STALE (no such screen) / ES_ERR_NO_MEMORY (no room left for
+ *   another screen's id; sixteen are kept).
+ */
+struct ESnapWorkArea {
+    ULONG id;                  /* stable for the screen, never 0      */
+    ULONG monitor;             /* 0 until displays can be told apart  */
+    struct ESnapRect bounds;   /* the whole screen, in its coordinates */
+    struct ESnapArea area;     /* usable and insets, as QueryScreenArea */
+};
+
+LONG ESnap_QueryWorkAreas(struct Screen *screen, struct ESnapWorkArea *buf,
+                          ULONG count, ULONG *needed);
+
 #endif /* EDGESNAP_H */

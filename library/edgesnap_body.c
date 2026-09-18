@@ -32,6 +32,7 @@
 #include <intuition/intuition.h>
 #include <graphics/layers.h>
 #include <intuition/intuitionbase.h>
+#include <intuition/screens.h>      /* PubScreenNode: a screen's public name */
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
@@ -1459,6 +1460,186 @@ LONG esb_query_screen_area(struct Screen *scr, struct ESnapArea *out)
 int esb_drag_active(void)
 {
     return g_engine.button_down;
+}
+
+/* ------------------------------------------------------ work areas (2.11) */
+
+/*
+ * The identity of a screen, kept across what a pointer does not
+ * survive. A public screen is remembered by name for as long as the
+ * library is loaded, so the Workbench screen reopened in another mode
+ * finds its id again; a private screen is remembered by address and
+ * forgotten once it is no longer open. Sixteen names, which is more
+ * screens than a desktop opens; ids are never reused.
+ */
+#define ESB_SCREEN_SLOTS 16
+#define ESB_SCREEN_NAME  32
+struct ESBScreenId {
+    ULONG id;                  /* 0 = free */
+    int is_public;
+    char name[ESB_SCREEN_NAME];
+    struct Screen *scr;        /* private screens: the address, while open */
+};
+static struct ESBScreenId g_screens[ESB_SCREEN_SLOTS];
+static ULONG g_screen_next = 1;
+
+static int esb_str_eq(const char *a, const char *b)
+{
+    while (*a != '\0' && *a == *b) {
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
+/* IBase locked. Is scr an open screen right now? */
+static int esb_screen_open_locked(struct Screen *scr)
+{
+    struct Screen *s;
+
+    for (s = ESB_IBASE->FirstScreen; s != NULL; s = s->NextScreen) {
+        if (s == scr) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/*
+ * The public name of scr, or an empty string. Takes Intuition's own
+ * list lock and must therefore be called with IBase NOT locked.
+ */
+static void esb_screen_public_name(struct Screen *scr, char *out, int cap)
+{
+    struct List *l = LockPubScreenList();
+    struct Node *n;
+
+    out[0] = '\0';
+    if (l != NULL) {
+        for (n = l->lh_Head; n->ln_Succ != NULL; n = n->ln_Succ) {
+            struct PubScreenNode *p = (struct PubScreenNode *)n;
+
+            if (p->psn_Screen == scr && n->ln_Name != NULL) {
+                int i;
+
+                for (i = 0; i < cap - 1 && n->ln_Name[i] != '\0'; i++) {
+                    out[i] = n->ln_Name[i];
+                }
+                out[i] = '\0';
+                break;
+            }
+        }
+    }
+    UnlockPubScreenList();
+}
+
+/* g_sem held. The id of scr, made on first sight; 0 when out of room. */
+static ULONG esb_screen_id(struct Screen *scr, const char *name)
+{
+    struct ESBScreenId *slot = NULL;
+    int i;
+
+    for (i = 0; i < ESB_SCREEN_SLOTS; i++) {
+        struct ESBScreenId *e = &g_screens[i];
+
+        if (e->id == 0) {
+            if (slot == NULL) {
+                slot = e;
+            }
+        } else if (name[0] != '\0') {
+            if (e->is_public && esb_str_eq(e->name, name)) {
+                e->scr = scr;
+                return e->id;
+            }
+        } else if (!e->is_public && e->scr == scr) {
+            return e->id;
+        }
+    }
+    if (slot == NULL) {
+        return 0;
+    }
+    slot->id = g_screen_next++;
+    if (g_screen_next == 0) {
+        g_screen_next = 1;
+    }
+    slot->is_public = name[0] != '\0';
+    for (i = 0; i < ESB_SCREEN_NAME - 1 && name[i] != '\0'; i++) {
+        slot->name[i] = name[i];
+    }
+    slot->name[i] = '\0';
+    slot->scr = scr;
+    return slot->id;
+}
+
+LONG esb_query_work_areas(struct Screen *scr, struct ESnapWorkArea *buf,
+                          ULONG count, ULONG *needed)
+{
+    char name[ESB_SCREEN_NAME];
+    ULONG ilock, id;
+    LONG rc = ES_OK;
+    int i;
+
+    if (needed == NULL || (buf == NULL && count != 0)) {
+        return ES_ERR_BAD_ARGS;
+    }
+    *needed = 0;
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    ilock = LockIBase(0);
+    if (scr == NULL) {
+        scr = ESB_IBASE->FirstScreen;
+    }
+    if (scr == NULL || !esb_screen_open_locked(scr)) {
+        UnlockIBase(ilock);
+        ReleaseSemaphore(&g_sem);
+        return ES_ERR_STALE;
+    }
+    /* private ids die with their screen */
+    for (i = 0; i < ESB_SCREEN_SLOTS; i++) {
+        if (g_screens[i].id != 0 && !g_screens[i].is_public &&
+            !esb_screen_open_locked(g_screens[i].scr)) {
+            g_screens[i].id = 0;
+        }
+    }
+    UnlockIBase(ilock);
+    esb_screen_public_name(scr, name, (int)sizeof(name));
+    *needed = 1;                   /* one area per screen, for now */
+    if (count >= 1) {
+        id = esb_screen_id(scr, name);
+        if (id == 0) {
+            rc = ES_ERR_NO_MEMORY;
+        } else {
+            ESRect usable;
+            ESInsets ins;
+
+            ilock = LockIBase(0);
+            if (!esb_screen_open_locked(scr)) {
+                UnlockIBase(ilock);
+                ReleaseSemaphore(&g_sem);
+                return ES_ERR_STALE;
+            }
+            esb_usable_area_locked(scr, NULL, &usable, &ins);
+            buf[0].bounds.x = 0;
+            buf[0].bounds.y = 0;
+            buf[0].bounds.w = scr->Width;
+            buf[0].bounds.h = scr->Height;
+            UnlockIBase(ilock);
+            buf[0].id = id;
+            buf[0].monitor = 0;
+            buf[0].area.usable.x = usable.x;
+            buf[0].area.usable.y = usable.y;
+            buf[0].area.usable.w = usable.w;
+            buf[0].area.usable.h = usable.h;
+            buf[0].area.insetLeft = ins.l;
+            buf[0].area.insetTop = ins.t;
+            buf[0].area.insetRight = ins.r;
+            buf[0].area.insetBottom = ins.b;
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
 }
 
 /* ------------------------------------------------- interactive path */

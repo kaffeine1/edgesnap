@@ -111,6 +111,12 @@ struct EdgeSnapIFace
                                          ULONG *client_out);
     LONG APICALL (*ESnap_UnregisterClient)(struct EdgeSnapIFace *Self,
                                            ULONG client);
+
+    /* --- appended for 2.11: work areas --- */
+    LONG APICALL (*ESnap_QueryWorkAreas)(struct EdgeSnapIFace *Self,
+                                         struct Screen *screen,
+                                         struct ESnapWorkArea *buf,
+                                         ULONG count, ULONG *needed);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

@@ -317,6 +317,35 @@ int main(void)
                "ES_ERR_STALE)\n", rcname(rc));
     }
 
+    /* 2.11: work areas. One per screen for now, with an id that comes
+     * back the same when asked again. */
+    if (EdgeSnapBase->lib_Revision >= 11) {
+        struct ESnapWorkArea wa[4];
+        ULONG need = 0, first = 0;
+
+        rc = ES_CALL(ESnap_QueryWorkAreas)(NULL, NULL, 0, &need);
+        printf("esnaptest: ESnap_QueryWorkAreas(count 0) -> %s, %lu area(s)\n",
+               rcname(rc), (unsigned long)need);
+        rc = ES_CALL(ESnap_QueryWorkAreas)(NULL, wa, 4, &need);
+        if (rc == ES_OK && need >= 1) {
+            first = wa[0].id;
+            printf("esnaptest: area id %lu monitor %lu, screen %ldx%ld, "
+                   "usable %ld,%ld %ldx%ld, insets %ld %ld %ld %ld\n",
+                   (unsigned long)wa[0].id, (unsigned long)wa[0].monitor,
+                   (long)wa[0].bounds.w, (long)wa[0].bounds.h,
+                   (long)wa[0].area.usable.x, (long)wa[0].area.usable.y,
+                   (long)wa[0].area.usable.w, (long)wa[0].area.usable.h,
+                   (long)wa[0].area.insetLeft, (long)wa[0].area.insetTop,
+                   (long)wa[0].area.insetRight, (long)wa[0].area.insetBottom);
+        } else {
+            printf("esnaptest: ESnap_QueryWorkAreas -> %s\n", rcname(rc));
+        }
+        rc = ES_CALL(ESnap_QueryWorkAreas)(NULL, wa, 4, &need);
+        printf("esnaptest: asked again -> %s, id %lu (%s)\n", rcname(rc),
+               (unsigned long)wa[0].id,
+               wa[0].id == first ? "same, as it should" : "DIFFERENT");
+    }
+
 #if defined(__amigaos4__)
     DropInterface((struct Interface *)IEdgeSnap);
 #endif

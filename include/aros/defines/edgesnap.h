@@ -403,6 +403,23 @@ __BEGIN_DECLS
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_QueryWorkAreas_WB(__EdgeSnapBase, __arg1, __arg2, __arg3, __arg4) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC4(LONG, ESnap_QueryWorkAreas,\
+         AROS_LCA(struct Screen *, (__arg1), A0), \
+         AROS_LCA(struct ESnapWorkArea *, (__arg2), A1), \
+         AROS_LCA(ULONG, (__arg3), D0), \
+         AROS_LCA(ULONG *, (__arg4), A2), \
+        struct Library *, (__EdgeSnapBase), 29, EdgeSnap);\
+})
+
+#define ESnap_QueryWorkAreas(arg1, arg2, arg3, arg4) \
+    __ESnap_QueryWorkAreas_WB(__EDGESNAP_LIBBASE, (arg1), (arg2), (arg3), (arg4))
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* DEFINES_EDGESNAP_H*/

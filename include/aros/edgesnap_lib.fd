@@ -29,4 +29,5 @@ ESnap_FindWindow(serial,window)(d0,a0)
 ESnap_FeedMotion(dx,dy)(d0,d1)
 ESnap_RegisterClient(name,wants,client_out)(a0,d0,a1)
 ESnap_UnregisterClient(client)(d0)
+ESnap_QueryWorkAreas(screen,buf,count,needed)(a0,a1,d0,a2)
 ##end

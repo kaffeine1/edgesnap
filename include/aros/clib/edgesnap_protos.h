@@ -233,6 +233,17 @@ AROS_LP1(LONG, ESnap_UnregisterClient,
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP4(LONG, ESnap_QueryWorkAreas,
+         AROS_LPA(struct Screen *, screen, A0),
+         AROS_LPA(struct ESnapWorkArea *, buf, A1),
+         AROS_LPA(ULONG, count, D0),
+         AROS_LPA(ULONG *, needed, A2),
+         LIBBASETYPEPTR, EdgeSnapBase, 29, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* CLIB_EDGESNAP_PROTOS_H */

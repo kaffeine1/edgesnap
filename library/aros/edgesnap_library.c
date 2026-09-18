@@ -351,3 +351,16 @@ AROS_LH1(LONG, ESnap_UnregisterClient,
     return esb_unregister_client(client);
     AROS_LIBFUNC_EXIT
 }
+
+/* --- appended for 2.11: work areas --- */
+AROS_LH4(LONG, ESnap_QueryWorkAreas,
+         AROS_LHA(struct Screen *, screen, A0),
+         AROS_LHA(struct ESnapWorkArea *, buf, A1),
+         AROS_LHA(ULONG, count, D0),
+         AROS_LHA(ULONG *, needed, A2),
+         struct EdgeSnapBase *, EdgeSnapBase, 29, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_query_work_areas(screen, buf, count, needed);
+    AROS_LIBFUNC_EXIT
+}
