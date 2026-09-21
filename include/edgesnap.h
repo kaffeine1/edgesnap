@@ -103,6 +103,17 @@ typedef ULONG ESTagData;
                     default ES_ZONEMASK_ALL: which zones react         */
 #define ES_OPT_Preview      (ES_TAGBASE + 11) /* BOOL, default TRUE      */
 #define ES_OPT_BypassQual   (ES_TAGBASE + 12) /* ES_QUAL_*, default NONE */
+#define ES_OPT_CycleSizes   (ES_TAGBASE + 13) /* BOOL, default TRUE: the
+                                                 same side hotkey again
+                                                 gives two thirds, then
+                                                 one third (2.13)       */
+#define ES_OPT_Animate      (ES_TAGBASE + 14) /* BOOL, default FALSE: a
+                                                 snap and a restore move
+                                                 the window in a few
+                                                 steps instead of one.
+                                                 Placement by a client
+                                                 is never animated
+                                                 (2.13)                 */
 
 /* Bypass qualifier values for ES_OPT_BypassQual. */
 #define ES_QUAL_NONE  0

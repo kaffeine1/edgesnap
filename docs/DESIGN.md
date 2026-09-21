@@ -941,7 +941,22 @@ of this verification.
   already has them, the palette does not; a second row for them is the
   natural next step once the first one has been used for a while.
 
-- **Animated snap**: the window glides into its zone
+- **Animated snap (done, library 2.13, 2026-09-21; still to be measured
+  on real hardware).** `ANIMATE` in the settings table, off as it
+  ships, and `ES_OPT_Animate` for a client that wants to set it. The
+  shape lives in `core/zones.c` so the host tests can hold it: four to
+  eight boxes, eased out, a whole glide inside a fifth of a second,
+  and `es_glide_steps()` returns 0 for a move too short to read as
+  motion or a window too large to redraw that many times. The library
+  takes it only for a snap and for putting a window back: a client
+  that places windows wants them placed, not shown moving. A covered
+  window is raised before it glides, and the last box on the way is
+  what the AROS repaint dance is told about, since after a glide the
+  window is no longer where it started. What remains is the
+  measurement the entry below asked for: on emulation it looks right,
+  and emulation is not where the redraw cost lives.
+  The original entry, kept because the reasoning still stands:
+  the window glides into its zone
   instead of jumping. Recorded here so it is neither forgotten nor
   promised. It arrived sideways: someone on Discord (2026-08-30) asked
   for wobbly windows, which is out of scope (below), but the wish under

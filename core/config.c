@@ -20,6 +20,7 @@ void es_config_defaults(ESConfig *cfg)
     cfg->panel_margin = ES_PANEL_MARGIN_PX;
     cfg->preview = 1;
     cfg->cycle_sizes = 1;
+    cfg->animate = 0;
     cfg->bypass_qual = ES_QUAL_NONE;
 }
 
@@ -315,6 +316,13 @@ int es_config_set(ESConfig *cfg, const char *key, const char *value)
         cfg->cycle_sizes = iv;
         return ES_OK;
     }
+    if (es_key_eq(key, "animate")) {
+        if (!es_parse_bool(value, &iv)) {
+            return ES_ERR_BAD_ARGS;
+        }
+        cfg->animate = iv;
+        return ES_OK;
+    }
     if (es_key_eq(key, "zones")) {
         if (!es_parse_zones(value, &mask)) {
             return ES_ERR_BAD_ARGS;
@@ -430,6 +438,11 @@ static const ESSetting es_setting_table[] = {
     { "PREVIEW", "Look", "Show the preview frame",
       "Outline where the window will land while dragging.",
       ES_SET_BOOL, 0, 0, 0 },
+    { "ANIMATE", "Look", "Glide into place",
+      "Move the window to its zone in a few steps instead of one. "
+      "Every step asks the program to redraw itself, so on a slow "
+      "machine or with a large window the plain jump looks better.",
+      ES_SET_BOOL, 0, 0, 0 },
     { "PANELDETECT", "Docks", "Keep clear of docks",
       "Detect docks and panels, and never cover them.",
       ES_SET_BOOL, 0, 0, 0 },
@@ -496,6 +509,9 @@ int es_setting_value(const ESConfig *cfg, int index)
         }
         if (es_key_eq(key, "cyclesizes")) {
             return cfg->cycle_sizes;
+        }
+        if (es_key_eq(key, "animate")) {
+            return cfg->animate;
         }
         if (es_key_eq(key, "paneldetect")) {
             return cfg->panel_detect;

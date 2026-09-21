@@ -38,12 +38,14 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 12
-#define ES_LIB_IDSTRING "edgesnap.library 2.12 (18.9.2026) Michele Dipace"
+#define ES_LIB_REVISION 13
+#define ES_LIB_IDSTRING "edgesnap.library 2.13 (21.9.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
 struct IntuitionIFace *IIntuition;
+struct Library *DOSBase;
+struct DOSIFace *IDOS;
 struct ExecIFace *IExec;
 
 struct EdgeSnapBase {
@@ -122,6 +124,14 @@ static BPTR libExpunge(struct LibraryManagerInterface *Self)
             CloseLibrary(IntuitionBase);
             IntuitionBase = NULL;
         }
+        if (IDOS != NULL) {
+            DropInterface((struct Interface *)IDOS);
+            IDOS = NULL;
+        }
+        if (DOSBase != NULL) {
+            CloseLibrary(DOSBase);
+            DOSBase = NULL;
+        }
         result = esb->segList;
         Remove(&esb->libNode.lib_Node);
         DeleteLibrary(&esb->libNode);
@@ -146,7 +156,14 @@ static struct Library *libOpen(struct LibraryManagerInterface *Self,
             IIntuition = (struct IntuitionIFace *)
                 GetInterface(IntuitionBase, "main", 1, NULL);
         }
-        if (IIntuition == NULL || !esb_init()) {
+        /* dos is here for one call, Delay: the glide waits a tick
+         * between two boxes, and a library has no other clock. */
+        DOSBase = OpenLibrary("dos.library", 36);
+        if (DOSBase != NULL) {
+            IDOS = (struct DOSIFace *)
+                GetInterface(DOSBase, "main", 1, NULL);
+        }
+        if (IIntuition == NULL || IDOS == NULL || !esb_init()) {
             if (IIntuition != NULL) {
                 DropInterface((struct Interface *)IIntuition);
                 IIntuition = NULL;
@@ -154,6 +171,14 @@ static struct Library *libOpen(struct LibraryManagerInterface *Self,
             if (IntuitionBase != NULL) {
                 CloseLibrary(IntuitionBase);
                 IntuitionBase = NULL;
+            }
+            if (IDOS != NULL) {
+                DropInterface((struct Interface *)IDOS);
+                IDOS = NULL;
+            }
+            if (DOSBase != NULL) {
+                CloseLibrary(DOSBase);
+                DOSBase = NULL;
             }
             return NULL;
         }

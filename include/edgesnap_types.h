@@ -76,6 +76,14 @@
  *       group keeps every other client, the commodity's drag included,
  *       off its windows, and the generation moves when a drag touches
  *       one. Groups die with the client that made them.
+ *   2.13 - two settings the library can now be told about.
+ *       ES_OPT_CycleSizes: the width cycle arrived in 2.8 but no tag
+ *       carried it, so a frontend could not switch it off; now it can.
+ *       ES_OPT_Animate: a snap and a restore reach their box in a few
+ *       steps instead of one. Off by default, because every step asks
+ *       the application to redraw itself, and only for snapping and
+ *       putting back, since a client that places windows wants them
+ *       placed, not shown moving.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

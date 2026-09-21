@@ -2878,7 +2878,7 @@ static void spike_close_edgesnap(void)
  */
 static void spike_push_config(void)
 {
-    struct TagItem tags[14];
+    struct TagItem tags[16];
     int n = 0;
 
     tags[n].ti_Tag = ES_OPT_EdgePx;
@@ -2905,6 +2905,12 @@ static void spike_push_config(void)
     tags[n++].ti_Data = (ULONG)g_cfg.preview;
     tags[n].ti_Tag = ES_OPT_BypassQual;
     tags[n++].ti_Data = (ULONG)g_cfg.bypass_qual;
+    /* 2.13 and later listen to this one; an older library ignores it,
+     * which is the contract for a tag it does not know. */
+    tags[n].ti_Tag = ES_OPT_CycleSizes;
+    tags[n++].ti_Data = (ULONG)g_cfg.cycle_sizes;
+    tags[n].ti_Tag = ES_OPT_Animate;
+    tags[n++].ti_Data = (ULONG)g_cfg.animate;
     tags[n].ti_Tag = TAG_DONE;
     tags[n].ti_Data = 0;
 
@@ -3665,9 +3671,12 @@ int main(int argc, char **argv)
            g_cfg.bypass_qual == ES_QUAL_ALT ? "alt" :
            g_cfg.bypass_qual == ES_QUAL_CTRL ? "ctrl" :
            g_cfg.bypass_qual == ES_QUAL_SHIFT ? "shift" : "none");
-    spike_out("edgesnap:        margins l%d t%d r%d b%d "
-           "(file: " ES_PREFS_ENV ")\n", g_cfg.margin.l, g_cfg.margin.t,
-           g_cfg.margin.r, g_cfg.margin.b);
+    spike_out("edgesnap:        margins l%d t%d r%d b%d, width cycle %s, "
+           "glide %s\n", g_cfg.margin.l, g_cfg.margin.t,
+           g_cfg.margin.r, g_cfg.margin.b,
+           g_cfg.cycle_sizes ? "on" : "off",
+           g_cfg.animate ? "on" : "off");
+    spike_out("edgesnap:        (file: " ES_PREFS_ENV ")\n");
     spike_dump_windows();
 
     port_mask = 1UL << port->mp_SigBit;

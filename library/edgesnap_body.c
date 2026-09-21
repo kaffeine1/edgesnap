@@ -36,9 +36,7 @@
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
-#ifdef __AROS__
-#include <proto/dos.h>
-#endif
+#include <proto/dos.h>       /* Delay: the tick between two boxes of a glide */
 
 #include "edgesnap.h"
 #include "edgesnap_body.h"
@@ -686,6 +684,49 @@ static void esb_refresh_wanderer(struct Window *win, const ESRect *box)
 }
 #endif
 
+/*
+ * The glide (2.13): the same trip, in a few boxes. Only a snap and a
+ * restore take it, never a client's placement, and only when the user
+ * asked for it: every step asks the application to redraw itself, and
+ * on real hardware with a large window that can cost more than the
+ * jump it replaces. es_glide_steps() decides whether the trip is worth
+ * showing at all.
+ *
+ * A covered window is raised first, so it glides where it can be seen.
+ * The last box on the way becomes the starting point handed to
+ * esb_change_box(): on AROS that function reasons about where the
+ * window IS, and after a glide that is no longer where it was.
+ *
+ * Like the repaint waits below, this runs with the library's semaphore
+ * held: the whole glide is a fifth of a second at most, and the task
+ * doing it is the one that asked for the snap.
+ */
+static void esb_change_box(struct Window *win, const ESRect *from,
+                           const ESRect *to, int may_raise);
+
+static void esb_glide_box(struct Window *win, const ESRect *from,
+                          const ESRect *to, int may_raise)
+{
+    ESRect at = *from;
+    int steps = g_cfg.animate ? es_glide_steps(from, to) : 0;
+    int i;
+
+    if (steps > 0 && may_raise && win->WLayer != NULL &&
+        win->WLayer->front != NULL) {
+        WindowToFront(win);
+        Delay(2);
+    }
+    for (i = 1; i < steps; i++) {
+        ESRect r;
+
+        es_glide_rect(from, to, i, steps, &r);
+        ChangeWindowBox(win, r.x, r.y, r.w, r.h);
+        Delay(1);                  /* one tick, about 20 ms a step */
+        at = r;
+    }
+    esb_change_box(win, &at, to, may_raise);
+}
+
 static void esb_change_box(struct Window *win, const ESRect *from,
                            const ESRect *to, int may_raise)
 {
@@ -843,7 +884,7 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
         rc = es_registry_remember_step(&g_registry, win, &s.box, &r,
                                        (int)zone, step);
         if (rc == ES_OK) {
-            esb_change_box(win, &s.box, &r, 1);
+            esb_glide_box(win, &s.box, &r, 1);
         }
     }
     ReleaseSemaphore(&g_sem);
@@ -871,7 +912,7 @@ LONG esb_unsnap_window(struct Window *win)
     } else {
         rc = es_registry_restore(&g_registry, win, &s.box, &out);
         if (rc == ES_OK) {
-            esb_change_box(win, &s.box, &out, 1);
+            esb_glide_box(win, &s.box, &out, 1);
         }
     }
     ReleaseSemaphore(&g_sem);
@@ -1060,6 +1101,12 @@ LONG esb_set_options(const struct TagItem *tags)
             break;
         case ES_OPT_Preview:
             cfg.preview = v ? 1 : 0;
+            break;
+        case ES_OPT_CycleSizes:
+            cfg.cycle_sizes = v ? 1 : 0;
+            break;
+        case ES_OPT_Animate:
+            cfg.animate = v ? 1 : 0;
             break;
         case ES_OPT_BypassQual:
             if (v < ES_QUAL_NONE || v > ES_QUAL_SHIFT) {

@@ -38,6 +38,7 @@ typedef struct ESConfig {
     int panel_margin;        /* breathing room around detected panels   */
     int preview;             /* show the zone preview frame             */
     int cycle_sizes;         /* same hotkey again = next width          */
+    int animate;             /* glide into the zone instead of jumping  */
     int bypass_qual;         /* ES_QUAL_*                               */
 } ESConfig;
 

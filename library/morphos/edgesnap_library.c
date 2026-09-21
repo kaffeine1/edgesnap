@@ -35,11 +35,12 @@
 
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  2
-#define ES_LIB_REVISION 12
-#define ES_LIB_IDSTRING "edgesnap.library 2.12 (18.9.2026) Michele Dipace\r\n"
+#define ES_LIB_REVISION 13
+#define ES_LIB_IDSTRING "edgesnap.library 2.13 (21.9.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
+struct DosLibrary *DOSBase;   /* Delay, for the glide's tick */
 
 struct EdgeSnapBase {
     struct Library lib;
@@ -110,7 +111,12 @@ static ULONG LibOpen(void)
         /* First client: what the body needs, then the body. */
         IntuitionBase = (struct IntuitionBase *)
             OpenLibrary("intuition.library", 36);
-        if (IntuitionBase == NULL || !esb_init()) {
+        DOSBase = (struct DosLibrary *)OpenLibrary("dos.library", 36);
+        if (IntuitionBase == NULL || DOSBase == NULL || !esb_init()) {
+            if (DOSBase != NULL) {
+                CloseLibrary((struct Library *)DOSBase);
+                DOSBase = NULL;
+            }
             if (IntuitionBase != NULL) {
                 CloseLibrary((struct Library *)IntuitionBase);
                 IntuitionBase = NULL;
@@ -135,6 +141,10 @@ static BPTR LibExpungeBase(struct EdgeSnapBase *esb)
     if (IntuitionBase != NULL) {
         CloseLibrary((struct Library *)IntuitionBase);
         IntuitionBase = NULL;
+    }
+    if (DOSBase != NULL) {
+        CloseLibrary((struct Library *)DOSBase);
+        DOSBase = NULL;
     }
     seglist = esb->segList;
     Remove(&esb->lib.lib_Node);

@@ -200,8 +200,64 @@ static void test_centre_honours_area_and_limits(void)
     CHECK(es_zone_name(ES_ZONE_CENTRE)[0] == 'c');
 }
 
+static void test_glide_moves_and_lands(void)
+{
+    ESRect from, to, r, prev;
+    int steps, i;
+
+    from.x = 0; from.y = 20; from.w = 400; from.h = 300;
+    to.x = 512; to.y = 20; to.w = 512; to.h = 673;
+    steps = es_glide_steps(&from, &to);
+    CHECK(steps >= 4);                        /* a trip worth showing */
+
+    /* every step moves towards the target and the last one IS it */
+    prev = from;
+    for (i = 1; i <= steps; i++) {
+        es_glide_rect(&from, &to, i, steps, &r);
+        CHECK(r.x >= prev.x);
+        CHECK(r.w >= prev.w);
+        CHECK(r.x <= to.x);
+        CHECK(r.w <= to.w);
+        prev = r;
+    }
+    CHECK(r.x == to.x && r.y == to.y && r.w == to.w && r.h == to.h);
+
+    /* it eases out: the first half covers more than half the distance */
+    es_glide_rect(&from, &to, steps / 2, steps, &r);
+    CHECK(r.x - from.x > (to.x - from.x) / 2);
+
+    /* out of range asks for the ends */
+    es_glide_rect(&from, &to, 0, steps, &r);
+    CHECK(r.x == from.x && r.w == from.w);
+    es_glide_rect(&from, &to, steps + 3, steps, &r);
+    CHECK(r.x == to.x && r.w == to.w);
+}
+
+static void test_glide_declines_when_it_should(void)
+{
+    ESRect from, to;
+
+    /* a move nobody would see */
+    from.x = 100; from.y = 100; from.w = 300; from.h = 200;
+    to = from;
+    to.x = 110;
+    CHECK(es_glide_steps(&from, &to) == 0);
+
+    /* a window too large to redraw eight times */
+    from.x = 0; from.y = 0; from.w = 1900; from.h = 1000;
+    to.x = 0; to.y = 0; to.w = 950; to.h = 1000;
+    CHECK(es_glide_steps(&from, &to) == 0);
+
+    /* the long trip of an ordinary window earns the most steps */
+    from.x = 0; from.y = 24; from.w = 400; from.h = 300;
+    to.x = 1500; to.y = 24; to.w = 400; to.h = 300;
+    CHECK(es_glide_steps(&from, &to) == 8);
+}
+
 int main(void)
 {
+    test_glide_moves_and_lands();
+    test_glide_declines_when_it_should();
     test_centre_keeps_the_size();
     test_centre_honours_area_and_limits();
     test_side_zones_cycle_widths();

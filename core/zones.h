@@ -101,6 +101,28 @@ void es_centre_rect(const ESRect *usable, const ESRect *win,
  */
 void es_order_by_growth(const long *delta, int n, int *order);
 
+/*
+ * The glide (animated snap). A window that jumps to its zone tells the
+ * eye nothing about where it came from; a few boxes on the way do. The
+ * shape is decided here so it can be tested on the host, while the
+ * waiting and the drawing stay on the Amiga side.
+ *
+ * es_glide_steps: how many boxes the trip from `from` to `to` deserves,
+ * and 0 when it deserves none. A move nobody would see as motion, or a
+ * window so large that every step costs a full redraw of it, is better
+ * served by the honest jump.
+ *
+ * es_glide_rect: box number `step` of `steps` (1..steps-1; `steps`
+ * gives `to` exactly). The pace eases out, fast at first and gentle at
+ * the end, which reads as "placed" rather than "dropped".
+ */
+#define ES_GLIDE_MIN_PX   48   /* below this, a jump is honest       */
+#define ES_GLIDE_MAX_AREA (1280 * 800)  /* above this, redraw wins   */
+
+int es_glide_steps(const ESRect *from, const ESRect *to);
+void es_glide_rect(const ESRect *from, const ESRect *to, int step,
+                   int steps, ESRect *out);
+
 /* Static human-readable name, for logs. */
 const char *es_zone_name(int zone);
 

@@ -163,6 +163,75 @@ void es_fit_zone_rect_step(int zone, const ESRect *u, int step,
     }
 }
 
+/* ------------------------------------------------------- the glide */
+
+static int es_abs_i(int v)
+{
+    return v < 0 ? -v : v;
+}
+
+int es_glide_steps(const ESRect *from, const ESRect *to)
+{
+    int travel, grow_w, grow_h, reach;
+    long area;
+
+    travel = es_abs_i(to->x - from->x) + es_abs_i(to->y - from->y);
+    grow_w = es_abs_i(to->w - from->w);
+    grow_h = es_abs_i(to->h - from->h);
+    reach = travel + grow_w + grow_h;
+    if (reach < ES_GLIDE_MIN_PX) {
+        return 0;                  /* too short to read as motion */
+    }
+    /* Every step asks the application to redraw itself, so the bigger
+     * of the two boxes decides whether it can afford to. */
+    area = (long)to->w * to->h;
+    if ((long)from->w * from->h > area) {
+        area = (long)from->w * from->h;
+    }
+    if (area > (long)ES_GLIDE_MAX_AREA) {
+        return 0;
+    }
+    /* Long trips earn a step or two more, but the whole glide stays
+     * inside a fifth of a second: past that it is in the way. */
+    if (reach > 1200) {
+        return 8;
+    }
+    if (reach > 400) {
+        return 6;
+    }
+    return 4;
+}
+
+void es_glide_rect(const ESRect *from, const ESRect *to, int step,
+                   int steps, ESRect *out)
+{
+    long num, den, rest;
+
+    if (steps < 1 || step >= steps) {
+        *out = *to;
+        return;
+    }
+    if (step <= 0) {
+        *out = *from;
+        return;
+    }
+    /* Ease out: 1 - (1 - t)^2 with t = step/steps, in whole numbers so
+     * that the last step lands exactly on the target. */
+    rest = (long)(steps - step);
+    den = (long)steps * steps;
+    num = den - rest * rest;
+    out->x = from->x + (int)(((long)(to->x - from->x) * num) / den);
+    out->y = from->y + (int)(((long)(to->y - from->y) * num) / den);
+    out->w = from->w + (int)(((long)(to->w - from->w) * num) / den);
+    out->h = from->h + (int)(((long)(to->h - from->h) * num) / den);
+    if (out->w < 1) {
+        out->w = 1;
+    }
+    if (out->h < 1) {
+        out->h = 1;
+    }
+}
+
 const char *es_zone_name(int zone)
 {
     switch (zone) {
