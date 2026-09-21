@@ -263,7 +263,8 @@ ULONG ESnap_QueryCapabilities(void);
 
 /*
  * Snap win to zone: ES_ZONE_LEFT.._MAX, or ES_ZONE_CENTRE from library
- * 2.9, which is the window's own size in the middle of the usable area.
+ * 2.9, which is the window's own size in the middle of the usable area,
+ * cut down to that area when it is larger than it.
  * Records pre-snap geometry for ESnap_UnsnapWindow. Honors the window's
  * own size limits (the result stays anchored to the zone's outer edge
  * when clamped; a centred window stays centred).
