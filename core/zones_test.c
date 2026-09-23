@@ -208,7 +208,7 @@ static void test_glide_moves_and_lands(void)
     from.x = 0; from.y = 20; from.w = 400; from.h = 300;
     to.x = 512; to.y = 20; to.w = 512; to.h = 673;
     steps = es_glide_steps(&from, &to);
-    CHECK(steps >= 4);                        /* a trip worth showing */
+    CHECK(steps >= 3);                        /* a trip worth showing */
 
     /* every step moves towards the target and the last one IS it */
     prev = from;
@@ -248,10 +248,11 @@ static void test_glide_declines_when_it_should(void)
     to.x = 0; to.y = 0; to.w = 950; to.h = 1000;
     CHECK(es_glide_steps(&from, &to) == 0);
 
-    /* the long trip of an ordinary window earns the most steps */
+    /* the long trip of an ordinary window earns the most steps, and
+     * still few: every one of them costs the application a redraw */
     from.x = 0; from.y = 24; from.w = 400; from.h = 300;
     to.x = 1500; to.y = 24; to.w = 400; to.h = 300;
-    CHECK(es_glide_steps(&from, &to) == 8);
+    CHECK(es_glide_steps(&from, &to) == 5);
 }
 
 int main(void)

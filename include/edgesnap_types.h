@@ -84,6 +84,9 @@
  *       the application to redraw itself, and only for snapping and
  *       putting back, since a client that places windows wants them
  *       placed, not shown moving.
+ *   2.14 - the glide as the first real machine asked for it: fewer
+ *       boxes, and each one waited for until Intuition has taken it,
+ *       so a window that grows glides too instead of jumping.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

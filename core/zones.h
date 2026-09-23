@@ -107,8 +107,8 @@ void es_order_by_growth(const long *delta, int n, int *order);
  * shape is decided here so it can be tested on the host, while the
  * waiting and the drawing stay on the Amiga side.
  *
- * es_glide_steps: how many boxes the trip from `from` to `to` deserves,
- * and 0 when it deserves none. A move nobody would see as motion, or a
+ * es_glide_steps: how many boxes the trip from `from` to `to` deserves
+ * (three to five), and 0 when it deserves none. A move nobody would see as motion, or a
  * window so large that every step costs a full redraw of it, is better
  * served by the honest jump.
  *

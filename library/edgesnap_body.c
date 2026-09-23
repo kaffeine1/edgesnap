@@ -704,6 +704,32 @@ static void esb_refresh_wanderer(struct Window *win, const ESRect *box)
 static void esb_change_box(struct Window *win, const ESRect *from,
                            const ESRect *to, int may_raise);
 
+/*
+ * One box of a glide. ChangeWindowBox() only asks: Intuition installs
+ * the box later, and a request that arrives while the previous one is
+ * still pending may be folded into it, which turns a glide into a jump.
+ * That is what the first real MorphOS machine showed: a window that
+ * shrank glided, a window that grew, and so had to redraw what it
+ * gained at every box, jumped. So every box is shown for a tick and,
+ * if Intuition has not taken it yet, waited for a little longer. The
+ * test is "the box changed", not "the box is what I asked for": a
+ * console rounds its size to its cells and would never match.
+ */
+static void esb_glide_step(struct Window *win, const ESRect *was,
+                           const ESRect *box)
+{
+    int i;
+
+    ChangeWindowBox(win, box->x, box->y, box->w, box->h);
+    for (i = 0; i < 3; i++) {
+        Delay(1);
+        if (win->LeftEdge != was->x || win->TopEdge != was->y ||
+            win->Width != was->w || win->Height != was->h) {
+            return;
+        }
+    }
+}
+
 static void esb_glide_box(struct Window *win, const ESRect *from,
                           const ESRect *to, int may_raise)
 {
@@ -720,9 +746,13 @@ static void esb_glide_box(struct Window *win, const ESRect *from,
         ESRect r;
 
         es_glide_rect(from, to, i, steps, &r);
-        ChangeWindowBox(win, r.x, r.y, r.w, r.h);
-        Delay(1);                  /* one tick, about 20 ms a step */
-        at = r;
+        esb_glide_step(win, &at, &r);
+        /* where it is, not where it was asked to be: the next box and
+         * the AROS repaint dance both reason from here */
+        at.x = win->LeftEdge;
+        at.y = win->TopEdge;
+        at.w = win->Width;
+        at.h = win->Height;
     }
     esb_change_box(win, &at, to, may_raise);
 }

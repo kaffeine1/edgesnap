@@ -191,15 +191,17 @@ int es_glide_steps(const ESRect *from, const ESRect *to)
     if (area > (long)ES_GLIDE_MAX_AREA) {
         return 0;
     }
-    /* Long trips earn a step or two more, but the whole glide stays
-     * inside a fifth of a second: past that it is in the way. */
+    /* Long trips earn a box more, but few in all: on the first real
+     * machine eight boxes looked right and felt slow, because every box
+     * waits for the application to redraw, and that is the cost the
+     * emulator never shows. */
     if (reach > 1200) {
-        return 8;
+        return 5;
     }
     if (reach > 400) {
-        return 6;
+        return 4;
     }
-    return 4;
+    return 3;
 }
 
 void es_glide_rect(const ESRect *from, const ESRect *to, int step,
