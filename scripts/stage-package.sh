@@ -144,6 +144,9 @@ cat > "$DEST/EdgeSnap.prefs" <<'EOF'
 # PANELMARGIN breathing room around a detected dock (default 8)
 # MARGINLEFT/TOP/RIGHT/BOTTOM  extra margins of your own (default 0)
 # BYPASSQUAL  hold to drag past the zones: none | alt | ctrl | shift
+# CYCLESIZES  the same side hotkey again gives two thirds, then one
+#             third, then a half again: yes | no
+# ANIMATE     glide into the zone instead of jumping: yes | no
 
 #ZONES=all
 #EDGEPX=12
@@ -151,4 +154,6 @@ cat > "$DEST/EdgeSnap.prefs" <<'EOF'
 #PANELDETECT=yes
 #PANELMARGIN=8
 #BYPASSQUAL=alt
+#CYCLESIZES=yes
+#ANIMATE=yes
 EOF

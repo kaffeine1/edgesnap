@@ -87,6 +87,8 @@
  *   2.14 - the glide as the first real machine asked for it: fewer
  *       boxes, and each one waited for until Intuition has taken it,
  *       so a window that grows glides too instead of jumping.
+ *   2.15 - the glide is on by default, having been judged on real
+ *       hardware: ES_OPT_Animate FALSE turns it off.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

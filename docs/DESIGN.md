@@ -941,9 +941,16 @@ of this verification.
   already has them, the palette does not; a second row for them is the
   natural next step once the first one has been used for a while.
 
-- **Animated snap (done, library 2.13, 2026-09-21; still to be measured
-  on real hardware).** `ANIMATE` in the settings table, off as it
-  ships, and `ES_OPT_Animate` for a client that wants to set it. The
+- **Animated snap (done, library 2.13, 2026-09-21; on by default from
+  2.15, 2026-09-23, after the real-hardware judgement).** `ANIMATE` in
+  the settings table and `ES_OPT_Animate` for a client that wants to
+  set it. On a real MorphOS machine the first cut showed two things the
+  emulator had hidden: a window that grew jumped instead of gliding,
+  because a ChangeWindowBox that arrives while the previous one is
+  pending can be folded into it, and eight boxes felt slow, because
+  each waits for the application's redraw. So 2.14 waits for Intuition
+  to take every box and uses three to five of them, and with that the
+  glide was judged good enough to be the default. The
   shape lives in `core/zones.c` so the host tests can hold it: four to
   eight boxes, eased out, a whole glide inside a fifth of a second,
   and `es_glide_steps()` returns 0 for a move too short to read as
