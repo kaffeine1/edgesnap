@@ -89,6 +89,10 @@
  *       so a window that grows glides too instead of jumping.
  *   2.15 - the glide is on by default, having been judged on real
  *       hardware: ES_OPT_Animate FALSE turns it off.
+ *   2.16 - QueryDividerAt, asked about a point on a seam, reports no
+ *       seam when another window covers the seam there: it is not
+ *       there to be grabbed. Asked from further away it still names
+ *       the nearest seam, covered in places or not.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

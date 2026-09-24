@@ -230,7 +230,10 @@ LONG ESnap_QueryDivider(ULONG thickness, struct ESnapDivider *divider);
  * stacked ones has a vertical seam moving all three and a horizontal
  * seam moving only the two, and four quadrants have one of each. Pass
  * the pointer position in screen coordinates; present is 0 when
- * nothing is within reach.
+ * nothing is within reach. From 2.16 a point ON a seam, within a few
+ * pixels of its strip, also answers whether the seam can be grabbed
+ * there: when another window covers it at that point, present is 0.
+ * Asked from further away, the nearest seam is named as before.
  *   ES_OK / ES_ERR_BAD_ARGS.
  */
 LONG ESnap_QueryDividerAt(ULONG thickness, LONG x, LONG y,

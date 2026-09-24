@@ -1378,6 +1378,79 @@ static int esb_seam_limits(ESSeam *seam)
     return seam->min_pos <= seam->max_pos;
 }
 
+/*
+ * Is the seam really at (x, y), a point on its strip, or is another
+ * window lying on top of it there? The registry knows where the
+ * snapped windows are, not what covers them, and without this the
+ * seam lit up over a window laid on top of a snapped pair (first real
+ * MorphOS machine, 2026-09-23), where a click would have resized the
+ * windows below.
+ *
+ * The screen's layers are walked front to back, read as the rest of
+ * the body reads them, without layers.library: the first layer that
+ * holds the point, and belongs to a window, decides. One of the seam's own windows, or a
+ * backdrop, since the gap between them can show the desktop: the seam
+ * is there. A frontend's own windows (the handle itself is a window on
+ * MorphOS) are passed over, as are layers with no window. Anything
+ * else covers it.
+ */
+/* How near the strip a point counts as on the seam: where a frontend
+ * lights it (three pixels), and one more. */
+#define ESB_SEAM_TOUCH_PX 4
+
+static int esb_seam_visible_at(const ESSeam *seam, int x, int y)
+{
+    struct Window *w0;
+    struct Screen *scr;
+    struct Layer *l;
+    ULONG ilock;
+    int visible = 1, i;
+
+    if (seam->a.n < 1) {
+        return 1;
+    }
+    w0 = (struct Window *)seam->a.ref[0];
+    ObtainSemaphore(&g_sem);       /* the ignored list; then IBase, as elsewhere */
+    ilock = LockIBase(0);
+    scr = w0->WScreen;
+    for (l = (scr != NULL) ? scr->LayerInfo.top_layer : NULL; l != NULL;
+         l = l->back) {
+        struct Window *lw;
+        int ours = 0;
+
+        if (x < l->bounds.MinX || x > l->bounds.MaxX ||
+            y < l->bounds.MinY || y > l->bounds.MaxY) {
+            continue;
+        }
+        /* Whose layer? Not l->Window: AmigaOS 4 leaves it empty, and
+         * the walk then passed over every window and found the seam
+         * uncovered. Every window names its own layer in WLayer. */
+        for (lw = scr->FirstWindow; lw != NULL; lw = lw->NextWindow) {
+            if (lw->WLayer == l) {
+                break;
+            }
+        }
+        if (lw == NULL || esb_is_ignored(lw)) {
+            continue;
+        }
+        for (i = 0; i < seam->a.n; i++) {
+            if ((struct Window *)seam->a.ref[i] == lw) {
+                ours = 1;
+            }
+        }
+        for (i = 0; i < seam->b.n; i++) {
+            if ((struct Window *)seam->b.ref[i] == lw) {
+                ours = 1;
+            }
+        }
+        visible = ours || (lw->Flags & WFLG_BACKDROP) != 0;
+        break;
+    }
+    UnlockIBase(ilock);
+    ReleaseSemaphore(&g_sem);
+    return visible;
+}
+
 LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
                           struct ESnapDivider *out)
 {
@@ -1399,8 +1472,38 @@ LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
             best_d = d;
         }
     }
+    /*
+     * Asked about a point ON the seam (within ESB_SEAM_TOUCH_PX of its
+     * strip), the answer also says whether the seam is there to be
+     * grabbed: the point of the strip nearest to the one asked about
+     * must not lie under another window. Asked from further away, the
+     * question is only which seam is nearest, and a window covering
+     * some other part of it changes nothing.
+     */
     if (best >= 0 && esb_seam_limits(&seams[best])) {
-        esb_seam_report(&seams[best], out);
+        int visible = 1;
+
+        if (best_d <= ESB_SEAM_TOUCH_PX) {
+            const ESRect *r = &seams[best].rect;
+            int cx = (int)x, cy = (int)y;
+
+            if (cx < r->x) {
+                cx = r->x;
+            } else if (cx > r->x + r->w - 1) {
+                cx = r->x + r->w - 1;
+            }
+            if (cy < r->y) {
+                cy = r->y;
+            } else if (cy > r->y + r->h - 1) {
+                cy = r->y + r->h - 1;
+            }
+            visible = esb_seam_visible_at(&seams[best], cx, cy);
+        }
+        if (visible) {
+            esb_seam_report(&seams[best], out);
+        } else {
+            esb_no_seam(out);
+        }
     } else {
         esb_no_seam(out);
     }

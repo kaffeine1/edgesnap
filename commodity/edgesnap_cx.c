@@ -1812,13 +1812,47 @@ static void spike_divider_sync(void);
  */
 static void spike_divider_hover(void)
 {
+    static ULONG moves_since_ask;
     int d;
 
-    if (g_divider == NULL || g_divider_dragging) {
+    if (g_divider_dragging) {
+        return;
+    }
+    if (g_divider == NULL) {
+        /*
+         * No handle: a seam that was covered where the pointer stood
+         * when the library was last asked, or a pair that has only
+         * just formed. Ask again every few moves, as the AROS line
+         * does, or the handle stays away until the next snap.
+         */
+        if (++moves_since_ask >= 6) {
+            moves_since_ask = 0;
+            spike_divider_sync();
+        }
         return;
     }
     d = spike_divider_distance();
     if (!g_divider_hot && d <= ES_SEAM_SHOW_PX) {
+        /*
+         * Ask the library here, before lighting: the pointer may be on
+         * a stretch of the seam that another window covers. The handle
+         * lies behind that window now, so nothing would show over it,
+         * but it would still light up above and below it, answering a
+         * pointer that is not on the seam at all.
+         */
+        struct Screen *ps = LockPubScreen(NULL);
+        struct ESnapDivider q;
+        LONG px = 0, py = 0;
+
+        if (ps != NULL) {
+            px = (LONG)ps->MouseX;
+            py = (LONG)ps->MouseY;
+            UnlockPubScreen(NULL, ps);
+        }
+        if (ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, px, py, &q) !=
+                ES_OK || !q.present) {
+            return;
+        }
         spike_divider_paint();
         g_divider_hot = 1;
         return;
@@ -1828,6 +1862,41 @@ static void spike_divider_hover(void)
          * two windows underneath draw themselves back. */
         spike_divider_close();
         spike_divider_sync();
+    }
+}
+
+/*
+ * The handle's depth: directly in front of the higher of the pair's
+ * two windows, NOT in front of everything. A window laid over the
+ * pair then stays over the handle as well, so the layers clip the
+ * handle's paint and a click there reaches that window. With
+ * WindowToFront the invisible strip sat on top of every window, lit
+ * up over one that covered the pair and took its clicks, resizing the
+ * windows below (first real MorphOS machine, 2026-09-23). The two
+ * windows were validated by the library a moment ago.
+ */
+static void spike_divider_depth(const struct ESnapDivider *d)
+{
+    struct Window *front = d->windowA;
+    struct Layer *l;
+
+    if (g_divider == NULL) {
+        return;
+    }
+    if (front == NULL || front->WLayer == NULL) {
+        front = d->windowB;
+    } else if (d->windowB != NULL && d->windowB->WLayer != NULL) {
+        for (l = front->WLayer->front; l != NULL; l = l->front) {
+            if (l == d->windowB->WLayer) {
+                front = d->windowB;     /* B lies in front of A */
+                break;
+            }
+        }
+    }
+    if (front != NULL) {
+        MoveWindowInFrontOf(g_divider, front);
+    } else {
+        WindowToFront(g_divider);
     }
 }
 
@@ -1873,7 +1942,7 @@ static void spike_divider_sync(void)
         }
     }
     if (g_divider != NULL) {
-        WindowToFront(g_divider);
+        spike_divider_depth(&d);
         g_divider_vertical = (int)d.vertical;
         return;
     }
@@ -1933,7 +2002,7 @@ static void spike_divider_sync(void)
         return;
     }
     spike_log("edgesnap: divider handle open\n");
-    WindowToFront(g_divider);
+    spike_divider_depth(&d);
     g_divider_vertical = d.vertical;
     g_divider_line = (int)d.position;
     g_divider_hot = 0;          /* opens invisible: see the note above */
@@ -2237,10 +2306,83 @@ static struct {
     struct Screen *scr;
 } g_seam;
 
+/* Is this seam open at (x, y), a point on its strip? */
+static int spike_seam_open_at(int x, int y)
+{
+    struct ESnapDivider d;
+
+    return ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, (LONG)x, (LONG)y,
+                                         &d) == ES_OK &&
+           d.present && (int)d.position == g_seam.line &&
+           (int)d.vertical == g_seam.vertical;
+}
+
+/*
+ * The stretch of the seam the line may be drawn on: the run around the
+ * pointer that no other window covers. The line goes straight onto the
+ * screen, past every layer, so drawn along the whole strip it crossed
+ * a window laid over part of the pair (2026-09-24). What is covered is
+ * the library's to say, one point at a time, because it knows every
+ * window on the seam; eight pixels a step, asked once per lighting.
+ */
+static void spike_seam_visible_run(ESRect *out)
+{
+    const ESRect *s = &g_seam.strip;
+    int along0, along1, at, lo, hi, cross;
+
+    *out = *s;
+    if (g_seam.scr == NULL) {
+        return;
+    }
+    if (g_seam.vertical) {
+        along0 = s->y;
+        along1 = s->y + s->h - 1;
+        at = (int)g_seam.scr->MouseY;
+        cross = s->x + s->w / 2;
+    } else {
+        along0 = s->x;
+        along1 = s->x + s->w - 1;
+        at = (int)g_seam.scr->MouseX;
+        cross = s->y + s->h / 2;
+    }
+    if (at < along0) {
+        at = along0;
+    } else if (at > along1) {
+        at = along1;
+    }
+#define ES_SEAM_OPEN(a) (g_seam.vertical ? spike_seam_open_at(cross, (a)) \
+                                         : spike_seam_open_at((a), cross))
+    lo = at;
+    while (lo - 8 >= along0 && ES_SEAM_OPEN(lo - 8)) {
+        lo -= 8;
+    }
+    if (lo - 8 < along0 && lo != along0 && ES_SEAM_OPEN(along0)) {
+        lo = along0;
+    }
+    hi = at;
+    while (hi + 8 <= along1 && ES_SEAM_OPEN(hi + 8)) {
+        hi += 8;
+    }
+    if (hi + 8 > along1 && hi != along1 && ES_SEAM_OPEN(along1)) {
+        hi = along1;
+    }
+#undef ES_SEAM_OPEN
+    if (g_seam.vertical) {
+        out->y = lo;
+        out->h = hi - lo + 1;
+    } else {
+        out->x = lo;
+        out->w = hi - lo + 1;
+    }
+}
+
 static void spike_seam_light(int on)
 {
     if (on && !g_seam.hot) {
-        spike_sl_show(&g_seam.strip);
+        ESRect run;
+
+        spike_seam_visible_run(&run);
+        spike_sl_show(&run);
         g_seam.hot = 1;
         g_shared.seam_hot = 1;
     } else if (!on && g_seam.hot) {
@@ -2293,7 +2435,9 @@ static void spike_divider_hover(void)
     if (g_divider_dragging) {
         return;
     }
-    if (!g_seam.hot && ++moves_since_ask >= 6) {
+    /* Lit, the answer is checked more often: the pointer may slide
+     * along the seam onto a part another window covers. */
+    if (++moves_since_ask >= (g_seam.hot ? 3u : 6u)) {
         moves_since_ask = 0;
         spike_seam_query();
     }
@@ -2302,7 +2446,18 @@ static void spike_divider_hover(void)
     }
     d = spike_divider_distance();
     if (!g_seam.hot && d <= ES_SEAM_SHOW_PX) {
-        spike_seam_light(1);
+        /*
+         * Ask once more, here, before lighting. The answer kept from
+         * a few moves ago was given where the pointer was then, and
+         * only the library can say whether another window lies on the
+         * seam at this point: the line is drawn straight onto the
+         * screen and would cross that window (2026-09-23).
+         */
+        spike_seam_query();
+        if (g_seam.present &&
+            spike_divider_distance() <= ES_SEAM_SHOW_PX) {
+            spike_seam_light(1);
+        }
     } else if (g_seam.hot && d >= ES_SEAM_HIDE_PX) {
         spike_seam_light(0);
     }
@@ -2933,9 +3088,12 @@ static void spike_config_reload(void)
               "corner 1/%d, drag %d px,\n",
               (unsigned)g_cfg.engine.zones_mask, g_cfg.engine.edge_px,
               g_cfg.engine.corner_div, g_cfg.engine.drag_min_px);
-    spike_out("edgesnap:        preview %s, panel detect %s (margin %d)\n",
+    spike_out("edgesnap:        preview %s, panel detect %s (margin %d), "
+              "width cycle %s, glide %s\n",
               g_cfg.preview ? "on" : "off",
-              g_cfg.panel_detect ? "on" : "off", g_cfg.panel_margin);
+              g_cfg.panel_detect ? "on" : "off", g_cfg.panel_margin,
+              g_cfg.cycle_sizes ? "on" : "off",
+              g_cfg.animate ? "on" : "off");
 }
 
 /* ------------------------------------------------------------ commodity */
