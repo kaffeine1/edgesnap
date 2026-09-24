@@ -19,8 +19,18 @@
 # The tooltypes come from make-icon.py, so every icon of the commodity
 # lists the same settings.
 #
+# The package drawer is the one icon the two systems share: AmigaOS 4
+# and MorphOS travel in the same archive, and each shows only some
+# formats (AmigaOS 4 no PNG, MorphOS no ARGB). So the drawer icon
+# carries Carlo's blue drawer twice inside one ICON form: as ARGB for
+# AmigaOS 4 and as 256-colour IMAG images, the ColorIcon form MorphOS
+# and AmigaOS 3.5 and later read, quantised from the same picture. It
+# becomes a drawer on the way: type WBDRAWER and the 56 bytes of
+# DrawerData, without which Workbench and Ambient show no drawer at all.
+#
 #   python3 scripts/make-system-icons.py   -> assets/os4/*.info,
-#                                              assets/mos/*.info
+#                                              assets/mos/*.info,
+#                                              assets/EdgeSnapDrawer.info
 import importlib.util
 import os
 import struct
@@ -85,6 +95,106 @@ def mos(src, dst, preset):
           (os.path.relpath(dst, ROOT), len(out), len(tooltypes)))
 
 
+def packbits(data):
+    """ByteRun1, which is what an IMAG's RLE is at eight bits a pixel."""
+    out = bytearray()
+    i, n = 0, len(data)
+    while i < n:
+        run = 1
+        while i + run < n and run < 128 and data[i + run] == data[i]:
+            run += 1
+        if run >= 2:
+            out += bytes([257 - run, data[i]])
+            i += run
+            continue
+        start = i
+        i += 1
+        while i < n and i - start < 128:
+            if i + 1 < n and data[i] == data[i + 1]:
+                break
+            i += 1
+        out += bytes([i - start - 1]) + data[start:i]
+    return bytes(out)
+
+
+def imag(argb, size):
+    """An IMAG chunk body: 255 colours plus a transparent index 0."""
+    from PIL import Image
+    im = Image.frombytes("RGBA", size, argb, "raw", "ARGB")
+    alpha = im.getchannel("A")
+    q = im.convert("RGB").quantize(colors=255, method=Image.Quantize.MEDIANCUT)
+    pal = q.getpalette()[:255 * 3]
+    pal += [0] * (255 * 3 - len(pal))
+    pix = bytearray(p + 1 for p in q.tobytes())
+    for k, a in enumerate(alpha.tobytes()):
+        if a < 128:
+            pix[k] = 0
+    body = packbits(bytes(pix))
+    palette = bytes([0, 0, 0] + pal)                   # index 0: transparent
+    head = struct.pack(">BBBBBBHH", 0, 255, 0x03, 1, 0, 8,
+                       len(body) - 1, len(palette) - 1)
+    return head + body + palette
+
+
+def drawer(src, dst):
+    blob = bytearray(open(src, "rb").read())
+    at = blob.find(b"FORM")
+    head, form = blob[:at], blob[at:]
+    head[48] = 2                                     # do_Type: WBDRAWER
+    head[50:58] = struct.pack(">II", 0, 0)           # no tool, no tooltypes
+    head[66:70] = struct.pack(">I", 1)               # do_DrawerData present
+    head[74:78] = struct.pack(">I", 0)               # a drawer runs nothing
+    # The classic part as Carlo left it, with the DrawerData after the
+    # DiskObject and in front of the images, where a reader expects it.
+    # A tool icon carries no strings after its images, so none follow.
+    head = head[:78] + ICON.drawer_data() + head[78:]
+
+    size = struct.unpack(">I", form[4:8])[0]
+    pos, end = 12, 8 + size
+    face, argbs, others = None, [], []
+    while pos + 8 <= end:
+        cid = bytes(form[pos:pos + 4])
+        ln = struct.unpack(">I", form[pos + 4:pos + 8])[0]
+        body = bytes(form[pos + 8:pos + 8 + ln])
+        if cid == b"FACE":
+            face = bytearray(body)
+        elif cid == b"ARGB":
+            argbs.append(body)
+        elif cid != b"IMAG":
+            others.append((cid, body))
+        pos += 8 + ln + (ln & 1)
+    w, h = face[0] + 1, face[1] + 1
+    face[4:6] = struct.pack(">H", 256 * 3 - 1)       # the IMAG palettes
+
+    def piece(cid, body):
+        return cid + struct.pack(">I", len(body)) + body + (b"\0" if len(body) & 1 else b"")
+
+    # The order is AmigaOS 4's, found by trying every arrangement in its
+    # Workbench (2026-09-24): Carlo's FACE carries the flag value 2, and
+    # with it set the ARGB images must follow FACE directly. IMAG first
+    # and the icon is dropped; the flag cleared and ARGB present and it
+    # is dropped too; the flag cleared and IMAG alone, it shows. So FACE
+    # as he left it, his ARGB, and the IMAG copies after them, where a
+    # reader that knows no ARGB finds them.
+    inner = b"ICON" + piece(b"FACE", bytes(face))
+    for body in argbs:                               # ARGB for AmigaOS 4
+        inner += piece(b"ARGB", body)
+    for body in argbs:                               # IMAG for the others
+        inner += piece(b"IMAG", imag(zlib.decompress(body[10:]), (w, h)))
+    for cid, body in others:
+        inner += piece(cid, body)
+    # Revision 1 in the gadget's UserData, as Carlo's icon has it, tells
+    # a reader that a drawer's classic part ends with dd_Flags and
+    # dd_ViewModes (AROS's diskobjio.c, ProcessNewDrawerData): without
+    # these six bytes it takes the start of the ICON form for them and
+    # the colour images are lost. Zero is "as the user's defaults".
+    head += struct.pack(">IH", 0, 0)
+    out = bytes(head) + b"FORM" + struct.pack(">I", len(inner)) + inner
+    open(dst, "wb").write(out)
+    print("%-28s %5d bytes, drawer, ARGB and IMAG" %
+          (os.path.relpath(dst, ROOT), len(out)))
+
+
 def main():
     for system in ("os4", "mos"):
         os.makedirs(os.path.join(ROOT, "assets", system), exist_ok=True)
@@ -96,6 +206,8 @@ def main():
         os.path.join(ROOT, "assets/mos/EdgeSnap.info"), "commodity")
     mos(os.path.join(ROOT, "assets/mos/src/EdgeSnapPrefs.png"),
         os.path.join(ROOT, "assets/mos/EdgeSnapPrefs.info"), "prefs")
+    drawer(os.path.join(ROOT, "assets/os4/src/EdgeSnapDrawer.info"),
+           os.path.join(ROOT, "assets/EdgeSnapDrawer.info"))
 
 
 if __name__ == "__main__":
