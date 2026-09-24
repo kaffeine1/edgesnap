@@ -32,24 +32,26 @@ cp "$ROOT/build/os4/esnaptest"         "$DEST/os4/esnaptest"
 if [ -f "$ROOT/build/os4/EdgeSnapPrefs" ]; then
     cp "$ROOT/build/os4/EdgeSnapPrefs" "$DEST/os4/EdgeSnapPrefs"
     # (infos) in the installer copies the icon along with the program,
-    # so the icon has to travel next to it.
-    cp "$ROOT/assets/EdgeSnapPrefs.info" "$DEST/os4/EdgeSnapPrefs.info"
+    # so the icon has to travel next to it. The icons of the two
+    # programs are Carlo Spadoni's, one set per system
+    # (scripts/make-system-icons.py).
+    cp "$ROOT/assets/os4/EdgeSnapPrefs.info" "$DEST/os4/EdgeSnapPrefs.info"
 fi
 # The commodity's own Workbench icon. The installer does not use it -
 # it writes a line into S:User-Startup - but the manual tells anyone
 # who prefers SYS:WBStartup to drop the program AND this icon in there,
 # and a package should carry what its documentation promises. The icon
 # holds DONOTWAIT and every setting as a commented tooltype.
-cp "$ROOT/assets/EdgeSnap.info" "$DEST/os4/EdgeSnap.info"
+cp "$ROOT/assets/os4/EdgeSnap.info" "$DEST/os4/EdgeSnap.info"
 if [ -f "$ROOT/build/morphos/EdgeSnap" ]; then
     cp "$ROOT/build/morphos/EdgeSnap"         "$DEST/mos/EdgeSnap"
     cp "$ROOT/build/morphos/edgesnap.library" "$DEST/mos/edgesnap.library"
     cp "$ROOT/build/morphos/esnaptest"        "$DEST/mos/esnaptest"
     if [ -f "$ROOT/build/morphos/EdgeSnapPrefs" ]; then
         cp "$ROOT/build/morphos/EdgeSnapPrefs" "$DEST/mos/EdgeSnapPrefs"
-        cp "$ROOT/assets/EdgeSnapPrefs.info" "$DEST/mos/EdgeSnapPrefs.info"
+        cp "$ROOT/assets/mos/EdgeSnapPrefs.info" "$DEST/mos/EdgeSnapPrefs.info"
     fi
-    cp "$ROOT/assets/EdgeSnap.info" "$DEST/mos/EdgeSnap.info"
+    cp "$ROOT/assets/mos/EdgeSnap.info" "$DEST/mos/EdgeSnap.info"
 else
     echo "WARNING: no MorphOS build - mos/ left empty" >&2
 fi

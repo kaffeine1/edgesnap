@@ -162,6 +162,8 @@ COMMODITY_TOOLTYPES = [
     "(MARGINRIGHT=0)",
     "(MARGINBOTTOM=0)",
     "(BYPASSQUAL=alt)",
+    "(CYCLESIZES=yes)",
+    "(ANIMATE=yes)",
 ]
 
 # The icons this project ships. A script gets a PROJECT icon whose

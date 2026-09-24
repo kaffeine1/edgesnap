@@ -218,8 +218,11 @@
 ; On AROS the icon goes as a plain file: the Installer's (infos) copy
 ; hands every icon to icon.library, and AROS's stops with an illegal
 ; access on ours, classic or PNG alike, while Wanderer reads the same
-; PNG icons without complaint (AROS One, 2026-09-05).
-(if (= #system 2)
+; PNG icons without complaint (AROS One, 2026-09-05). MorphOS's icon
+; is a PNG too, and goes the same way: a plain copy keeps it byte for
+; byte, where icon.library might write it back in a format of its own.
+; Only AmigaOS 4 still takes the (infos) road.
+(if (not (= #system 0))
     (
       (copyfiles
         (prompt #prefs-prompt)

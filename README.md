@@ -323,10 +323,13 @@ the design doc:
 
 ## Thanks
 
-- **Carlo Spadoni** drew the AROS icons EdgeSnap ships with, and the
-  AmigaOS 4 and MorphOS ones offered alongside them. The AROS package
-  carries his commodity and preferences icons, with the icOn chunk added
-  by `scripts/make-aros-icons.py`; the sources are in `assets/aros/src`.
+- **Carlo Spadoni** drew the commodity and preferences icons, one set
+  for each system. His pictures are shipped as he drew them: the
+  scripts only add what a Workbench icon carries besides the picture,
+  the type, the stack and the tooltypes. `scripts/make-aros-icons.py`
+  does it for AROS (sources in `assets/aros/src`) and
+  `scripts/make-system-icons.py` for AmigaOS 4 and MorphOS (sources in
+  `assets/os4/src` and `assets/mos/src`).
 - The testers on the AROSWorld forum found the black areas in Wanderer's
   drawers, the colour left along the seam and the traces of the preview
   frame on the NVIDIA Nouveau driver, each with a video or a log that
