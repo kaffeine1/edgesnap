@@ -42,9 +42,18 @@ cp "$ROOT/assets/EdgeSnapDrawer.info" "$CARD/EdgeSnap.info"
 # The archive as it will reach testers, next to the drawer it unpacks
 # to - so both can be tried from the same card. The version comes from
 # edgesnap_version.h, as in make-release.sh, so an old archive left in
-# build/ never travels by mistake. Older archives on the card go away.
+# build/ never travels by mistake. Older archives on the card go away,
+# but only the ones this script writes, EdgeSnap-<version>.lha and its
+# AROS twin: the card is a shared one, and a file that merely starts
+# with the same name belongs to somebody else.
 VERSION=$(sed -n 's/^#define ES_VERSION  *"\([^"]*\)".*/\1/p' "$ROOT/include/edgesnap_version.h")
-rm -f "$CARD"/EdgeSnap-*.lha
+for old in "$CARD"/EdgeSnap-*.lha; do
+    [ -e "$old" ] || continue
+    if basename "$old" |
+       grep -Eq '^EdgeSnap-[0-9]+(\.[0-9]+)+(-AROS64)?\.lha$'; then
+        rm -f "$old"
+    fi
+done
 if [ -f "$ROOT/build/EdgeSnap-$VERSION.lha" ]; then
     cp "$ROOT/build/EdgeSnap-$VERSION.lha" "$CARD/EdgeSnap-$VERSION.lha"
 fi
