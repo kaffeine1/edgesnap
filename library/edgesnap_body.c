@@ -714,14 +714,20 @@ static void esb_change_box(struct Window *win, const ESRect *from,
  * if Intuition has not taken it yet, waited for a little longer. The
  * test is "the box changed", not "the box is what I asked for": a
  * console rounds its size to its cells and would never match.
+ *
+ * `patience` is how many ticks a box may take. Three is plenty once a
+ * window has been resized, but the first box of the first snap of a
+ * window costs MorphOS more: on real hardware that snap never glided
+ * while every later one did (2026-09-25). The loop stops as soon as the
+ * box has changed, so a longer patience slows nothing that is quick.
  */
 static void esb_glide_step(struct Window *win, const ESRect *was,
-                           const ESRect *box)
+                           const ESRect *box, int patience)
 {
     int i;
 
     ChangeWindowBox(win, box->x, box->y, box->w, box->h);
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < patience; i++) {
         Delay(1);
         if (win->LeftEdge != was->x || win->TopEdge != was->y ||
             win->Width != was->w || win->Height != was->h) {
@@ -746,7 +752,7 @@ static void esb_glide_box(struct Window *win, const ESRect *from,
         ESRect r;
 
         es_glide_rect(from, to, i, steps, &r);
-        esb_glide_step(win, &at, &r);
+        esb_glide_step(win, &at, &r, i == 1 ? 10 : 3);
         /* where it is, not where it was asked to be: the next box and
          * the AROS repaint dance both reason from here */
         at.x = win->LeftEdge;

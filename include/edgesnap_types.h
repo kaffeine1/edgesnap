@@ -93,6 +93,8 @@
  *       seam when another window covers the seam there: it is not
  *       there to be grabbed. Asked from further away it still names
  *       the nearest seam, covered in places or not.
+ *   2.17 - the first box of a glide is waited for longer, so the first
+ *       snap of a window glides on MorphOS too.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the
