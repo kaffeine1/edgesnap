@@ -28,9 +28,18 @@
 # becomes a drawer on the way: type WBDRAWER and the 56 bytes of
 # DrawerData, without which Workbench and Ambient show no drawer at all.
 #
+# Install, the guide and the readme sit beside the installer, which is
+# one for every system, so each has one icon: Carlo's AmigaOS 4
+# picture, agreed with him, carried as the drawer's is, and copied as a
+# dual PNG into assets/aros/src for the AROS archive.
+#
 #   python3 scripts/make-system-icons.py   -> assets/os4/*.info,
 #                                              assets/mos/*.info,
-#                                              assets/EdgeSnapDrawer.info
+#                                              assets/EdgeSnapDrawer.info,
+#                                              assets/{Install,EdgeSnap.guide,
+#                                                EdgeSnap.readme}.info,
+#                                              assets/aros/src/ (pictures)
+#   python3 scripts/make-aros-icons.py     -> assets/aros/*.info
 import importlib.util
 import os
 import struct
@@ -148,7 +157,21 @@ def drawer(src, dst):
     # DiskObject and in front of the images, where a reader expects it.
     # A tool icon carries no strings after its images, so none follow.
     head = head[:78] + ICON.drawer_data() + head[78:]
+    # Revision 1 in the gadget's UserData, as Carlo's icon has it, tells
+    # a reader that a drawer's classic part ends with dd_Flags and
+    # dd_ViewModes (AROS's diskobjio.c, ProcessNewDrawerData): without
+    # these six bytes it takes the start of the ICON form for them and
+    # the colour images are lost. Zero is "as the user's defaults".
+    head += struct.pack(">IH", 0, 0)
 
+    out = bytes(head) + with_imag(bytes(form))
+    open(dst, "wb").write(out)
+    print("%-28s %5d bytes, drawer, ARGB and IMAG" %
+          (os.path.relpath(dst, ROOT), len(out)))
+
+
+def with_imag(form):
+    """The ICON form again, with 256-colour IMAG copies of its ARGB images."""
     size = struct.unpack(">I", form[4:8])[0]
     pos, end = 12, 8 + size
     face, argbs, others = None, [], []
@@ -183,16 +206,56 @@ def drawer(src, dst):
         inner += piece(b"IMAG", imag(zlib.decompress(body[10:]), (w, h)))
     for cid, body in others:
         inner += piece(cid, body)
-    # Revision 1 in the gadget's UserData, as Carlo's icon has it, tells
-    # a reader that a drawer's classic part ends with dd_Flags and
-    # dd_ViewModes (AROS's diskobjio.c, ProcessNewDrawerData): without
-    # these six bytes it takes the start of the ICON form for them and
-    # the colour images are lost. Zero is "as the user's defaults".
-    head += struct.pack(">IH", 0, 0)
-    out = bytes(head) + b"FORM" + struct.pack(">I", len(inner)) + inner
+    return b"FORM" + struct.pack(">I", len(inner)) + inner
+
+
+def project(src, dst, preset):
+    """Install, the guide, the readme: one icon for AmigaOS 4 and MorphOS,
+    which share the archive. Carlo's AmigaOS 4 picture for everyone, as
+    agreed with him: his ARGB for AmigaOS 4 and IMAG copies after it for
+    MorphOS. The default tool and tooltypes are make-icon.py's."""
+    tmp = dst + ".tmp"
+    _, tool, tooltypes, stack = ICON.PRESETS[preset]
+    cmd = [sys.executable, os.path.join(ROOT, "scripts", "icon-tooltypes.py"),
+           src, tmp, "--tool", tool]
+    for t in tooltypes:
+        cmd += ["--tooltype", t]
+    subprocess.check_call(cmd, stdout=subprocess.DEVNULL)
+    blob = bytearray(open(tmp, "rb").read())
+    os.remove(tmp)
+    blob[74:78] = struct.pack(">I", stack)       # do_StackSize
+    at = blob.find(b"FORM")
+    out = bytes(blob[:at]) + with_imag(bytes(blob[at:]))
     open(dst, "wb").write(out)
-    print("%-28s %5d bytes, drawer, ARGB and IMAG" %
-          (os.path.relpath(dst, ROOT), len(out)))
+    print("%-28s %5d bytes, AmigaOS 4 and MorphOS, %d tooltype(s)" %
+          (os.path.relpath(dst, ROOT), len(out), len(tooltypes)))
+
+
+def aros_picture(src, dst):
+    """The same picture for the AROS archive: a dual PNG, the selected
+    image after the normal one's IEND, where AROS's icon.library looks
+    for it; make-aros-icons.py adds the icOn chunk."""
+    from PIL import Image
+    import io
+    blob = open(src, "rb").read()
+    at = blob.find(b"FORM")
+    size = struct.unpack(">I", blob[at + 4:at + 8])[0]
+    pos, end, w, h, pngs = at + 12, at + 8 + size, 0, 0, b""
+    while pos + 8 <= end:
+        cid = blob[pos:pos + 4]
+        ln = struct.unpack(">I", blob[pos + 4:pos + 8])[0]
+        body = blob[pos + 8:pos + 8 + ln]
+        if cid == b"FACE":
+            w, h = body[0] + 1, body[1] + 1
+        elif cid == b"ARGB":
+            im = Image.frombytes("RGBA", (w, h), zlib.decompress(body[10:]),
+                                 "raw", "ARGB")
+            buf = io.BytesIO()
+            im.save(buf, "PNG")
+            pngs += buf.getvalue()
+        pos += 8 + ln + (ln & 1)
+    open(dst, "wb").write(pngs)
+    print("%-28s %5d bytes, AROS picture" % (os.path.relpath(dst, ROOT), len(pngs)))
 
 
 def main():
@@ -208,6 +271,12 @@ def main():
         os.path.join(ROOT, "assets/mos/EdgeSnapPrefs.info"), "prefs")
     drawer(os.path.join(ROOT, "assets/os4/src/EdgeSnapDrawer.info"),
            os.path.join(ROOT, "assets/EdgeSnapDrawer.info"))
+    for name, out, preset in (("Install", "Install", "install"),
+                              ("Guide", "EdgeSnap.guide", "text"),
+                              ("Readme", "EdgeSnap.readme", "text")):
+        src = os.path.join(ROOT, "assets/os4/src/%s.info" % name)
+        project(src, os.path.join(ROOT, "assets/%s.info" % out), preset)
+        aros_picture(src, os.path.join(ROOT, "assets/aros/src/%s.png" % out))
 
 
 if __name__ == "__main__":

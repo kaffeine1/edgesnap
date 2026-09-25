@@ -184,38 +184,75 @@ script - is noticed at once.
 @{b}For programmers@{ub}
 
 @{b}Two version numbers, and why@{ub}
-EdgeSnap is 0.1: a first public release, complete in what it does but
-proven on only two machines. @{b}edgesnap.library@{ub} says 2.2, and
-that is not a mistake - a library's version is its interface, not its
-product. It reached 2 when the seam was added to the API, and the
-revision climbs with every build meant to replace an earlier one,
-because that is how the installer decides whether to replace it.
+EdgeSnap is 0.4: a beta, complete in what it does and tested on real
+MorphOS hardware and on AmigaOS 4 and AROS under emulation.
+@{b}edgesnap.library@{ub} says 2.16, and that is not a mistake: a
+library's version is its interface, not its product. It reached 2 when
+the seam was added to the API, and the revision climbs with every build
+meant to replace an earlier one, because that is how the installer
+decides whether to replace it.
 
 While EdgeSnap is below 1.0, treat the library's interface as @{b}not
-frozen@{ub}: methods will only ever be added at the end, never moved
-or removed, but names and arguments may still change if a better shape
-turns up. If you build on it now, say which version you built against.
+frozen@{ub}: calls are only ever added at the end, never moved or
+removed, but names and arguments may still change if a better shape
+turns up. If you build on it now, say which revision you built against,
+and check lib_Revision before using a call added after 2.2.
 
 The behaviour lives in @{b}edgesnap.library@{ub}, not in the
 commodity. The commodity is a client like any other: it contributes
-raw input and draws the preview frame, and every decision - drag
-detection, zones, snapping, restoring, the seam - happens inside the
-library.
+raw input and draws the preview frame and the seam, and every decision
+happens inside the library. So another program can ask for the same
+things:
 
-That means another program can ask for the same things:
+  @{b}Snapping@{ub}
+  ESnap_SnapWindow           place a window in a zone
+  ESnap_UnsnapWindow         put it back where it was
+  ESnap_QueryWindow          which zone a window is in
+  ESnap_ExcludeWindow        keep a window out of snapping
 
-  ESnap_SnapWindow(window, zone)    place a window in a zone
-  ESnap_UnsnapWindow(window)        put it back where it was
-  ESnap_QueryZone(...)              ask what a zone's rectangle is
-  ESnap_QueryDivider(...)           find the seam between two windows
-  ESnap_MoveDivider(position)       move it, resizing both
+  @{b}The seam between two windows@{ub}
+  ESnap_QueryDivider         the seam of the layout
+  ESnap_QueryDividerAt       the seam nearest a point
+  ESnap_MoveDivider          move the seam, resizing both sides
+  ESnap_MoveDividerAt        move a named seam
+
+  @{b}Screen and windows (2.5, 2.6, 2.11)@{ub}
+  ESnap_QueryScreenArea      where windows may go, docks left clear
+  ESnap_QueryWorkAreas       the same, with an id that outlives a
+                             screen-mode change
+  ESnap_QueryWindows         the windows of a screen, with their state
+  ESnap_QueryGeneration      a number that moves when anything did
+  ESnap_QueryWindowSerial    an identity for a window that its
+  ESnap_FindWindow           address cannot give
+  ESnap_PlaceWindow          put a window in a rectangle
+  ESnap_PlaceWindowsA        put several at once, a whole layout
+
+  @{b}Clients and groups (2.10, 2.12)@{ub}
+  ESnap_RegisterClient       one client owns the interactive engine,
+  ESnap_UnregisterClient     any number may own layouts
+  ESnap_CreateGroup          windows a layout client looks after,
+  ESnap_GroupAddWindow       optionally locked against everyone
+  ESnap_GroupRemoveWindow    else, the commodity's drag included
+  ESnap_QueryGroupOf
+  ESnap_DeleteGroup
+
+  @{b}Running it@{ub}
+  ESnap_Enable               switch snapping, or a layout, on or off
+  ESnap_SetOptionsA          the settings, as tags
+  ESnap_IgnoreWindows        a frontend's own windows
+  ESnap_FeedInput            a frontend's input, and what it did
+  ESnap_FeedMotion
+  ESnap_ResetInput
 
 The library validates every window handle on every call, so a window
-that has been closed gives an error rather than a crash.
+that has been closed gives an error rather than a crash. The contract
+of every call, with what it returns and from which revision it exists,
+is in @{b}include/edgesnap.h@{ub} in the source repository.
 
-@{b}esnaptest@{ub}, in the os4 and mos drawers of this package, is a
-small client that opens the library and drives the whole API - a
-worked example.
+@{b}esnaptest@{ub}, in the os4, mos and aros64 drawers of this package,
+is a small client that opens the library and drives the whole API: a
+worked example, and the quickest way to see which revision a machine
+is really running.
 
 @endnode
 

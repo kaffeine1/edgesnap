@@ -10,17 +10,17 @@
 
 (set #app-version "0.4 beta")
 
+; Short enough for the first window of AmigaOS 4's Installer: with
+; the old paragraph the text ran under the buttons that choose the
+; installation mode (seen in the AmigaOS 4 VM, 2026-09-25). What
+; EdgeSnap does at length is the guide's to say.
 (set #welcome
   (cat "EdgeSnap " #app-version "\n"
        "Window snapping for AmigaOS 4.x, MorphOS and AROS\n"
        "by Michele Dipace <michele.dipace@kaffeine.net>\n"
-       "MIT license\n\n"
-       "Drag a window against a screen edge or corner and it fills "
-       "that half or quarter of the screen, the way Windows and macOS "
-       "do. Two windows side by side share a seam that can be dragged "
-       "to re-balance them. It installs as a commodity that starts "
-       "with the system, so the behaviour is simply there.\n\n"
-       "Icons by Carlo Spadoni."))
+       "MIT license. Icons by Carlo Spadoni.\n\n"
+       "Drag a window to a screen edge or corner and it fills that "
+       "half or quarter of the screen."))
 
 (set #ask-system "Which system is this?")
 (set #ask-system-help
@@ -68,9 +68,11 @@
 ; see the end of this script. Saying "nothing was installed into the
 ; drawer you ran this from" while the manual lived only there was how
 ; users came to delete their own documentation.
+; The closing text has to fit AmigaOS 4's Installer window too: at its
+; old length the last line, the command that starts EdgeSnap by hand,
+; sat under the button that closes it (2026-09-25).
 (set #done-head
-  (cat "EdgeSnap " #app-version " is installed.\n"
-       "by Michele Dipace <michele.dipace@kaffeine.net>\n\n"
+  (cat "EdgeSnap " #app-version " is installed.\n\n"
        "Where it went:\n"
        "    LIBS:edgesnap.library\n"))
 ; the commodity's own place and how it starts differ on AROS: see
@@ -82,13 +84,9 @@
 ; on AROS, so this text is put together at the end, once the system is
 ; known (see #startup-line and the exit at the bottom).
 (set #done-tail-1
-  (cat "\nEdgeSnap starts with the system at every boot. To start it by "
-       "hand at any time:\n\n    "))
+  (cat "\nIt starts with the system. By hand: "))
 (set #done-tail-2
-  (cat "\n\nThe settings are in SYS:Prefs/EdgeSnap - open it, change what "
-       "you like, and EdgeSnap follows without being restarted. "
-       "Exchange enables, disables or removes it as with any "
-       "commodity."))
+  (cat "\nSettings: SYS:Prefs/EdgeSnap, followed at once."))
 
 ; Nothing here installs into @default-dest: the library, the commodity,
 ; the preferences window and the template each go to an absolute
@@ -407,8 +405,7 @@
                "    (started by Wanderer at every boot)\n"
                "    one line in S:User-Startup\n")
            "    " (tackon #guide-dest "EdgeSnap.guide") "\n\n"
-           "Nothing else was installed into the drawer you ran this "
-           "from, so it can be deleted.\n"
+           "The drawer you ran this from can be deleted.\n"
            (if (= #old-preview 1)
                (cat "\nThe copy of the first preview in C: was removed. Its "
                     "line in S:User-Startup, Run >NIL: C:EdgeSnap, does "

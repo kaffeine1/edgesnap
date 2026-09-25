@@ -80,9 +80,11 @@ fi
 cp "$ROOT/LICENSE"                     "$DEST/LICENSE"
 
 cp "$ROOT/installer/Install"           "$DEST/Install"
-cp "$ROOT/assets/icons/install-es.info" "$DEST/Install.info"
-cp "$ROOT/assets/icons/guide.info"      "$DEST/EdgeSnap.guide.info"
-cp "$ROOT/assets/icons/readme.info"     "$DEST/EdgeSnap.readme.info"
+# Carlo Spadoni's, one icon each for AmigaOS 4 and MorphOS
+# (scripts/make-system-icons.py).
+cp "$ROOT/assets/Install.info"          "$DEST/Install.info"
+cp "$ROOT/assets/EdgeSnap.guide.info"   "$DEST/EdgeSnap.guide.info"
+cp "$ROOT/assets/EdgeSnap.readme.info"  "$DEST/EdgeSnap.readme.info"
 
 "$ROOT/scripts/make-guide.sh" "$DEST/EdgeSnap.guide" >/dev/null
 
