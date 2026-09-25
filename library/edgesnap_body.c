@@ -715,11 +715,14 @@ static void esb_change_box(struct Window *win, const ESRect *from,
  * test is "the box changed", not "the box is what I asked for": a
  * console rounds its size to its cells and would never match.
  *
- * `patience` is how many ticks a box may take. Three is plenty once a
- * window has been resized, but the first box of the first snap of a
- * window costs MorphOS more: on real hardware that snap never glided
- * while every later one did (2026-09-25). The loop stops as soon as the
- * box has changed, so a longer patience slows nothing that is quick.
+ * `patience` is how many ticks a box may take. Three is plenty, but
+ * on real MorphOS hardware the first snap after the system started
+ * never glided while every later one did, new windows included
+ * (2026-09-25): the first programmatic resize after boot costs MorphOS
+ * more than three ticks, the next box arrived while it was pending,
+ * and the two were folded. So the first box of every glide may take
+ * ten. The loop stops as soon as the box has changed, so a longer
+ * patience slows nothing that is quick.
  */
 static void esb_glide_step(struct Window *win, const ESRect *was,
                            const ESRect *box, int patience)
