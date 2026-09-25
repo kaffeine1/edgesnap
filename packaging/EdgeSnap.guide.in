@@ -125,7 +125,7 @@ four windows that share one line share one seam.
       Nothing about the middle says how big a window should be, so it
       keeps its own size; one larger than the screen area is cut down
       to it. @{b}ctrl alt cursor down@{ub} puts it back as usual.
-  @{b}ctrl alt space@{ub}          open the selector under the pointer
+  @{b}ctrl alt z@{ub}              open the selector under the pointer
       A small palette that is the map of the screen: nine cells, each
       where the window would go, with a miniature of its zone. Point
       and click, or move with the cursor keys and press Return; the

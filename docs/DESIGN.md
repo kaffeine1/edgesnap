@@ -921,7 +921,11 @@ of this verification.
 
 - **A selector on a hotkey (first cut done, 2026-09-18).** The macOS
   tiling menu a tester posted (2026-09-06) puts the choices in front
-  of the pointer. `ctrl alt space` opens a palette under the pointer
+  of the pointer. `ctrl alt z` opens a palette under the pointer (it
+  was `ctrl alt space` until real MorphOS hardware showed that
+  combination taken: MorphOS switches keymaps on it when more than one
+  is set up, and got the first press every time; z as in Windows'
+  Win+Z, which opens the same kind of picker)
   that is the map of the screen: nine cells in three rows, each where
   the window would go, the corners in the corners, the halves at the
   sides, maximise at the top in the middle (the top edge maximises in

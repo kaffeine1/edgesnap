@@ -106,7 +106,7 @@ go fills that half or quarter of the screen.
   - two windows side by side share their edge: press the seam and the
     pointer becomes a double arrow, drag it and both are resized;
   - hotkeys for those who prefer them (ctrl alt cursor keys, ctrl alt c
-    for the middle of the screen, ctrl alt space for a selector under
+    for the middle of the screen, ctrl alt z for a selector under
     the pointer);
   - it is a commodity: it starts with the system and Exchange enables,
     disables or removes it like any other.

@@ -3105,7 +3105,7 @@ static void spike_config_reload(void)
 #define HK_DUMP        5
 #define HK_FRAME       6   /* ctrl alt f: the preview frame, no drag */
 #define HK_CENTRE      7   /* ctrl alt c: its own size, in the middle */
-#define HK_SELECT      8   /* ctrl alt space: the selector, under the pointer */
+#define HK_SELECT      8   /* ctrl alt z: the selector, under the pointer */
 
 static int spike_add_hotkey(CxObj *broker, struct MsgPort *port,
                             STRPTR descr, LONG id)
@@ -3152,7 +3152,7 @@ static struct Window *spike_active_window(void)
  * lives. Each cell shows a miniature of its zone, drawn by the same
  * geometry that places the window, so the picture cannot lie.
  *
- * It opens under the pointer on ctrl alt space, takes the mouse and the
+ * It opens under the pointer on ctrl alt z, takes the mouse and the
  * cursor keys, and goes away on a choice, on Esc or the right button,
  * on the hotkey again, or when anything else is activated. Plain
  * Intuition and graphics.library, so it is the same window on all
@@ -3772,7 +3772,14 @@ int main(int argc, char **argv)
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_down",
                           HK_RESTORE) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt c", HK_CENTRE) ||
-        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt space", HK_SELECT) ||
+        /*
+         * Not ctrl alt space, which is where it began: MorphOS switches
+         * keymaps on that combination when more than one is set up, and
+         * took the first press every time (real hardware, 2026-09-25).
+         * Z as in Windows' own Win+Z, which opens the same kind of
+         * layout picker.
+         */
+        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt z", HK_SELECT) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt d", HK_DUMP) ||
         !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt f", HK_FRAME) ||
         CxObjError(broker) != 0) {
@@ -3809,7 +3816,7 @@ int main(int argc, char **argv)
     spike_out("  screen edge or corner, then release.\n");
     spike_out("  hotkeys: ctrl alt cursor left/right/up = snap, down = "
            "restore,\n");
-    spike_out("           ctrl alt c = centre, ctrl alt space = selector,\n");
+    spike_out("           ctrl alt c = centre, ctrl alt z = selector,\n");
     spike_out("           ctrl alt d = window dump.\n");
     spike_out("  quit: Ctrl-C here, or remove it from Exchange.\n");
     /* The centre is a zone the library learned in 2.9. An older one in
