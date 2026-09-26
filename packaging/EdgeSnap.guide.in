@@ -186,7 +186,7 @@ script - is noticed at once.
 @{b}Two version numbers, and why@{ub}
 EdgeSnap is 0.4: a beta, complete in what it does and tested on real
 MorphOS hardware and on AmigaOS 4 and AROS under emulation.
-@{b}edgesnap.library@{ub} says 2.16, and that is not a mistake: a
+@{b}edgesnap.library@{ub} says 2.17, and that is not a mistake: a
 library's version is its interface, not its product. It reached 2 when
 the seam was added to the API, and the revision climbs with every build
 meant to replace an earlier one, because that is how the installer
