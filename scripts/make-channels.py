@@ -51,7 +51,7 @@ ARCHIVE = os.path.join(ROOT, "build", "EdgeSnap-%s.lha" % VERSION)
 ARCHIVE_AROS = os.path.join(ROOT, "build", "EdgeSnap-%s-AROS64.lha" % VERSION)
 # From the second AROS release on, the previous archive is named here so
 # the old entry does not survive beside the new one. None for the first.
-AROS_REPLACES_AMINET = None       # still waiting in /new, no published entry yet
+AROS_REPLACES_AMINET = "util/cdity/edgesnap.x86_64-aros.lha"  # 0.31, checked 2026-09-26
 AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
@@ -71,41 +71,38 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-0.31 corrects the installer: it was offering to copy the commented
-settings template into ENVARC:, with the answer set to yes by default,
-so an update could replace the settings the user had saved. A file
-already in ENVARC: is now left alone and never asked about. Reported by
-a distribution maintainer reading the 0.3 archive.
+A window can now go to the middle of the screen at the size it has
+(ctrl alt c), and ctrl alt z opens a small selector under the pointer:
+nine cells that are the map of the screen, one for each place a window
+can go, chosen with the mouse or the cursor keys.
 
-I have added AROS x86_64 ABIv11, with a native shared library, Zune
-preferences and PNG icons. It has its own archive; the AmigaOS 4 and
-MorphOS builds still travel together.
+Windows glide into place instead of jumping. I judged the glide on real
+MorphOS hardware before making it the default, and it can be switched
+off in the preferences ("Glide into place") by anyone who prefers the
+jump.
 
-Library API 2.5 adds window enumeration, change tracking and placement
-of individual windows or complete layouts in arbitrary rectangles.
-API 2.6 adds window serials and lookup, so a client need not use a reused
-window address as its identity.
+Pressing the same side hotkey again gives the window two thirds of the
+screen, then one third, then a half again. That can be switched off too,
+and from this version switching it off really works.
 
-On MorphOS as delivered a window may not leave the screen, and the pointer
-stayed pinned to it short of the edge: snapping by drag now works there
-too, without holding Control, because the library (2.7) is told how far
-the mouse itself travelled.
+The seam between two windows is more careful: its handle gives back what
+it covered, and a window laid over a snapped pair no longer shows the
+handle through it or lets it take the clicks meant for that window.
 
-Drag detection remembers where the title-bar press began and accepts
-outline drags and tablet motion. Pair fill and seam resizing respect
-each window's size limits, and layout changes shrink before growing.
-The PPC hotkey path lets the window change finish before finding the seam.
+Carlo Spadoni drew the icons for all three systems: the program, the
+preferences, the drawer, the installer and the documents.
 
-On AROS, the preview works with outline dragging, Wanderer receives fresh
-damage after resizing, and hiding the seam preserves repainted pixels.
-The installer retires the first AROS preview in C: before installing
-the current commodity and its icon in SYS:WBStartup.
+For programmers, edgesnap.library 2.17 adds what a tiling window manager
+needs from it: client roles, so that one program owns the drag and others
+own their layouts; work areas with an identity that survives a screen
+mode change; and layout groups that can keep other programs off their
+windows.
 """),
     ("WHAT IT IS", """
 EdgeSnap gives AmigaOS 4.x, MorphOS and AROS x86_64 the window snapping that Windows
 and macOS users reach for without thinking. Drag a window against a
-screen edge or corner and it fills that half or quarter of the screen. A
-frame shows where it will land before you let go.
+screen edge or corner and it glides into that half or quarter of the
+screen. A frame shows where it will land before you let go.
 
 Two windows that end up side by side share a seam, and that seam can be
 dragged: both windows are resized together, so half and half becomes
@@ -115,16 +112,13 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. I checked this build under emulation on
-AmigaOS 4.1, MorphOS 3.20 and a fresh AROS One 1.3 x86_64 installation.
-The AROS test passed 40 snaps with DualPNG icons, overlapping drawers
-and off-screen starts, but that does not resolve the report of black
-drawer areas on real hardware. On AmigaOS 4 and MorphOS the narrow seam
-handle can retain old pixels after another window covers it and goes
-away. On AROS drivers where the screen cannot be read back reliably the
-preview frame is drawn as a plain inversion; a tester on NVIDIA Nouveau
-saw thin traces of it stay on the desktop, which this build addresses,
-awaiting his confirmation. All of it remains worth reporting.
+Version %s is still a beta. I checked it on real MorphOS hardware and
+under emulation on AmigaOS 4.1 and AROS One 1.3 x86_64, each time by
+installing the package over an earlier version. On one AROS installation
+Wanderer's drawers can show black areas after a snap; another program
+that moves windows does the same there, and the AROS developers are
+looking into how Wanderer redraws a drawer. All of it remains worth
+reporting.
 
 The interface below 1.0 is not frozen. If EdgeSnap covers your dock,
 misses your seam or draws something odd, please include the system,
@@ -161,12 +155,16 @@ running copy is stopped and replaced, with no reboot.
     ("FOR PROGRAMMERS", """
 The behaviour lives in edgesnap.library, not in the commodity: the
 commodity is a client of it like any other program can be. Another
-program can ask for a window to be placed, ask where a zone is, or find
-and move the seam between two tiled windows.
+program can place a window in a zone or in any rectangle, find and move
+the seam between two tiled windows, list the windows with their state,
+follow their changes and lay out several windows in one call.
 
-The API also enumerates windows, tracks changes, places whole layouts
-and supplies serials for window identity. The included esnaptest client
-exercises the 2.5 and 2.6 calls on both PPC systems.
+Since 2.10 the library also serves tiling window managers: one client
+owns the interactive drag and any number own their layouts, work areas
+keep an identity across a screen mode change, and a layout group can
+keep every other program, the commodity's drag included, off its
+windows. The included esnaptest client exercises the whole API on all
+three systems.
 
 The library says %s while EdgeSnap says %s, and that is not a mistake:
 a library's version is its interface, not its product. While EdgeSnap is

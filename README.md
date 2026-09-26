@@ -72,6 +72,14 @@ first gesture is the drag.
 
 *The MorphOS preferences window (MUI), version 0.2. The AmigaOS 4 window is the same sections in ReAction: both are generated from one settings table.*
 
+- **0.4 (2026-09-26):** the middle of the screen and a selector under
+  the pointer (`ctrl alt c`, `ctrl alt z`), windows that glide into
+  place, the width cycle on a repeated side hotkey, a seam handle that
+  never shows through a window laid over the pair, and Carlo Spadoni's
+  icons on all three systems. `edgesnap.library` 2.17 adds client
+  roles, work areas and layout groups for tiling clients. Checked on
+  real MorphOS hardware and under emulation on AmigaOS 4.1 and AROS One
+  1.3, each time by installing the package over an earlier version.
 - **Phase 0 (spike): validated on BOTH targets** - AmigaOS 4 (QEMU,
   2026-08-11) and real MorphOS hardware (2026-08-26): drag detection,
   snapping and the outline preview all work, including the
