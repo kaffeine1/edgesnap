@@ -954,7 +954,14 @@ of this verification.
   pending can be folded into it, and eight boxes felt slow, because
   each waits for the application's redraw. So 2.14 waits for Intuition
   to take every box and uses three to five of them, and with that the
-  glide was judged good enough to be the default. The
+  glide was judged good enough to be the default. 2.17 waits longer
+  for the first box of every glide, because the first programmatic
+  resize after MorphOS has started is slow and was being folded. A
+  heavy application window (a large MUI window, 2026-09-25) can still
+  jump at its first snap, while it builds its layout for a new size,
+  and glide from then on: left that way on purpose, since waiting for
+  it would show a pause before the motion, and a jump is the honest
+  answer to an expensive redraw. The
   shape lives in `core/zones.c` so the host tests can hold it: four to
   eight boxes, eased out, a whole glide inside a fifth of a second,
   and `es_glide_steps()` returns 0 for a move too short to read as
