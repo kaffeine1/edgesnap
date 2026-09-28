@@ -152,7 +152,7 @@ COMMODITY_TOOLTYPES = [
     "(Settings below: remove the parentheses to enable one.)",
     "(ZONES=all)",
     "(EDGEPX=12)",
-    "(CORNERDIV=4)",
+    "(CORNERDIV=0)",
     "(DRAGMINPX=4)",
     "(PREVIEW=yes)",
     "(PANELDETECT=yes)",

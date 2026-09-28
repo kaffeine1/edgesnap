@@ -93,7 +93,7 @@ Short:        Tile windows by dragging them to an edge
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/cdity
-Version:      0.4 (beta)
+Version:      0.41 (beta)
 Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros
 License:      MIT
 
@@ -141,7 +141,8 @@ cat > "$DEST/EdgeSnap.prefs" <<'EOF'
 # ZONES       which zones react: all | none | halves | corners |
 #             left,right,topleft,topright,bottomleft,bottomright,maximize
 # EDGEPX      how close to an edge the POINTER must be (default 12)
-# CORNERDIV   corner length = usable height / this (default 4)
+# CORNERDIV   0: a corner only where the pointer is pushed into it
+#             (default); 2..16: a band, usable height / this
 # DRAGMINPX   pointer travel before a drag counts (default 4)
 # PREVIEW     show the zone preview frame: yes | no
 # PANELDETECT reserve dock/panel strips: yes | no

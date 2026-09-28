@@ -8,7 +8,7 @@
 
 (set #app "EdgeSnap")
 
-(set #app-version "0.4 beta")
+(set #app-version "0.41 beta")
 
 ; Short enough for the first window of AmigaOS 4's Installer: with
 ; the old paragraph the text ran under the buttons that choose the

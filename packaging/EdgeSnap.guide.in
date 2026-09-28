@@ -4,8 +4,8 @@
 @(c) "Copyright (c) 2026 Michele Dipace - MIT licence"
 @wordwrap
 
-@node MAIN "EdgeSnap 0.4 beta"
-@{b}EdgeSnap 0.4 beta@{ub}
+@node MAIN "EdgeSnap 0.41 beta"
+@{b}EdgeSnap 0.41 beta@{ub}
 Window snapping for AmigaOS 4.x, MorphOS and AROS x86_64
 by Michele Dipace <michele.dipace@kaffeine.net>
 
@@ -86,6 +86,14 @@ On AROS delete the library and the two files in SYS:WBStartup.
 Drag a window's title bar until the pointer touches an edge or a
 corner, then release. The zones are: left and right edges for halves,
 the four corners for quarters, the top edge to maximise.
+
+A corner is the corner itself. Anywhere along a side edge gives the
+half, even with the title bar right under the screen's own; for a
+quarter, push the pointer on into the corner, where the screen stops
+it. The top edge is the screen's own title bar, for the same reason: a
+window that sits at the top is not maximised the moment it is touched.
+If you would rather have longer corners, and a top edge that reaches
+into the screen, the Corner size setting gives them back.
 
 If a window is already snapped to one side, snapping another to the
 other side gives it the space that is actually left, not a rigid
@@ -184,9 +192,9 @@ script - is noticed at once.
 @{b}For programmers@{ub}
 
 @{b}Two version numbers, and why@{ub}
-EdgeSnap is 0.4: a beta, complete in what it does and tested on real
+EdgeSnap is 0.41: a beta, complete in what it does and tested on real
 MorphOS hardware and on AmigaOS 4 and AROS under emulation.
-@{b}edgesnap.library@{ub} says 2.17, and that is not a mistake: a
+@{b}edgesnap.library@{ub} says 2.19, and that is not a mistake: a
 library's version is its interface, not its product. It reached 2 when
 the seam was added to the API, and the revision climbs with every build
 meant to replace an earlier one, because that is how the installer
