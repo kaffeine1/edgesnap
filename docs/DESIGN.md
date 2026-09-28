@@ -158,6 +158,25 @@ interfaces). Heuristic instead:
   configurable). Usable area = screen minus `BarHeight` minus dock/panel
   strips minus per-side configurable margins (there is no work-area API
   on Amiga systems).
+- Corners and the top edge (library 2.19, 2026-09-28): a corner is the
+  corner itself, not a band along the side edge. Until then a quarter
+  of the usable height at each end of a side edge counted as corner,
+  so half of every side edge was corner, and a window dragged sideways
+  by a title bar in the upper part of the screen, which is how most
+  windows are dragged, landed in a quarter when a half was meant. The
+  screen's edges stop the pointer, so the corner itself is the easiest
+  target there is: throw the pointer into it. The same reasoning moves
+  the top edge to the screen's own title bar: a window whose title bar
+  sits at the top of the usable area is grabbed within the edge
+  distance of it, and was in the maximize zone the moment it moved.
+  `CORNERDIV` 2 to 16 still gives the bands, and with them a top edge
+  that reaches the edge distance into the screen; 0 and 1 are the
+  corner itself, and 0 is the default. An older library refuses 0 and
+  1 along with every other setting of the call, so the commodity sends
+  it the old 4 instead. Where a window may not leave the screen
+  (MorphOS as delivered) the corner is reached by the push of library
+  2.7 (below), and a bottom corner needs it on both axes at once: that
+  is the case to watch on real hardware.
 - Dock awareness (macOS-style, added 2026-08-26, field-tuned on real
   MorphOS the same day): edge strips reserved by panel-like windows are
   auto-subtracted from the usable area. Detection is split per the

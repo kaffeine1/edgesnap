@@ -482,6 +482,44 @@ static void test_pinned_pointer_pushing_at_the_edge(void)
     CHECK(a.do_snap == 0);
 }
 
+/*
+ * With the settings as they come, a window whose title bar is just
+ * under the screen's bar is not in the maximize zone when it is
+ * dragged: the top edge is the screen's bar. Pushed up into it, it is.
+ */
+static void test_default_top_is_the_screen_bar(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    f.box.y = 12;                    /* the window at the top ... */
+    f.mouse_y = 22;                  /* ... held by its title bar */
+    start_drag(&e, &f);              /* moves it 30 right, 5 down */
+
+    f.mouse_x = 320;
+    f.mouse_y = 18;                  /* six below the usable top: 12 */
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone == ES_ZONE_NONE);
+
+    f.mouse_y = 5;                   /* in the screen's bar */
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone_changed == 1 && a.zone == ES_ZONE_MAX);
+
+    f.mouse_y = 12;                  /* the usable area's first row */
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone == ES_ZONE_MAX);
+
+    f.mouse_y = 13;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone_changed == 1 && a.zone == ES_ZONE_NONE);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 0);
+}
+
 /* Pushing while the window is NOT at the edge, or pushing the wrong
  * way, changes nothing: only a wall counts. */
 static void test_push_without_a_wall_is_ignored(void)
@@ -513,9 +551,46 @@ static void test_push_without_a_wall_is_ignored(void)
     CHECK(a.do_snap == 0);
 }
 
+/*
+ * With the settings as they come, a window dragged sideways by a title
+ * bar just under the screen's bar snaps to the half; pushed on up into
+ * the screen's bar it takes the quarter, and back down it is a half
+ * again.
+ */
+static void test_default_corner_is_the_corner(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+
+    f.mouse_x = 2;
+    f.mouse_y = 20;                  /* the usable area starts at 12 */
+    f.box.x = -98;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone_changed == 1 && a.zone == ES_ZONE_LEFT);
+
+    f.mouse_y = 4;                   /* in the screen's bar */
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone_changed == 1 && a.zone == ES_ZONE_TOP_LEFT);
+
+    f.mouse_y = 30;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone_changed == 1 && a.zone == ES_ZONE_LEFT);
+
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 1 && a.snap_zone == ES_ZONE_LEFT);
+}
+
 int main(void)
 {
     test_happy_left_snap();
+    test_default_corner_is_the_corner();
+    test_default_top_is_the_screen_bar();
     test_pinned_pointer_pushing_at_the_edge();
     test_push_without_a_wall_is_ignored();
     test_click_without_drag();

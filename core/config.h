@@ -106,7 +106,9 @@ typedef struct ESSetting {
  */
 #define ES_EDGE_PX_MIN        1
 #define ES_EDGE_PX_MAX      200
-#define ES_CORNER_DIV_MIN     2
+/* CORNERDIV 0 and 1: only the corner itself, the pointer at or beyond
+ * the usable area's top or bottom (see es_engine_corner_px). */
+#define ES_CORNER_DIV_MIN     0
 #define ES_CORNER_DIV_MAX    16
 #define ES_DRAG_MIN_PX_MIN    1
 #define ES_DRAG_MIN_PX_MAX  200

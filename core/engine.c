@@ -19,10 +19,32 @@ static int es_abs(int v)
 void es_engine_config_defaults(ESEngineConfig *cfg)
 {
     cfg->edge_px = 12;
-    cfg->corner_div = 4;
+    /*
+     * The corner only where the pointer stands in it. With a quarter of
+     * the height at each end (corner_div 4, until 2026-09-28) half of
+     * every side edge was corner, and a window dragged sideways by a
+     * title bar in the upper part of the screen landed in a quarter
+     * when a half was meant, which is how most windows are dragged.
+     * The screen's edges stop the pointer, so the corner itself is an
+     * easy target: throw the pointer into it.
+     */
+    cfg->corner_div = 0;
     cfg->drag_min_px = 4;
     cfg->push_px = 24;
     cfg->zones_mask = ES_ZONEMASK_ALL;
+}
+
+int es_engine_top_px(const ESEngineConfig *cfg)
+{
+    return cfg->corner_div <= 1 ? 0 : cfg->edge_px;
+}
+
+int es_engine_corner_px(const ESEngineConfig *cfg, int usable_h)
+{
+    if (cfg->corner_div <= 1) {
+        return 0;
+    }
+    return usable_h / cfg->corner_div;
 }
 
 static void es_actions_clear(ESEngineActions *out)
@@ -183,8 +205,9 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
                    b->y + b->h >= u->y + u->h) {
             my = u->y + u->h - 1;
         }
-        z = es_zone_from_pointer(u, mx, my, e->cfg.edge_px,
-                                 u->h / e->cfg.corner_div);
+        z = es_zone_from_pointer_top(u, mx, my, e->cfg.edge_px,
+                                     es_engine_corner_px(&e->cfg, u->h),
+                                     es_engine_top_px(&e->cfg));
 
         /* Holding the bypass qualifier, or landing in a zone the user
          * switched off, means "just move the window". */

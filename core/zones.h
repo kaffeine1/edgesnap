@@ -31,6 +31,17 @@ typedef struct ESRect {
 int es_zone_from_pointer(const ESRect *usable, int px, int py,
                          int edge_px, int corner_px);
 
+/*
+ * The same, with the top edge's band of its own: top_px is how far
+ * below the usable area's top the pointer still counts as on the top
+ * edge. es_zone_from_pointer() is this with top_px = edge_px; 0 makes
+ * the top edge the screen's title bar and above, where a window's own
+ * title bar cannot be when the window sits at the top of the usable
+ * area.
+ */
+int es_zone_from_pointer_top(const ESRect *usable, int px, int py,
+                             int edge_px, int corner_px, int top_px);
+
 /* Target rectangle for a zone. Halves and quarters tile exactly even for
  * odd usable sizes (right/bottom take the remainder). */
 void es_zone_rect(int zone, const ESRect *usable, ESRect *out);

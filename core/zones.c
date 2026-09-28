@@ -10,12 +10,18 @@
 int es_zone_from_pointer(const ESRect *u, int px, int py,
                          int edge_px, int corner_px)
 {
+    return es_zone_from_pointer_top(u, px, py, edge_px, corner_px, edge_px);
+}
+
+int es_zone_from_pointer_top(const ESRect *u, int px, int py,
+                             int edge_px, int corner_px, int top_px)
+{
     int on_left, on_right, on_top;
 
     on_left = (px <= u->x + edge_px);
     on_right = (px >= u->x + u->w - 1 - edge_px);
     /* py < u->y is the screen title bar: still the top edge. */
-    on_top = (py <= u->y + edge_px);
+    on_top = (py <= u->y + top_px);
 
     if (on_left) {
         if (py <= u->y + corner_px) {

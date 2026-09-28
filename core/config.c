@@ -430,7 +430,9 @@ static const ESSetting es_setting_table[] = {
       "How close to an edge the pointer must come, in pixels.",
       ES_SET_INT, ES_EDGE_PX_MIN, ES_EDGE_PX_MAX, 0 },
     { "CORNERDIV", "Sensitivity", "Corner size",
-      "Corner length is the usable height divided by this.",
+      "0: a corner only where the pointer is pushed into it. From 2: "
+      "a band at each end of the side edges, the usable height divided "
+      "by this.",
       ES_SET_INT, ES_CORNER_DIV_MIN, ES_CORNER_DIV_MAX, 0 },
     { "DRAGMINPX", "Sensitivity", "Drag threshold",
       "How far the pointer must travel before it counts as a drag.",

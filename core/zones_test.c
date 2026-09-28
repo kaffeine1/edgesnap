@@ -48,6 +48,54 @@ static void test_zone_from_pointer(void)
     CHECK(es_zone_from_pointer(&u, 320, 478, 12, 100) == ES_ZONE_NONE);
 }
 
+/* The top edge with a band of its own: 0 is the screen's bar. */
+static void test_zone_top_band(void)
+{
+    ESRect u;
+    u.x = 0;
+    u.y = 12;
+    u.w = 640;
+    u.h = 468;
+
+    CHECK(es_zone_from_pointer_top(&u, 320, 12, 12, 0, 0) == ES_ZONE_MAX);
+    CHECK(es_zone_from_pointer_top(&u, 320, 3, 12, 0, 0) == ES_ZONE_MAX);
+    CHECK(es_zone_from_pointer_top(&u, 320, 13, 12, 0, 0) == ES_ZONE_NONE);
+    CHECK(es_zone_from_pointer_top(&u, 320, 24, 12, 0, 12) == ES_ZONE_MAX);
+    /* the side edges do not care */
+    CHECK(es_zone_from_pointer_top(&u, 0, 13, 12, 0, 0) == ES_ZONE_LEFT);
+    CHECK(es_zone_from_pointer_top(&u, 0, 12, 12, 0, 0) == ES_ZONE_TOP_LEFT);
+}
+
+/*
+ * Corners of no length, the default since 2026-09-28: along a side
+ * edge a corner is only at or beyond the usable area's top or bottom.
+ * A title bar just under the screen's own bar is a half, the screen
+ * bar itself is the corner.
+ */
+static void test_zone_corner_only(void)
+{
+    ESRect u;
+    u.x = 0;
+    u.y = 12;      /* screen bar above */
+    u.w = 640;
+    u.h = 468;     /* last usable row 479 */
+
+    CHECK(es_zone_from_pointer(&u, 0, 13, 12, 0) == ES_ZONE_LEFT);
+    CHECK(es_zone_from_pointer(&u, 0, 40, 12, 0) == ES_ZONE_LEFT);
+    CHECK(es_zone_from_pointer(&u, 0, 478, 12, 0) == ES_ZONE_LEFT);
+    CHECK(es_zone_from_pointer(&u, 639, 13, 12, 0) == ES_ZONE_RIGHT);
+    CHECK(es_zone_from_pointer(&u, 0, 12, 12, 0) == ES_ZONE_TOP_LEFT);
+    CHECK(es_zone_from_pointer(&u, 0, 3, 12, 0) == ES_ZONE_TOP_LEFT);
+    CHECK(es_zone_from_pointer(&u, 639, 0, 12, 0) == ES_ZONE_TOP_RIGHT);
+    CHECK(es_zone_from_pointer(&u, 0, 479, 12, 0) == ES_ZONE_BOTTOM_LEFT);
+    CHECK(es_zone_from_pointer(&u, 639, 479, 12, 0) == ES_ZONE_BOTTOM_RIGHT);
+    /* along the top edge the corner is where the side edge's band is */
+    CHECK(es_zone_from_pointer(&u, 12, 0, 12, 0) == ES_ZONE_TOP_LEFT);
+    CHECK(es_zone_from_pointer(&u, 13, 0, 12, 0) == ES_ZONE_MAX);
+    CHECK(es_zone_from_pointer(&u, 626, 0, 12, 0) == ES_ZONE_MAX);
+    CHECK(es_zone_from_pointer(&u, 627, 0, 12, 0) == ES_ZONE_TOP_RIGHT);
+}
+
 static void test_zone_rect_tiles(void)
 {
     ESRect u, l, r, tl, tr, bl, br, m;
@@ -264,6 +312,8 @@ int main(void)
     test_side_zones_cycle_widths();
     test_stepped_zone_honours_limits();
     test_zone_from_pointer();
+    test_zone_corner_only();
+    test_zone_top_band();
     test_zone_rect_tiles();
     test_fit_zone_rect();
 

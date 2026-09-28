@@ -45,13 +45,31 @@ typedef struct ESWinFacts {
 
 typedef struct ESEngineConfig {
     int edge_px;      /* pointer this close to an edge = zone           */
-    int corner_div;   /* corner length = usable height / corner_div     */
+    int corner_div;   /* corner length = usable height / corner_div;    */
+                      /* 0 or 1: only the corner itself                 */
     int drag_min_px;  /* pointer travel needed to call it a drag        */
     unsigned zones_mask; /* ES_ZONEBIT() set of zones that react        */
     int push_px;      /* raw travel against a pinned edge = at the edge */
 } ESEngineConfig;
 
 void es_engine_config_defaults(ESEngineConfig *cfg);
+
+/*
+ * How far a corner reaches along an edge of the usable area, in pixels.
+ * corner_div 0 and 1 give 0: a corner is then only where the pointer
+ * stands at or beyond the usable area's top or bottom, in the screen's
+ * title bar or below a dock, where the screen's own edge stops it.
+ */
+int es_engine_corner_px(const ESEngineConfig *cfg, int usable_h);
+
+/*
+ * How far below the usable area's top the pointer still counts as on
+ * the top edge: the edge distance, or 0 with corners of no length, so
+ * that a window whose title bar sits at the top of the usable area is
+ * not in the maximize zone the moment it is dragged. The top edge is
+ * then the screen's title bar and above.
+ */
+int es_engine_top_px(const ESEngineConfig *cfg);
 
 /* Actions emitted by one input step. Flags say which fields are valid.
  * On release both hide_preview and do_snap can be set: hide first. */

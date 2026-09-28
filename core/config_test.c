@@ -19,13 +19,26 @@ static int g_failures = 0;
         } \
     } while (0)
 
+/* 0 and 1 are "only the corner itself"; 17 is still too many. */
+static void test_corner_div_range(void)
+{
+    ESConfig c;
+
+    es_config_defaults(&c);
+    CHECK(es_config_line(&c, "CORNERDIV=4") == ES_OK && c.engine.corner_div == 4);
+    CHECK(es_config_line(&c, "CORNERDIV=0") == ES_OK && c.engine.corner_div == 0);
+    CHECK(es_config_line(&c, "CORNERDIV=1") == ES_OK && c.engine.corner_div == 1);
+    CHECK(es_config_line(&c, "CORNERDIV=17") == ES_ERR_BAD_ARGS &&
+          c.engine.corner_div == 1);
+}
+
 static void test_defaults(void)
 {
     ESConfig c;
 
     es_config_defaults(&c);
     CHECK(c.engine.edge_px == 12);
-    CHECK(c.engine.corner_div == 4);
+    CHECK(c.engine.corner_div == 0);
     CHECK(c.engine.drag_min_px == 4);
     CHECK(c.engine.zones_mask == ES_ZONEMASK_ALL);
     CHECK(c.panel_detect == 1);
@@ -326,6 +339,7 @@ static void test_groups_are_named_and_contiguous(void)
 
 int main(void)
 {
+    test_corner_div_range();
     test_defaults();
     test_numbers_and_bounds();
     test_key_spelling_and_whitespace();
