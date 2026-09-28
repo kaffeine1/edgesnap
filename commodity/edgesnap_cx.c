@@ -3035,11 +3035,20 @@ static void spike_push_config(void)
 {
     struct TagItem tags[16];
     int n = 0;
+    int corner_div = g_cfg.engine.corner_div;
 
+    /*
+     * 0 and 1, the corner itself, are 2.19's. An older library in
+     * LIBS: refuses them, and every other tag of the call with them,
+     * so it gets the band it had as its default.
+     */
+    if (corner_div < 2 && EdgeSnapBase->lib_Revision < 19) {
+        corner_div = 4;
+    }
     tags[n].ti_Tag = ES_OPT_EdgePx;
     tags[n++].ti_Data = (ULONG)g_cfg.engine.edge_px;
     tags[n].ti_Tag = ES_OPT_CornerDiv;
-    tags[n++].ti_Data = (ULONG)g_cfg.engine.corner_div;
+    tags[n++].ti_Data = (ULONG)corner_div;
     tags[n].ti_Tag = ES_OPT_DragMinPx;
     tags[n++].ti_Data = (ULONG)g_cfg.engine.drag_min_px;
     tags[n].ti_Tag = ES_OPT_Zones;
@@ -3074,6 +3083,18 @@ static void spike_push_config(void)
     }
 }
 
+/* "corner 1/4" for a band, "corner only" for the corner itself. */
+static const char *spike_corner_words(void)
+{
+    static char buf[16];
+
+    if (g_cfg.engine.corner_div <= 1) {
+        return "only";
+    }
+    sprintf(buf, "1/%d", g_cfg.engine.corner_div);
+    return buf;
+}
+
 /*
  * Preferences changed under us. dos.library tells us the file was
  * written; who wrote it does not matter - the preferences window, an
@@ -3085,9 +3106,9 @@ static void spike_config_reload(void)
     spike_config_load(g_argc, g_argv);
     spike_push_config();
     spike_out("edgesnap: preferences reloaded: zones %04x, edge %d px, "
-              "corner 1/%d, drag %d px,\n",
+              "corner %s, drag %d px,\n",
               (unsigned)g_cfg.engine.zones_mask, g_cfg.engine.edge_px,
-              g_cfg.engine.corner_div, g_cfg.engine.drag_min_px);
+              spike_corner_words(), g_cfg.engine.drag_min_px);
     spike_out("edgesnap:        preview %s, panel detect %s (margin %d), "
               "width cycle %s, glide %s\n",
               g_cfg.preview ? "on" : "off",
@@ -3826,9 +3847,9 @@ int main(int argc, char **argv)
         spike_out("edgesnap: the library in LIBS: is older than 2.9, "
                   "so ctrl alt c (centre) will be refused.\n");
     }
-    spike_out("edgesnap: prefs: zones %04x, edge %d px, corner 1/%d, "
+    spike_out("edgesnap: prefs: zones %04x, edge %d px, corner %s, "
            "drag %d px,\n", (unsigned)g_cfg.engine.zones_mask,
-           g_cfg.engine.edge_px, g_cfg.engine.corner_div,
+           g_cfg.engine.edge_px, spike_corner_words(),
            g_cfg.engine.drag_min_px);
     spike_out("edgesnap:        preview %s, panel detect %s (margin %d), "
            "bypass %s,\n", g_cfg.preview ? "on" : "off",

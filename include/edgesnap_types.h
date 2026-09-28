@@ -95,6 +95,14 @@
  *       the nearest seam, covered in places or not.
  *   2.17 - the first box of a glide is waited for longer, so the first
  *       snap after MorphOS has started glides too.
+ *   2.19 - ES_OPT_CornerDiv takes 0 and 1, the corner only where the
+ *       pointer is pushed into it, and 0 is the default: a quarter of
+ *       the height at each end made half of every side edge a corner.
+ *       With corners of no length the top edge is the screen's title
+ *       bar, so a window that sits at the top is not in the maximize
+ *       zone when it is dragged. An older library refuses 0 and 1,
+ *       and every other tag of the same call with them: a client
+ *       checks the revision before it sends them.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

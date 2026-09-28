@@ -87,7 +87,12 @@ typedef ULONG ESTagData;
 /* ESnap_SetOptionsA(). Unknown tags are ignored (forward compat). */
 #define ES_TAGBASE          (0x8E5A0000UL)
 #define ES_OPT_EdgePx       (ES_TAGBASE + 1)  /* LONG, default 12     */
-#define ES_OPT_CornerDiv    (ES_TAGBASE + 2)  /* LONG, default 4      */
+#define ES_OPT_CornerDiv    (ES_TAGBASE + 2)  /* LONG, default 0: the  */
+                                               /* corner only where the */
+                                               /* pointer is pushed into */
+                                               /* it; 2..16 a band of    */
+                                               /* height/n (2.19; before */
+                                               /* 2..16, default 4)      */
 #define ES_OPT_DragMinPx    (ES_TAGBASE + 3)  /* LONG, default 4      */
 #define ES_OPT_MarginLeft   (ES_TAGBASE + 4)  /* LONG, default 0      */
 #define ES_OPT_MarginTop    (ES_TAGBASE + 5)  /* LONG, default 0      */
