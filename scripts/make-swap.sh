@@ -78,6 +78,17 @@ for f in $(cd "$STAGE" && find . -type f | sed 's|^\./||'); do
         bad=1
     fi
 done
+# The drawer's icon and the archive travel outside the stage, and the
+# cache can cut them short just the same.
+if ! cmp -s "$ROOT/assets/EdgeSnapDrawer.info" "$CARD/EdgeSnap.info"; then
+    echo "MISMATCH: EdgeSnap.info" >&2
+    bad=1
+fi
+if [ -f "$ROOT/build/EdgeSnap-$VERSION.lha" ] &&
+   ! cmp -s "$ROOT/build/EdgeSnap-$VERSION.lha" "$CARD/EdgeSnap-$VERSION.lha"; then
+    echo "MISMATCH: EdgeSnap-$VERSION.lha" >&2
+    bad=1
+fi
 if [ "$bad" != "0" ]; then
     echo "ERROR: the card does not hold what was copied - do NOT trust it" >&2
     exit 1
