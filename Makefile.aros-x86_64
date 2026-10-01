@@ -57,7 +57,8 @@ LIB_GEN := $(GEN)/edgesnap_start.c $(GEN)/edgesnap_end.c
 CX_SRC := commodity/edgesnap_cx.c core/config.c core/panels.c core/zones.c \
 	core/engine.c
 PREFS_SRC := prefs/morphos/edgesnap_prefs.c prefs/prefs_io.c \
-	core/config.c core/engine.c core/zones.c core/panels.c
+	core/config.c core/engine.c core/zones.c core/panels.c \
+	prefs/offscreen_sys.c core/offscreen.c
 
 # A module links without the program startup and without a C runtime.
 MODULE_LDFLAGS ?= -nostartfiles -nostdlib -L"$(AROS_SDK_ROOT)/lib" -L"$(SDK_GCC_ROOT)"
