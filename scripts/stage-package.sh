@@ -124,6 +124,11 @@ including one line in S:User-Startup (on AROS the commodity goes into
 SYS:WBStartup instead), so snapping is simply there from the next boot.
 Updating is installing again: no reboot needed.
 
+A corner is now the corner itself. If you saved EdgeSnap's preferences
+with an earlier version, they keep the corner size they had, 4, a band
+along each side: set Corner size to 0 in SYS:Prefs/EdgeSnap for the
+corners as they come now.
+
 A window that may not go past the edge of the screen keeps the pointer
 from reaching it. The preferences show the system's own setting for
 that, "Windows can move off-screen", on all three systems; on MorphOS,

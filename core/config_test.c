@@ -6,6 +6,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 
 #include "config.h"
 
@@ -248,6 +249,60 @@ static void test_write_round_trip(void)
     CHECK(small[7] == '!');
 }
 
+/* Defaults go out as comments; what the user changed does not. */
+static void test_write_defaults_as_comments(void)
+{
+    ESConfig a, b;
+    char buf[1024];
+    const char *p;
+    int pinned = 0;
+
+    es_config_defaults(&a);
+    es_config_write(&a, buf, (int)sizeof(buf));
+    for (p = buf; *p != '\0'; p++) {
+        if ((p == buf || p[-1] == '\n') && *p >= 'A' && *p <= 'Z') {
+            pinned++;               /* a line that starts with a key */
+        }
+    }
+    CHECK(pinned == 0);
+    CHECK(strstr(buf, "\n#CORNERDIV=0\n") != NULL);
+    CHECK(strstr(buf, "\n#EDGEPX=12\n") != NULL);
+
+    a.engine.corner_div = 4;
+    es_config_write(&a, buf, (int)sizeof(buf));
+    CHECK(strstr(buf, "\nCORNERDIV=4\n") != NULL);
+    CHECK(strstr(buf, "\n#EDGEPX=12\n") != NULL);
+    feed_text(&b, buf);
+    CHECK(same_config(&a, &b));
+
+    /* a file written with the defaults pins none of them: read by a
+     * version whose default is another, that other is what holds */
+    es_config_defaults(&a);
+    es_config_write(&a, buf, (int)sizeof(buf));
+    es_config_defaults(&b);
+    b.engine.corner_div = 7;     /* as if 7 were a later default */
+    {
+        char line[256];
+        const char *q = buf;
+        int n = 0;
+
+        for (;;) {
+            if (*q == '\n' || *q == '\0') {
+                line[n] = '\0';
+                es_config_line(&b, line);
+                n = 0;
+                if (*q == '\0') {
+                    break;
+                }
+            } else if (n < (int)sizeof(line) - 1) {
+                line[n++] = *q;
+            }
+            q++;
+        }
+    }
+    CHECK(b.engine.corner_div == 7);
+}
+
 static void test_settings_table(void)
 {
     const ESSetting *t;
@@ -353,6 +408,7 @@ int main(void)
     if (g_failures == 0) {
         test_settings_table();
     test_write_round_trip();
+    test_write_defaults_as_comments();
     printf("config_test: all tests passed\n");
         return 0;
     }

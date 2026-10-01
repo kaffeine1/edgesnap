@@ -133,7 +133,10 @@ int es_setting_apply(ESConfig *cfg, int index, int value);
  * Write the settings as a preferences file. Returns the number of
  * bytes the text needs (excluding the terminator), whether or not it
  * fitted; nothing is written if `size` is too small. Parsing the
- * result back gives the same settings.
+ * result back gives the same settings. A setting at its default is
+ * written as a comment, "#KEY=value": the file still lists every
+ * setting, but only the ones the user changed are pinned, so a default
+ * that changes in a later version reaches everyone who never chose.
  */
 int es_config_write(const ESConfig *cfg, char *buf, int size);
 

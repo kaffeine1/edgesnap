@@ -655,7 +655,10 @@ int es_config_write(const ESConfig *cfg, char *buf, int size)
         "# Written by the EdgeSnap preferences program.\n"
         "# Every setting also works as a Shell argument:\n"
         "#   EdgeSnap ZONES=halves EDGEPX=24\n"
+        "# A line that starts with # is a setting left as it comes,\n"
+        "# so that a later version's default reaches it.\n"
         "\n";
+    ESConfig def;
     char num[16];
     char zones[96];
     int at = 0;
@@ -664,6 +667,13 @@ int es_config_write(const ESConfig *cfg, char *buf, int size)
     if (cfg == 0 || buf == 0 || size <= 0) {
         return 0;
     }
+    /*
+     * Until 0.41 every setting was written as it stood, defaults
+     * included, and a file saved once pinned them all: when the corner
+     * size's default went from 4 to 0, whoever had ever pressed Save
+     * kept the 4 without having chosen it. A default stays a default.
+     */
+    es_config_defaults(&def);
     at = es_emit(buf, size, at, header);
     for (i = 0; i < ES_SETTING_COUNT; i++) {
         const ESSetting *s = &es_setting_table[i];
@@ -683,6 +693,9 @@ int es_config_write(const ESConfig *cfg, char *buf, int size)
         default:
             text = es_num(v, num + sizeof(num));
             break;
+        }
+        if (v == es_setting_value(&def, i)) {
+            at = es_emit(buf, size, at, "#");
         }
         at = es_emit(buf, size, at, s->key);
         at = es_emit(buf, size, at, "=");
