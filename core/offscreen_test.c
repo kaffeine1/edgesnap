@@ -381,6 +381,97 @@ static void test_aros_shapes(void)
     CHECK(es_aros_offscreen(g, 70) == -1);
 }
 
+/*
+ * AmigaOS 4's GUI preferences as 4.1 Final Edition writes them: PRHD,
+ * one GUI chunk of 7484 bytes (version 0, screen flags 0x364: off-screen
+ * dragging on), and the IControl chunk it keeps in the same file.
+ */
+static unsigned char os4_file[7568 + 7492];
+
+static int os4_build(int gui_chunks)
+{
+    static const unsigned char head[] = {
+        'F', 'O', 'R', 'M', 0, 0, 0, 0, 'P', 'R', 'E', 'F',
+        'P', 'R', 'H', 'D', 0, 0, 0, 6, 0, 0, 0, 0, 0, 0
+    };
+    int at = 0, i, c;
+
+    for (i = 0; i < (int)sizeof(head); i++) {
+        os4_file[at++] = head[i];
+    }
+    for (c = 0; c < gui_chunks; c++) {
+        os4_file[at++] = 'G'; os4_file[at++] = 'U';
+        os4_file[at++] = 'I'; os4_file[at++] = ' ';
+        os4_file[at++] = 0x00; os4_file[at++] = 0x00;
+        os4_file[at++] = 0x1D; os4_file[at++] = 0x3C;        /* 7484 */
+        for (i = 0; i < 7484; i++) {
+            os4_file[at + i] = (unsigned char)(i * 7 + c);   /* not zeros */
+        }
+        os4_file[at + 16] = 0; os4_file[at + 17] = 0;        /* version */
+        os4_file[at + 22] = 0x00; os4_file[at + 23] = 0x00;
+        os4_file[at + 24] = 0x03; os4_file[at + 25] = 0x64;  /* 0x364 */
+        at += 7484;
+    }
+    os4_file[at++] = 'I'; os4_file[at++] = 'C';
+    os4_file[at++] = 'T'; os4_file[at++] = 'L';
+    os4_file[at++] = 0; os4_file[at++] = 0;
+    os4_file[at++] = 0; os4_file[at++] = 42;
+    for (i = 0; i < 42; i++) {
+        os4_file[at++] = (unsigned char)i;
+    }
+    os4_file[4] = (unsigned char)((at - 8) >> 24);
+    os4_file[5] = (unsigned char)((at - 8) >> 16);
+    os4_file[6] = (unsigned char)((at - 8) >> 8);
+    os4_file[7] = (unsigned char)(at - 8);
+    return at;
+}
+
+/* Only the bit moves, in every GUI chunk; the rest stays as it came. */
+static void test_os4(void)
+{
+    static unsigned char was[7568 + 7492];
+    int len = os4_build(1);
+    int i, other = 0;
+
+    CHECK(len == 7568);
+    for (i = 0; i < len; i++) {
+        was[i] = os4_file[i];
+    }
+    CHECK(es_os4_offscreen(os4_file, len) == 1);
+    CHECK(es_os4_set_offscreen(os4_file, len, 0) == 1);
+    CHECK(es_os4_offscreen(os4_file, len) == 0);
+    CHECK(os4_file[26 + 8 + 25] == 0x44);           /* 0x364 -> 0x344 */
+    for (i = 0; i < len; i++) {
+        if (i != 26 + 8 + 25 && os4_file[i] != was[i]) {
+            other++;
+        }
+    }
+    CHECK(other == 0);
+    CHECK(es_os4_set_offscreen(os4_file, len, 0) == 0);
+    CHECK(es_os4_set_offscreen(os4_file, len, 1) == 1);
+    for (i = 0; i < len; i++) {
+        if (os4_file[i] != was[i]) {
+            other++;
+        }
+    }
+    CHECK(other == 0);
+
+    len = os4_build(2);                              /* two GUI chunks */
+    CHECK(es_os4_set_offscreen(os4_file, len, 0) == 1);
+    CHECK(os4_file[26 + 8 + 25] == 0x44);
+    CHECK(os4_file[26 + 8 + 7484 + 8 + 25] == 0x44);
+    CHECK(es_os4_offscreen(os4_file, len) == 0);
+
+    len = os4_build(0);                              /* no GUI chunk */
+    CHECK(es_os4_offscreen(os4_file, len) == -1);
+    CHECK(es_os4_set_offscreen(os4_file, len, 1) == -1);
+    len = os4_build(1);
+    os4_file[0] = 'X';
+    CHECK(es_os4_offscreen(os4_file, len) == -1);
+    len = os4_build(1);
+    CHECK(es_os4_offscreen(os4_file, 4000) == -1);  /* GUI chunk cut short */
+}
+
 int main(void)
 {
     test_mos_factory();
@@ -390,6 +481,7 @@ int main(void)
     test_aros_factory();
     test_aros_one();
     test_aros_shapes();
+    test_os4();
 
     if (g_failures == 0) {
         printf("offscreen_test: all tests passed\n");

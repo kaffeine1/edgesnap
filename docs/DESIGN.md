@@ -869,7 +869,7 @@ still names the switch for whoever prefers it.
 2026-10-01).** The push answers, but a window that may go past the edge
 answers better: the zones need two pushes at once for a bottom corner,
 and on real hardware a push can flicker. So the preferences program on
-MorphOS and AROS now shows the system's setting, in a section named
+all three systems now shows the system's setting, in a section named
 after the system so that nobody takes it for one of ours, and writes
 it where the system keeps it, that one bit and nothing else of the
 user's file (`core/offscreen.c`, host-tested against files the systems
@@ -890,8 +890,17 @@ wrote; `prefs/offscreen_sys.c` around it):
   menus). The chunk is `sizeof(struct IControlPrefs)`, 36 bytes on
   x86_64 where the structure is padded, and the editor loads no other
   size. On as delivered; also taken up at once.
-- AmigaOS 4 keeps it elsewhere, in the GUI preferences
-  (`GF_SCREENOFFSDRAGGING`), on as delivered, and is left alone.
+- AmigaOS 4: `ENV:Sys/gui.prefs`, the GUI editor's file: one "GUI "
+  chunk with struct GUIPrefs (7484 bytes on 4.1 Final Edition) and the
+  IControl chunk AmigaOS 4 keeps in the same file; off-screen dragging
+  is `GF_SCREENOFFSDRAGGING`, 0x20 of `gp_ScreenFlags`. On as
+  delivered, but a user of the first releases had it off and could not
+  use EdgeSnap until they found it (that was before the push). IPrefs
+  applies the file when it is written. The SDK says that only IPrefs
+  may set GUI attributes globally, so EdgeSnap writes the file and
+  never calls SetGUIAttrs; a machine without the file is not written
+  for, since it holds the system's whole look. Every GUI chunk gets the
+  bit, so that no screen keeps the other answer.
 
 Changing the user's preference from the commodity is still not done.
 What changed is who asks: the box in the preferences window, at the

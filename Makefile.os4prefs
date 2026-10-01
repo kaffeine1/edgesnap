@@ -7,7 +7,8 @@ CC = ppc-amigaos-gcc
 CFLAGS ?= -Wall -Wextra -O2 -Icore -Iinclude -Iprefs
 TARGET ?= build/os4/EdgeSnapPrefs
 SRC := prefs/os4/edgesnap_prefs.c prefs/prefs_io.c core/config.c \
-       core/engine.c core/zones.c core/panels.c
+       core/engine.c core/zones.c core/panels.c prefs/offscreen_sys.c \
+       core/offscreen.c
 
 .PHONY: all clean
 

@@ -124,6 +124,12 @@ including one line in S:User-Startup (on AROS the commodity goes into
 SYS:WBStartup instead), so snapping is simply there from the next boot.
 Updating is installing again: no reboot needed.
 
+A window that may not go past the edge of the screen keeps the pointer
+from reaching it. The preferences show the system's own setting for
+that, "Windows can move off-screen", on all three systems; on MorphOS,
+where it is off as delivered, the first installation turns it on and
+says so.
+
 The icons are by Carlo Spadoni, who drew them for EdgeSnap.
 
 Full documentation is in EdgeSnap.guide.

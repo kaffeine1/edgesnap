@@ -531,9 +531,10 @@ static void es_collect(struct ESPrefsGui *gui)
 #endif
 
 /*
- * The system's setting, when the box was changed: Save keeps it for the
- * next start too, Use for this session. Either way the system takes it
- * up at once.
+ * The system's setting as the box shows it: Use for this session, Save
+ * for the next start too, even when only an earlier Use had changed it.
+ * The system takes it up at once, and a file that already says so is
+ * not written at all.
  */
 static void es_store_offscreen(struct ESPrefsGui *gui, int permanent)
 {
@@ -543,68 +544,15 @@ static void es_store_offscreen(struct ESPrefsGui *gui, int permanent)
         return;
     }
     get(gui->offscreen, MUIA_Selected, &on);
-    if ((on ? 1 : 0) == gui->off_was) {
-        return;
-    }
     if (!eso_set(on ? 1 : 0, 1, permanent)) {
         MUI_RequestA(gui->app, gui->win, 0,
                      ES_REQ_TEXT("EdgeSnap Preferences"),
                      ES_REQ_TEXT("_OK"),
                      ES_REQ_TEXT("\33c\"Windows can move off-screen\" could "
-                                 "not be written:\nthe system's IControl "
-                                 "file refused it."),
+                                 "not be written:\nthe system's "
+                                 "preferences file refused it."),
                      NULL);
     }
-}
-
-/* Case-blind comparison for the Shell words. */
-static int es_word(const char *a, const char *b)
-{
-    while (*a != '\0' && *b != '\0') {
-        char x = *a++;
-        char y = *b++;
-
-        if (x >= 'a' && x <= 'z') {
-            x = (char)(x - 'a' + 'A');
-        }
-        if (y >= 'a' && y <= 'z') {
-            y = (char)(y - 'a' + 'A');
-        }
-        if (x != y) {
-            return 0;
-        }
-    }
-    return *a == *b;
-}
-
-/* EdgeSnapPrefs OFFSCREEN QUERY|ON|OFF: no window. */
-static int es_offscreen_command(int argc, char **argv)
-{
-    int state = eso_query(0);
-
-    if (state < 0 || eso_query(1) < 0) {
-        Printf((CONST_STRPTR)"EdgeSnapPrefs: the %s IControl file is not one this "
-               "program can read\n", (ESTagData)eso_system());
-        return RETURN_ERROR;
-    }
-    if (argc >= 3 && es_word(argv[2], "QUERY")) {
-        Printf((CONST_STRPTR)"windows can move off-screen: %s\n",
-               (ESTagData)(state ? "yes" : "no"));
-        return state ? RETURN_OK : RETURN_WARN;
-    }
-    if (argc >= 3 && (es_word(argv[2], "ON") || es_word(argv[2], "OFF"))) {
-        state = es_word(argv[2], "ON");
-        if (!eso_set(state, 1, 1)) {
-            Printf((CONST_STRPTR)"EdgeSnapPrefs: the %s IControl file could not be "
-                   "written\n", (ESTagData)eso_system());
-            return RETURN_ERROR;
-        }
-        Printf((CONST_STRPTR)"windows can move off-screen: %s\n",
-               (ESTagData)(state ? "yes" : "no"));
-        return RETURN_OK;
-    }
-    Printf((CONST_STRPTR)"EdgeSnapPrefs OFFSCREEN QUERY|ON|OFF\n");
-    return RETURN_ERROR;
 }
 
 /* ------------------------------------------------------------ main */
@@ -621,8 +569,8 @@ int main(int argc, char **argv)
     int i;
 
     (void)es_version_cookie;
-    if (argc >= 2 && es_word(argv[1], "OFFSCREEN")) {
-        return es_offscreen_command(argc, argv);
+    if (eso_is_command(argc, argv)) {
+        return eso_command(argc, argv);
     }
     for (i = 0; i < ES_MAX_SETTINGS; i++) {
         gui.field[i] = NULL;

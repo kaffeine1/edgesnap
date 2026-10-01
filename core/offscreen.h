@@ -15,6 +15,10 @@
  *            holds struct IControlPrefs; ICF_OFFSCREENLAYERS, bit 28
  *            of ic_Flags, is IControl's "Offscreen move". On as
  *            delivered.
+ *   AmigaOS 4  ENV:Sys/gui.prefs, an IFF FORM PREF whose "GUI " chunk
+ *            holds struct GUIPrefs; GF_SCREENOFFSDRAGGING, 0x20 of
+ *            gp_ScreenFlags, is the GUI editor's off-screen dragging.
+ *            On as delivered.
  *
  * Pure C89 over a file held in memory, so the host tests can hold it
  * to the files the systems really write; the reading and writing are
@@ -26,9 +30,10 @@
 #ifndef EDGESNAP_OFFSCREEN_H
 #define EDGESNAP_OFFSCREEN_H
 
-/* Longer than either file: MorphOS's is under a kilobyte even with
- * every hotkey of IControl given a trigger, AROS's is 70 bytes. */
-#define ES_OFFS_FILE_MAX 4096
+/* Longer than any of the files: MorphOS's is under a kilobyte even
+ * with every hotkey of IControl given a trigger, AROS's is 70 bytes,
+ * AmigaOS 4's GUI preferences 7568 on 4.1 Final Edition. */
+#define ES_OFFS_FILE_MAX 32768
 
 /* ------------------------------------------------------------ MorphOS */
 
@@ -81,5 +86,23 @@ int es_aros_set_offscreen(unsigned char *buf, int len, int on);
  * ES_AROS_DEFAULT_LEN bytes, returns that length.
  */
 int es_aros_default(int on, unsigned char *buf);
+
+/* ---------------------------------------------------------- AmigaOS 4 */
+
+#define ES_OS4_OFFSCREEN 0x20UL
+
+/* 1 when windows may go past the edge, 0 when not, as the first GUI
+ * chunk says; -1 when the buffer is not GUI preferences. */
+int es_os4_offscreen(const unsigned char *buf, int len);
+
+/*
+ * Set or clear the bit in place, in every GUI chunk the file has, so
+ * that no screen keeps the other answer. 1 when the buffer changed, 0
+ * when it already said so, -1 when it is not GUI preferences, in which
+ * case nothing is touched. There is no file of defaults for AmigaOS 4:
+ * the GUI preferences are the system's whole look, and a machine
+ * without them is not one to write them for.
+ */
+int es_os4_set_offscreen(unsigned char *buf, int len, int on);
 
 #endif /* EDGESNAP_OFFSCREEN_H */

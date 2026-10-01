@@ -15,6 +15,15 @@
  * nothing - the three buttons every Amiga preferences program has. The
  * running EdgeSnap watches ENV: and reconfigures itself, so there is
  * no protocol between this program and the commodity at all.
+ *
+ * One row is not EdgeSnap's: "Windows can move off-screen" is the
+ * system's own off-screen dragging, the GUI editor's setting, kept in
+ * the GUI preferences (prefs/offscreen_sys.c). It is here because a
+ * drag only snaps where the pointer can reach the edge, and with that
+ * setting off a dragged window stops at the edge and holds the pointer
+ * back. It sits in a section named after the system, and IPrefs takes
+ * it up at once. From a Shell and from the installer:
+ *   EdgeSnapPrefs OFFSCREEN QUERY|ON|OFF
  */
 
 /*
@@ -54,6 +63,7 @@
 #include <proto/label.h>
 
 #include "prefs_io.h"
+#include "offscreen_sys.h"
 #include "zones.h"
 #include "edgesnap_version.h"
 
@@ -70,12 +80,16 @@ static const char es_version_cookie[] __attribute__((used)) =
 #define GID_SAVE    1
 #define GID_USE     2
 #define GID_CANCEL  3
+#define GID_OFFSCREEN 4          /* the system's setting, not ours    */
 #define GID_SETTING 100          /* + index of the setting            */
 #define GID_ZONE    200          /* + zone number                     */
 
 struct ESPrefsGui {
     Object *win;
     struct Window *window;
+    Object *offscreen;                   /* the system's setting      */
+    int off_was;                         /* as found: 1, 0, or -1 for */
+                                         /* a file we cannot read     */
     Object *field[ES_MAX_SETTINGS];      /* one gadget per setting    */
     Object *zone[ES_ZONE_COUNT + 1];     /* checkboxes for the mask   */
     ESConfig cfg;
@@ -427,6 +441,33 @@ static Object *es_build_window(struct ESPrefsGui *gui)
         }
     }
 
+    /*
+     * The system's own setting, in a section of its own named after the
+     * system, so that nobody takes it for one of ours. A file this
+     * program cannot read leaves the box greyed out rather than guessing
+     * what the system would make of a rewritten one.
+     */
+    {
+        Object *sect = VLayoutObject,
+            LAYOUT_SpaceOuter, TRUE,
+            LAYOUT_BevelStyle, BVS_GROUP,
+            LAYOUT_Label, eso_system(),
+        End;
+
+        gui->offscreen = CheckBoxObject,
+            GA_ID, GID_OFFSCREEN,
+            GA_RelVerify, TRUE,
+            GA_Text, "",
+            GA_Selected, gui->off_was == 1 ? TRUE : FALSE,
+            GA_Disabled, gui->off_was < 0 ? TRUE : FALSE,
+        End;
+        if (sect != NULL && gui->offscreen != NULL) {
+            es_add_child(rows, sect, NULL, 0);
+            es_add_child(sect, gui->offscreen,
+                         "Windows can move off-screen:", 2);
+        }
+    }
+
     buttons = HLayoutObject,
         LAYOUT_SpaceOuter, TRUE,
         LAYOUT_EvenSize, TRUE,
@@ -531,9 +572,36 @@ static void es_collect(struct ESPrefsGui *gui)
     }
 }
 
+/*
+ * The system's setting as the box shows it: Use for this session, Save
+ * for the next start too, even when only an earlier Use had changed it.
+ * IPrefs takes it up at once, and a file that already says so is not
+ * written at all.
+ */
+static void es_store_offscreen(struct ESPrefsGui *gui, int permanent)
+{
+    struct EasyStruct es;
+    ULONG on = 0;
+
+    if (gui->offscreen == NULL || gui->off_was < 0) {
+        return;
+    }
+    GetAttr(GA_Selected, gui->offscreen, &on);
+    if (!eso_set(on ? 1 : 0, 1, permanent)) {
+        es.es_StructSize = sizeof(es);
+        es.es_Flags = 0;
+        es.es_Title = (STRPTR)"EdgeSnap Preferences";
+        es.es_TextFormat = (STRPTR)"\"Windows can move off-screen\" could not "
+                           "be written:\nthe system's GUI preferences file "
+                           "refused it.";
+        es.es_GadgetFormat = (STRPTR)"OK";
+        EasyRequestArgs(gui->window, &es, NULL, NULL);
+    }
+}
+
 /* ---------------------------------------------------------------- main */
 
-int main(void)
+int main(int argc, char **argv)
 {
     struct ESPrefsGui gui;
     ULONG signals, result;
@@ -544,6 +612,14 @@ int main(void)
 
     (void)es_version_cookie;
     (void)es_stack_cookie;
+    if (eso_is_command(argc, argv)) {
+        return eso_command(argc, argv);
+    }
+    gui.offscreen = NULL;
+    gui.off_was = eso_query(0);
+    if (gui.off_was >= 0 && eso_query(1) < 0) {
+        gui.off_was = -1;      /* one of the two files is not ours to read */
+    }
     for (i = 0; i < ES_MAX_SETTINGS; i++) {
         gui.field[i] = NULL;
     }
@@ -588,12 +664,14 @@ int main(void)
                 case GID_SAVE:
                     es_collect(&gui);
                     esp_store(&gui.cfg, 1);
+                    es_store_offscreen(&gui, 1);
                     running = 0;
                     rc = RETURN_OK;
                     break;
                 case GID_USE:
                     es_collect(&gui);
                     esp_store(&gui.cfg, 0);
+                    es_store_offscreen(&gui, 0);
                     running = 0;
                     rc = RETURN_OK;
                     break;

@@ -101,22 +101,25 @@ half - so a sixty/forty split stays sixty/forty.
 
 @{b}Windows that may not leave the screen@{ub}
 A drag snaps where the pointer reaches the edge. Whether a dragged
-window may go on past the edge is the system's own setting, in its
-IControl preferences. Where it may not, the window stops at the edge
-and holds the pointer back where it has the title bar; EdgeSnap then
-counts pushing on against the edge as being there, but the zones
-answer better when the window can go on.
+window may go on past the edge is the system's own setting: in IControl
+on MorphOS and AROS, in the GUI preferences on AmigaOS 4 (off-screen
+dragging). Where it may not, the window stops at the edge and holds
+the pointer back where it has the title bar; EdgeSnap then counts
+pushing on against the edge as being there, but the zones answer
+better when the window can go on.
 
 MorphOS as delivered keeps windows on the screen, so the first
 installation there chooses IControl's "allow positioning beyond the
 screen limits", says so on a page of its own, and MorphOS takes it up
 at once. An update leaves the setting as it finds it. AROS and
-AmigaOS 4 let a window go past the edge as delivered.
+AmigaOS 4 let a window go past the edge as delivered, unless someone
+turned it off.
 
-To change it either way on MorphOS or AROS, use the box
-@{b}Windows can move off-screen@{ub} in EdgeSnap's preferences, in the
-section named after the system, or IControl itself. IControl's key,
-Control as delivered, turns the setting round while it is held.
+To change it either way, use the box @{b}Windows can move off-screen@{ub}
+in EdgeSnap's preferences, in the section named after the system, or
+the system's own editor: IControl, or GUI on AmigaOS 4. On MorphOS,
+IControl's key, Control as delivered, turns the setting round while it
+is held.
 
 @{b}The seam@{ub}
 Where two snapped windows meet there is nothing to see until the
@@ -160,10 +163,10 @@ applies the change for this session only, Cancel changes nothing.
 
 The window offers every setting listed under
 @{" Settings " link SETTINGS}, each with the range it accepts, so
-nothing you can choose there can be refused. On MorphOS and AROS it
-also has the system's own "Windows can move off-screen", in a section
-named after the system (see above): it is kept in IControl's file, not
-in EdgeSnap's, and the system follows it at once.
+nothing you can choose there can be refused. It also has the
+system's own "Windows can move off-screen", in a section named after
+the system (see above): it is kept in the system's preferences, not in
+EdgeSnap's, and the system follows it at once.
 
 @{b}Getting past the zones@{ub}
 If you want to drag a window right up to the edge without it
@@ -191,9 +194,9 @@ and hold that key while you drag.
       refused; only QUIT stops it.
 
   @{b}SYS:Prefs/EdgeSnap OFFSCREEN QUERY|ON|OFF@{ub}
-      On MorphOS and AROS: ask or set whether windows can move
-      off-screen, the system's own setting, without opening the
-      window. QUERY returns 0 when they can and 5 when they cannot.
+      Ask or set whether windows can move off-screen, the system's
+      own setting, without opening the window. QUERY returns 0 when
+      they can and 5 when they cannot.
 
 Run from a Shell rather than with @{b}Run >NIL:@{ub} (on AROS
 @{b}Run >NIL: <NIL:@{ub}) and it prints what it decides, drag by drag -

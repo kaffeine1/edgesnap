@@ -325,3 +325,75 @@ int es_aros_default(int on, unsigned char *buf)
     es_aros_set_offscreen(buf, ES_AROS_DEFAULT_LEN, on);
     return ES_AROS_DEFAULT_LEN;
 }
+
+/* ---------------------------------------------------------- AmigaOS 4 */
+
+/*
+ * struct GUIPrefs is packed to two bytes: four reserved longs, the
+ * version word, the global flags, then gp_ScreenFlags at 22, big
+ * endian, so 0x20 sits in its last byte.
+ */
+#define ES_GUI_FLAGS_BYTE 25
+#define ES_GUI_BIT_MASK   0x20
+
+/* Where the next GUI chunk's data starts, from `pos` on, or -1. */
+static int es_gui_chunk(const unsigned char *buf, int len, int pos)
+{
+    while (pos + 8 <= len) {
+        unsigned long size = es_be32(buf + pos + 4);
+
+        if (size > (unsigned long)(len - pos - 8)) {
+            return -1;                     /* a chunk longer than the file */
+        }
+        if (es_is(buf + pos, "GUI ") && size > ES_GUI_FLAGS_BYTE) {
+            return pos + 8;
+        }
+        pos += 8 + (int)size + (int)(size & 1);
+    }
+    return -1;
+}
+
+static int es_gui_first(const unsigned char *buf, int len)
+{
+    if (buf == 0 || len < 12 || !es_is(buf, "FORM") ||
+        !es_is(buf + 8, "PREF")) {
+        return -1;
+    }
+    return es_gui_chunk(buf, len, 12);
+}
+
+int es_os4_offscreen(const unsigned char *buf, int len)
+{
+    int at = es_gui_first(buf, len);
+
+    if (at < 0) {
+        return -1;
+    }
+    return (buf[at + ES_GUI_FLAGS_BYTE] & ES_GUI_BIT_MASK) != 0;
+}
+
+int es_os4_set_offscreen(unsigned char *buf, int len, int on)
+{
+    int at = es_gui_first(buf, len);
+    int changed = 0;
+
+    if (at < 0) {
+        return -1;
+    }
+    while (at >= 0) {
+        unsigned char *b = buf + at + ES_GUI_FLAGS_BYTE;
+        unsigned char was = *b;
+        unsigned long size = es_be32(buf + at - 4);
+
+        if (on) {
+            *b = (unsigned char)(was | ES_GUI_BIT_MASK);
+        } else {
+            *b = (unsigned char)(was & (unsigned char)~ES_GUI_BIT_MASK);
+        }
+        if (*b != was) {
+            changed = 1;
+        }
+        at = es_gui_chunk(buf, len, at + (int)size + (int)(size & 1));
+    }
+    return changed;
+}
