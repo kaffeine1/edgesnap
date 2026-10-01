@@ -252,6 +252,24 @@
 
 (complete 70)
 
+; --- windows that may go past the edge (MorphOS, first installation) --
+;
+; MorphOS as delivered keeps a dragged window on the screen: dragged
+; against an edge it stops there and holds the pointer back where it
+; has the title bar, so the pointer never reaches the edge, and a drag
+; snaps only by pushing on against it. The setting that lets windows go
+; on is MorphOS's own, in IControl: "allow positioning beyond the screen
+; limits". The first installation chooses it, and MorphOS takes it up at
+; once, no restart. An update leaves it alone: whoever chose otherwise
+; meant it. EdgeSnap's preferences program does the work, and has the
+; box. AmigaOS 4 and AROS let windows go past the edge as delivered.
+(set #offscreen 0)
+(if (= #system 1)
+    (if (= #update 0)
+        (if (= (run "SYS:Prefs/EdgeSnap >NIL: OFFSCREEN QUERY" (safe)) 5)
+            (if (= (run "SYS:Prefs/EdgeSnap >NIL: OFFSCREEN ON") 0)
+                (set #offscreen 1)))))
+
 ; --- start it with the system ---------------------------------------
 (if (= #system 2)
     (startup #app
@@ -394,6 +412,22 @@
                  "of the one that was running before.\n\n"))
       (default 1))
     (run #startup-line))
+
+; What was changed outside EdgeSnap is said on a page of its own, to
+; every user level: nobody should find a system setting different and
+; not know who did it, or how to have it back.
+(if (= #offscreen 1)
+    (message
+      (cat "One setting of MorphOS was changed.\n\n"
+           "Windows can now be dragged past the edge of the screen "
+           "(IControl: positioning beyond the screen limits). Without "
+           "that, a window dragged to an edge stops there and holds the "
+           "pointer back, and a drag hardly ever snaps. It works at once; "
+           "IControl's key, Control as delivered, still keeps a window on "
+           "the screen while held.\n\n"
+           "To have it as it was: SYS:Prefs/EdgeSnap, the box "
+           "\"Windows can move off-screen\", or IControl.")
+      (all)))
 
 ; (quiet): our own closing text says what happened - the Installer's
 ; standard one would add that EdgeSnap "is in Work:", which is not

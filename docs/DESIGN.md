@@ -865,6 +865,40 @@ is flush with as being on that edge, after `push_px` (24) of it. A
 frontend that never calls FeedMotion gets the 2.6 behaviour; the guide
 still names the switch for whoever prefers it.
 
+**The system's own setting, from EdgeSnap's preferences (0.41,
+2026-10-01).** The push answers, but a window that may go past the edge
+answers better: the zones need two pushes at once for a bottom corner,
+and on real hardware a push can flicker. So the preferences program on
+MorphOS and AROS now shows the system's setting, in a section named
+after the system so that nobody takes it for one of ours, and writes
+it where the system keeps it, that one bit and nothing else of the
+user's file (`core/offscreen.c`, host-tested against files the systems
+wrote; `prefs/offscreen_sys.c` around it):
+
+- MorphOS: `ENV:Sys/icontrol.conf`, a text file whose first line is
+  `Flags=0x...`; IControl's "allow positioning beyond the screen
+  limits" is 0x4000. Not in the SDK: read off two files a user saved
+  with the choice either way, one digit apart. MorphOS does not install
+  the file; a machine where IControl was never saved runs on built-in
+  defaults, and gets what 3.20's IControl writes from them (captured in
+  the VM by moving the file aside and saving). MorphOS watches the
+  file: written from outside, it takes effect at once (window dragged
+  to the left edge: stopped at 0 with the bit clear, went on to -210
+  with it set, no restart).
+- AROS: `ENV:SYS/icontrol.prefs`, IFF with an ICTL chunk;
+  `ICF_OFFSCREENLAYERS` is bit 28 of `ic_Flags` (bit 15 there is 3D
+  menus). The chunk is `sizeof(struct IControlPrefs)`, 36 bytes on
+  x86_64 where the structure is padded, and the editor loads no other
+  size. On as delivered; also taken up at once.
+- AmigaOS 4 keeps it elsewhere, in the GUI preferences
+  (`GF_SCREENOFFSDRAGGING`), on as delivered, and is left alone.
+
+Changing the user's preference from the commodity is still not done.
+What changed is who asks: the box in the preferences window, at the
+user's hand, and the first installation on MorphOS, which chooses it
+once and says so on a page of its own. An update never touches it:
+whoever turned it back meant it. The push stays for whoever does.
+
 **Where 0.3 stands (2026-09-06).** The prepared release includes the
 AROS x86_64 ABIv11 lane, library API 2.6 on all three systems, the
 window-size and drag-press fixes, Wanderer repaint handling and the
