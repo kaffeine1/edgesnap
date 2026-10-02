@@ -130,6 +130,11 @@ struct EdgeSnapIFace
                                             ULONG group, struct Window *win);
     LONG APICALL (*ESnap_QueryGroupOf)(struct EdgeSnapIFace *Self,
                                        struct Window *win, ULONG *group_out);
+
+    /* --- appended for 2.20: gaps and margins per group --- */
+    LONG APICALL (*ESnap_SetGroupOptionsA)(struct EdgeSnapIFace *Self,
+                                           ULONG group,
+                                           const struct TagItem *tags);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

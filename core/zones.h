@@ -92,6 +92,19 @@ void es_fit_rect(const ESRect *want, const ESRect *usable,
                  int min_w, int min_h, int max_w, int max_h, ESRect *out);
 
 /*
+ * A cell of a tiler's layout made into a window box (2.20, ES_PF_CELL):
+ * a side at or beyond the usable area's edge gives up the margin of
+ * that side, margin[] being left, top, right, bottom; a side shared
+ * with another cell gives up half the gap, the left or top one rounded
+ * down and the right or bottom one up, so that two neighbours together
+ * leave exactly the gap between them. A cell too small for its insets
+ * keeps one pixel. `area`, when not NULL, receives the usable area less
+ * the margins: the edges es_fit_rect should keep a window against.
+ */
+void es_cell_rect(const ESRect *cell, const ESRect *usable, int gap,
+                  const int margin[4], ESRect *out, ESRect *area);
+
+/*
  * The window's own size, in the middle of the usable area
  * (ES_ZONE_CENTRE). Nothing in the word "centre" says how big a window
  * should be, so it keeps the size it has; a window larger than the area

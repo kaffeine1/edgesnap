@@ -416,3 +416,14 @@ AROS_LH2(LONG, ESnap_QueryGroupOf,
     return esb_query_group_of(win, group_out);
     AROS_LIBFUNC_EXIT
 }
+
+/* --- appended for 2.20: gaps and margins per group --- */
+AROS_LH2(LONG, ESnap_SetGroupOptionsA,
+         AROS_LHA(ULONG, group, D0),
+         AROS_LHA(const struct TagItem *, tags, A0),
+         struct EdgeSnapBase *, EdgeSnapBase, 35, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_set_group_options(group, tags);
+    AROS_LIBFUNC_EXIT
+}

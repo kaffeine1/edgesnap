@@ -51,5 +51,6 @@
 #define ESnap_GroupAddWindow    esb_group_add_window
 #define ESnap_GroupRemoveWindow esb_group_remove_window
 #define ESnap_QueryGroupOf      esb_query_group_of
+#define ESnap_SetGroupOptionsA  esb_set_group_options
 
 #endif /* EDGESNAP_STATIC_H */

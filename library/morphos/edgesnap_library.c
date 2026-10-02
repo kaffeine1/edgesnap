@@ -35,8 +35,8 @@
 
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  2
-#define ES_LIB_REVISION 19
-#define ES_LIB_IDSTRING "edgesnap.library 2.19 (28.9.2026) Michele Dipace\r\n"
+#define ES_LIB_REVISION 20
+#define ES_LIB_IDSTRING "edgesnap.library 2.20 (2.10.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -356,6 +356,13 @@ static LONG G_QueryGroupOf(void)
     return esb_query_group_of((struct Window *)REG_A0, (ULONG *)REG_A1);
 }
 
+/* --- appended for 2.20: gaps and margins per group --- */
+static LONG G_SetGroupOptionsA(void)
+{
+    return esb_set_group_options((ULONG)REG_D0,
+                                 (const struct TagItem *)REG_A0);
+}
+
 #define ES_GATE(name, fn) \
     static struct EmulLibEntry name = \
         { TRAP_LIB, 0, (void (*)(void))fn }
@@ -394,6 +401,7 @@ ES_GATE(GATE_DeleteGroup, G_DeleteGroup);
 ES_GATE(GATE_GroupAddWindow, G_GroupAddWindow);
 ES_GATE(GATE_GroupRemoveWindow, G_GroupRemoveWindow);
 ES_GATE(GATE_QueryGroupOf, G_QueryGroupOf);
+ES_GATE(GATE_SetGroupOptionsA, G_SetGroupOptionsA);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -431,6 +439,7 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_GroupAddWindow,
     (APTR)&GATE_GroupRemoveWindow,
     (APTR)&GATE_QueryGroupOf,
+    (APTR)&GATE_SetGroupOptionsA,
     (APTR)-1
 };
 

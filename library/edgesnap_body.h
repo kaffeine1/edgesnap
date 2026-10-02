@@ -137,4 +137,7 @@ LONG esb_group_add_window(ULONG group, struct Window *win);
 LONG esb_group_remove_window(ULONG group, struct Window *win);
 LONG esb_query_group_of(struct Window *win, ULONG *group_out);
 
+/* 2.20: gaps and margins per group */
+LONG esb_set_group_options(ULONG group, const struct TagItem *tags);
+
 #endif /* EDGESNAP_BODY_H */

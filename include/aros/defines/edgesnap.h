@@ -496,6 +496,29 @@ __BEGIN_DECLS
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_SetGroupOptionsA_WB(__EdgeSnapBase, __arg1, __arg2) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC2(LONG, ESnap_SetGroupOptionsA,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(const struct TagItem *, (__arg2), A0), \
+        struct Library *, (__EdgeSnapBase), 35, EdgeSnap);\
+})
+
+#define ESnap_SetGroupOptionsA(arg1, arg2) \
+    __ESnap_SetGroupOptionsA_WB(__EDGESNAP_LIBBASE, (arg1), (arg2))
+
+#if !defined(NO_INLINE_STDARG) && !defined(EDGESNAP_NO_INLINE_STDARG)
+#define ESnap_SetGroupOptions(arg1, ...) \
+({ \
+    const IPTR ESnap_SetGroupOptionsA_args[] = { AROS_PP_VARIADIC_CAST2IPTR(__VA_ARGS__) };\
+    ESnap_SetGroupOptionsA((arg1), (const struct TagItem *)(ESnap_SetGroupOptionsA_args)); \
+})
+#endif /* !NO_INLINE_STDARG */
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* DEFINES_EDGESNAP_H*/

@@ -81,6 +81,8 @@ static ULONG g_client_next = 1;
 static int esb_locked_for(struct Window *win);
 static void esb_groups_drop_owner(ULONG client);
 static void esb_groups_clear(void);
+static int esb_group_cell(struct Window *win, const ESRect *cell,
+                          const ESRect *usable, ESRect *box, ESRect *area);
 static ULONG g_gen_touch;      /* drags that reached for a locked window */
 
 /* Facts sampled from a live window; ESB internal. */
@@ -2407,7 +2409,7 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
                              ULONG flags)
 {
     struct ESBSnap s;
-    ESRect r;
+    ESRect r, box, area;
     LONG rc;
 
     if (!esb_sample(win, &s)) {
@@ -2417,7 +2419,20 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
     if (esb_is_excluded(win) || !esb_snappable(&s) || esb_locked_for(win)) {
         return ES_ERR_REJECTED;
     }
-    es_fit_rect(want, &s.usable, s.min_w, s.min_h, s.max_w, s.max_h, &r);
+    /*
+     * 2.20: a cell of the group's layout. The window's box is the cell
+     * less the group's margins and half gaps, and its size limits are
+     * fitted against the area less the margins, so a window that has to
+     * grow still keeps to the margin it is against. A window in no
+     * group takes the cell as it is.
+     */
+    if ((flags & ES_PF_CELL) != 0 &&
+        esb_group_cell(win, want, &s.usable, &box, &area)) {
+        es_fit_rect(&box, &area, s.min_w, s.min_h, s.max_w, s.max_h, &r);
+    } else {
+        es_fit_rect(want, &s.usable, s.min_w, s.min_h, s.max_w, s.max_h,
+                    &r);
+    }
     /*
      * The registry keeps the geometry from before the window was
      * adopted, and follows every placement so that a restore still
@@ -2438,7 +2453,7 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
     return ES_OK;
 }
 
-#define ESB_PF_ALL (ES_PF_NO_RESTORE | ES_PF_KEEP_ZORDER)
+#define ESB_PF_ALL (ES_PF_NO_RESTORE | ES_PF_KEEP_ZORDER | ES_PF_CELL)
 
 /* ---------------------------------------------------------- groups (2.12) */
 
@@ -2461,6 +2476,8 @@ struct ESBGroup {
     char name[ESB_GROUP_NAME];
     ULONG member[ESB_GROUP_MEMBERS];
     int members;
+    int gap;                   /* 2.20: room between two cells     */
+    int margin[4];             /* 2.20: left, top, right, bottom   */
 };
 static struct ESBGroup g_groups[ESB_GROUP_SLOTS];
 static ULONG g_group_next = 1;
@@ -2526,6 +2543,23 @@ static struct ESBGroup *esb_group_of_serial(ULONG serial)
         }
     }
     return NULL;
+}
+
+/*
+ * g_sem held. 2.20: a cell of a layout made into a window box with the
+ * gaps and margins of the window's group, and the area less the
+ * margins; 0 for a window in no group.
+ */
+static int esb_group_cell(struct Window *win, const ESRect *cell,
+                          const ESRect *usable, ESRect *box, ESRect *area)
+{
+    struct ESBGroup *g = esb_group_of_serial(esb_serial_of_ptr(win));
+
+    if (g == NULL) {
+        return 0;
+    }
+    es_cell_rect(cell, usable, g->gap, g->margin, box, area);
+    return 1;
 }
 
 /* g_sem held, identities observed: members that closed leave. */
@@ -2638,6 +2672,8 @@ LONG esb_create_group(ULONG area, const char *name, ULONG flags,
             g->task = c->task;
             g->flags = flags;
             g->members = 0;
+            g->gap = 0;
+            g->margin[0] = g->margin[1] = g->margin[2] = g->margin[3] = 0;
             for (i = 0; i < ESB_GROUP_NAME - 1 && name != NULL && name[i] != '\0'; i++) {
                 g->name[i] = name[i];
             }
@@ -2678,6 +2714,75 @@ LONG esb_delete_group(ULONG group)
     g = esb_group_mine(group, &rc);
     if (g != NULL) {
         g->id = 0;
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
+/*
+ * 2.20: the group's gaps and margins. Applied to a copy first, so that
+ * a value out of range changes nothing, as ESnap_SetOptionsA does.
+ */
+LONG esb_set_group_options(ULONG group, const struct TagItem *tags)
+{
+    const struct TagItem *scan = tags;
+    const struct TagItem *ti;
+    struct ESBGroup *g;
+    int gap, margin[4];
+    LONG rc, v;
+
+    if (tags == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    g = esb_group_mine(group, &rc);
+    if (g != NULL) {
+        gap = g->gap;
+        margin[0] = g->margin[0];
+        margin[1] = g->margin[1];
+        margin[2] = g->margin[2];
+        margin[3] = g->margin[3];
+        while (rc == ES_OK && (ti = esb_next_tag(&scan)) != NULL) {
+            v = (LONG)ti->ti_Data;
+            switch (ti->ti_Tag) {
+            case ES_GO_Gap:
+                if (v < 0 || v > ES_GO_GAP_MAX) {
+                    rc = ES_ERR_BAD_ARGS;
+                } else {
+                    gap = (int)v;
+                }
+                break;
+            case ES_GO_Margin:
+                if (v < 0 || v > ES_GO_MARGIN_MAX) {
+                    rc = ES_ERR_BAD_ARGS;
+                } else {
+                    margin[0] = margin[1] = margin[2] = margin[3] = (int)v;
+                }
+                break;
+            case ES_GO_MarginLeft:
+            case ES_GO_MarginTop:
+            case ES_GO_MarginRight:
+            case ES_GO_MarginBottom:
+                if (v < 0 || v > ES_GO_MARGIN_MAX) {
+                    rc = ES_ERR_BAD_ARGS;
+                } else {
+                    margin[ti->ti_Tag - ES_GO_MarginLeft] = (int)v;
+                }
+                break;
+            default:
+                break;                 /* a later revision's tag */
+            }
+        }
+        if (rc == ES_OK) {
+            g->gap = gap;
+            g->margin[0] = margin[0];
+            g->margin[1] = margin[1];
+            g->margin[2] = margin[2];
+            g->margin[3] = margin[3];
+        }
     }
     ReleaseSemaphore(&g_sem);
     return rc;

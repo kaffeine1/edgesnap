@@ -180,4 +180,10 @@
         struct Window *, __p0, a0, ULONG *, __p1, a1, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+/* --- appended for 2.20: gaps and margins per group --- */
+#define ESnap_SetGroupOptionsA(__p0, __p1) \
+    LP2(0xd2, LONG, ESnap_SetGroupOptionsA, \
+        ULONG, __p0, d0, const struct TagItem *, __p1, a0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */

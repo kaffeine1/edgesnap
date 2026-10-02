@@ -1086,6 +1086,20 @@ What follows in that list (work areas, groups, divider tokens, client
 roles) is the section below, designed in the issue with a real client
 on the other side.
 
+Item 9, gaps and margins per group, came as revision 2.20
+(2026-10-02). `ESnap_SetGroupOptionsA` keeps an inner gap and four
+outer margins with the group, and `ES_PF_CELL` asks `PlaceWindow` and
+`PlaceWindowsA` to take them off a cell: a side at the edge of the
+usable area gives up the margin there, a side shared with another cell
+half the gap, the odd pixel going to the right or bottom side. So the
+tiler computes cells that tile the area exactly, and the room between
+them is the library's to keep the same everywhere; a window's size
+limits are fitted against the area less the margins, so one that has
+to grow still keeps to its margin. The arithmetic is `es_cell_rect` in
+`core/zones.c`, host-tested; esnaptest places its own window in a half
+cell and finds it where it should be, on all three systems. Item 6,
+divider tokens per group, waits for the tiler that would use them.
+
 ### Before the ABI freeze
 
 Four structural changes. Each one moves a public signature, which is why

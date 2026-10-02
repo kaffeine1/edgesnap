@@ -409,6 +409,11 @@ ULONG ESnap_QueryGeneration(struct Screen *screen);
  *                      damage a file manager will not repaint; with
  *                      this flag it stays where it is in the stack,
  *                      damage and all.
+ *   ES_PF_CELL         (2.20) rect is a cell of the layout of the
+ *                      window's group: the group's margins and gap are
+ *                      taken off it (see ESnap_SetGroupOptionsA). A
+ *                      window in no group is placed in the cell as it
+ *                      is. An older library answers ES_ERR_BAD_ARGS.
  *
  * ESnap_PlaceWindowsA: a whole layout in one call. Every entry gets its
  * own result, so one stale window does not fail the rest. The library
@@ -420,6 +425,7 @@ ULONG ESnap_QueryGeneration(struct Screen *screen);
  */
 #define ES_PF_NO_RESTORE   0x0001UL
 #define ES_PF_KEEP_ZORDER  0x0002UL
+#define ES_PF_CELL         0x0004UL
 
 LONG ESnap_PlaceWindow(struct Window *win, const struct ESnapRect *rect,
                        ULONG flags);
@@ -598,5 +604,41 @@ LONG ESnap_DeleteGroup(ULONG group);
 LONG ESnap_GroupAddWindow(ULONG group, struct Window *win);
 LONG ESnap_GroupRemoveWindow(ULONG group, struct Window *win);
 LONG ESnap_QueryGroupOf(struct Window *win, ULONG *group_out);
+
+/*
+ * --- 2.20: gaps and margins per group --------------------------------
+ *
+ * The global margins (ES_OPT_Margin*) are the user's; a tiler wants
+ * room between the cells of its layout and around it, its own for each
+ * group. ESnap_SetGroupOptionsA keeps them with the group, and
+ * PlaceWindow and PlaceWindowsA take them off a cell when asked with
+ * ES_PF_CELL: a side at or beyond the edge of the usable area gives up
+ * the margin of that side, a side shared with another cell half the
+ * gap, so that two neighbours leave exactly the gap between them (an
+ * odd pixel goes to the right or bottom cell's side). A seam dragged
+ * between two of the group's windows keeps the gap they have.
+ *
+ *   ES_GO_Gap           LONG, room between two cells, 0..ES_GO_GAP_MAX
+ *   ES_GO_Margin        LONG, all four margins at once, applied before
+ *                       the per-side tags of the same call
+ *   ES_GO_MarginLeft, ES_GO_MarginTop, ES_GO_MarginRight,
+ *   ES_GO_MarginBottom  LONG, 0..ES_GO_MARGIN_MAX
+ *
+ * All 0 when the group is made. Unknown tags are ignored; a value out
+ * of range changes nothing and answers ES_ERR_BAD_ARGS. The owner's
+ * task only:
+ *   ES_OK / ES_ERR_BAD_ARGS / ES_ERR_REJECTED (not the owner) /
+ *   ES_ERR_STALE (no such group).
+ */
+#define ES_GO_Gap          (ES_TAGBASE + 0x101)
+#define ES_GO_Margin       (ES_TAGBASE + 0x102)
+#define ES_GO_MarginLeft   (ES_TAGBASE + 0x103)
+#define ES_GO_MarginTop    (ES_TAGBASE + 0x104)
+#define ES_GO_MarginRight  (ES_TAGBASE + 0x105)
+#define ES_GO_MarginBottom (ES_TAGBASE + 0x106)
+#define ES_GO_GAP_MAX      200
+#define ES_GO_MARGIN_MAX   2000
+
+LONG ESnap_SetGroupOptionsA(ULONG group, const struct TagItem *tags);
 
 #endif /* EDGESNAP_H */

@@ -353,3 +353,34 @@ void es_order_by_growth(const long *delta, int n, int *order)
         order[j] = idx;
     }
 }
+
+void es_cell_rect(const ESRect *cell, const ESRect *usable, int gap,
+                  const int margin[4], ESRect *out, ESRect *area)
+{
+    int left = cell->x;
+    int top = cell->y;
+    int right = cell->x + cell->w;
+    int bottom = cell->y + cell->h;
+    int half = gap / 2;
+
+    left += left <= usable->x ? margin[0] : half;
+    top += top <= usable->y ? margin[1] : half;
+    right -= right >= usable->x + usable->w ? margin[2] : gap - half;
+    bottom -= bottom >= usable->y + usable->h ? margin[3] : gap - half;
+    out->x = left;
+    out->y = top;
+    out->w = right - left > 0 ? right - left : 1;
+    out->h = bottom - top > 0 ? bottom - top : 1;
+    if (area != 0) {
+        area->x = usable->x + margin[0];
+        area->y = usable->y + margin[1];
+        area->w = usable->w - margin[0] - margin[2];
+        area->h = usable->h - margin[1] - margin[3];
+        if (area->w < 1) {
+            area->w = 1;
+        }
+        if (area->h < 1) {
+            area->h = 1;
+        }
+    }
+}

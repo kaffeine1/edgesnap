@@ -290,6 +290,15 @@ AROS_LP2(LONG, ESnap_QueryGroupOf,
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP2(LONG, ESnap_SetGroupOptionsA,
+         AROS_LPA(ULONG, group, D0),
+         AROS_LPA(const struct TagItem *, tags, A0),
+         LIBBASETYPEPTR, EdgeSnapBase, 35, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* CLIB_EDGESNAP_PROTOS_H */

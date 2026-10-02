@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 19
-#define ES_LIB_IDSTRING "edgesnap.library 2.19 (28.9.2026) Michele Dipace"
+#define ES_LIB_REVISION 20
+#define ES_LIB_IDSTRING "edgesnap.library 2.20 (2.10.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -468,6 +468,14 @@ static LONG _ESnap_QueryGroupOf(struct EdgeSnapIFace *Self,
     return esb_query_group_of(win, group_out);
 }
 
+/* --- appended for 2.20: gaps and margins per group --- */
+static LONG _ESnap_SetGroupOptionsA(struct EdgeSnapIFace *Self, ULONG group,
+                                    const struct TagItem *tags)
+{
+    (void)Self;
+    return esb_set_group_options(group, tags);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -504,6 +512,7 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_GroupAddWindow,
     (APTR)_ESnap_GroupRemoveWindow,
     (APTR)_ESnap_QueryGroupOf,
+    (APTR)_ESnap_SetGroupOptionsA,
     (APTR)-1
 };
 

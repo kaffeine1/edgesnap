@@ -40,4 +40,5 @@ ESnap_DeleteGroup(group)(d0)
 ESnap_GroupAddWindow(group,win)(d0,a0)
 ESnap_GroupRemoveWindow(group,win)(d0,a0)
 ESnap_QueryGroupOf(win,group_out)(a0,a1)
+ESnap_SetGroupOptionsA(group,tags)(d0,a0)
 ##end

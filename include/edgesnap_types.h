@@ -103,6 +103,10 @@
  *       zone when it is dragged. An older library refuses 0 and 1,
  *       and every other tag of the same call with them: a client
  *       checks the revision before it sends them.
+ *   2.20 - gaps and margins per group: SetGroupOptionsA appended, and
+ *       ES_PF_CELL for PlaceWindow and PlaceWindowsA, which takes them
+ *       off a cell of the group's layout (item 9 of the tiler's list in
+ *       issue 2). An older library refuses the flag with BAD_ARGS.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the
