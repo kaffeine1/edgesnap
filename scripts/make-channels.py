@@ -51,7 +51,7 @@ ARCHIVE = os.path.join(ROOT, "build", "EdgeSnap-%s.lha" % VERSION)
 ARCHIVE_AROS = os.path.join(ROOT, "build", "EdgeSnap-%s-AROS64.lha" % VERSION)
 # From the second AROS release on, the previous archive is named here so
 # the old entry does not survive beside the new one. None for the first.
-AROS_REPLACES_AMINET = "util/cdity/edgesnap.x86_64-aros.lha"  # 0.31, checked 2026-09-26
+AROS_REPLACES_AMINET = "util/cdity/edgesnap.x86_64-aros.lha"  # 0.4, checked 2026-10-03
 AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
@@ -71,32 +71,29 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-A window can now go to the middle of the screen at the size it has
-(ctrl alt c), and ctrl alt z opens a small selector under the pointer:
-nine cells that are the map of the screen, one for each place a window
-can go, chosen with the mouse or the cursor keys.
+A corner is now the corner itself. Anywhere along a side edge gives the
+half, even with the title bar right under the screen's own; for a
+quarter, push the pointer on into the corner, where the screen stops
+it. The top edge is the screen's own title bar, so a window that sits
+at the top is no longer maximised the moment it is touched. The Corner
+size setting gives the longer corners back. Preferences saved by an
+earlier version keep the corner size they had, 4: set it to 0 for the
+corner itself.
 
-Windows glide into place instead of jumping. I judged the glide on real
-MorphOS hardware before making it the default, and it can be switched
-off in the preferences ("Glide into place") by anyone who prefers the
-jump.
+A window that may not go past the edge of the screen keeps the pointer
+from reaching it. Each system has its own setting for that, and the
+preferences now show it on all three as "Windows can move off-screen".
+On MorphOS, where it is off as delivered, the first installation turns
+it on and says so. From a Shell: SYS:Prefs/EdgeSnap OFFSCREEN followed
+by QUERY, ON or OFF.
 
-Pressing the same side hotkey again gives the window two thirds of the
-screen, then one third, then a half again. That can be switched off too,
-and from this version switching it off really works.
+The preferences program now writes a setting left at its default as a
+comment, so a better default in a later version reaches everyone who
+never changed that setting.
 
-The seam between two windows is more careful: its handle gives back what
-it covered, and a window laid over a snapped pair no longer shows the
-handle through it or lets it take the clicks meant for that window.
-
-Carlo Spadoni drew the icons for all three systems: the program, the
-preferences, the drawer, the installer and the documents.
-
-For programmers, edgesnap.library 2.17 adds what a tiling window manager
-needs from it: client roles, so that one program owns the drag and others
-own their layouts; work areas with an identity that survives a screen
-mode change; and layout groups that can keep other programs off their
-windows.
+For programmers, edgesnap.library 2.20 gives a layout group gaps
+between its windows and margins from the edges of the screen, applied
+when a program places one of the group's windows as a cell.
 """),
     ("WHAT IT IS", """
 EdgeSnap gives AmigaOS 4.x, MorphOS and AROS x86_64 the window snapping that Windows
@@ -163,8 +160,9 @@ Since 2.10 the library also serves tiling window managers: one client
 owns the interactive drag and any number own their layouts, work areas
 keep an identity across a screen mode change, and a layout group can
 keep every other program, the commodity's drag included, off its
-windows. The included esnaptest client exercises the whole API on all
-three systems.
+windows. Since 2.20 a group can also keep gaps between its windows and
+margins from the edges of the screen. The included esnaptest client
+exercises the whole API on all three systems.
 
 The library says %s while EdgeSnap says %s, and that is not a mistake:
 a library's version is its interface, not its product. While EdgeSnap is
