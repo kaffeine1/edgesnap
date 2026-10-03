@@ -38,13 +38,9 @@ target-system behavior.
 
 ## Prior art
 
-Window snapping is not new on the Amiga, and the closest and most
-successful piece of prior art is **GoSnap**.
-
-**GoSnap solves the classic AmigaOS 3.x case, and solves it well.** It
-is the answer for that world, it is used, and EdgeSnap is not an
-attempt to replace it or to improve on it there. Anyone on 3.x is
-better served by GoSnap today.
+Window snapping is not new on the Amiga, and the closest piece of
+prior art is **GoSnap**, a commodity for AmigaOS 3.1.4 and later that
+snaps a window dragged to an edge or a corner of the screen.
 
 **EdgeSnap is written for AmigaOS 4.x and MorphOS.** That is not a
 detail of packaging: these systems bring compositing, ReAction and MUI,
