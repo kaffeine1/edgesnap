@@ -531,6 +531,21 @@ static void es_collect(struct ESPrefsGui *gui)
 #endif
 
 /*
+ * The window's id is what makes it remember its place and size. Zune
+ * puts a remembered window back at that size even when its contents
+ * have grown since: after an update from 0.4, in the same session, the
+ * window opened without its Save, Use and Cancel buttons (AROS One 1.3,
+ * 2026-10-03). So on AROS there is no id, and the window always opens
+ * whole. MUI on MorphOS sizes a window to its contents, so there it
+ * keeps its id.
+ */
+#ifdef __AROS__
+#define ES_WINDOW_ID TAG_IGNORE, (ESTagData)0
+#else
+#define ES_WINDOW_ID MUIA_Window_ID, MAKE_ID('E', 'S', 'P', 'R')
+#endif
+
+/*
  * The system's setting as the box shows it: Use for this session, Save
  * for the next start too, even when only an earlier Use had changed it.
  * The system takes it up at once, and a file that already says so is
@@ -614,7 +629,7 @@ int main(int argc, char **argv)
         MUIA_Application_Base,        "EDGESNAPPREFS",
         SubWindow, gui.win = WindowObject,
             MUIA_Window_Title, "EdgeSnap Preferences",
-            MUIA_Window_ID, MAKE_ID('E', 'S', 'P', 'R'),
+            ES_WINDOW_ID,
             WindowContents, VGroup,
                 Child, es_settings_group(&gui),
                 Child, es_offscreen_group(&gui),
