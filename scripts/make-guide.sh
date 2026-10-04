@@ -4,7 +4,9 @@
 #
 # Build EdgeSnap.guide from the prose template and the settings table.
 # The settings section is GENERATED from core/config.c, so the ranges
-# and defaults in the documentation are the ones the program enforces.
+# and defaults in the documentation are the ones the program enforces,
+# and the version string from include/edgesnap_version.h: written by
+# hand it said 0.1 (29.8.2026) in every package up to 0.41.
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -17,9 +19,17 @@ cc -std=c89 -pedantic -Wall -Wextra -I"$ROOT/core" -I"$ROOT/include" \
    "$ROOT/core/engine.c" "$ROOT/core/zones.c" "$ROOT/core/panels.c" \
    -o "$GEN"
 
-awk -v gen="$GEN" '
+HDR="$ROOT/include/edgesnap_version.h"
+VERSION=$(sed -n 's/^#define ES_VERSION  *"\([^"]*\)".*/\1/p' "$HDR")
+DATE=$(sed -n 's/^#define ES_VERSION_DATE  *"\([^"]*\)".*/\1/p' "$HDR")
+if [ -z "$VERSION" ] || [ -z "$DATE" ]; then
+    echo "ERROR: no version or date in $HDR" >&2
+    exit 1
+fi
+
+awk -v gen="$GEN" -v ver="$VERSION ($DATE)" '
     /^%%SETTINGS%%$/ { while ((gen | getline line) > 0) print line; next }
-    { print }
+    { gsub(/%%VER%%/, ver); print }
 ' "$ROOT/packaging/EdgeSnap.guide.in" > "$OUT"
 
 echo "$OUT"

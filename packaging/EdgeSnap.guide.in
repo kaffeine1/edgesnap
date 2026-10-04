@@ -1,5 +1,5 @@
 @database EdgeSnap
-@$VER: EdgeSnap.guide 0.1 (29.8.2026)
+@$VER: EdgeSnap.guide %%VER%%
 @author "Michele Dipace <michele.dipace@kaffeine.net>"
 @(c) "Copyright (c) 2026 Michele Dipace - MIT licence"
 @wordwrap
