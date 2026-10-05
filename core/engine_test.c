@@ -483,6 +483,70 @@ static void test_pinned_pointer_pushing_at_the_edge(void)
 }
 
 /*
+ * The same pinned pointer into a corner, with the corners as they come:
+ * a corner is the corner itself, so the pointer has to be on both edges
+ * at once. A window flush with the left edge and the bottom holds the
+ * pointer up at its title bar, far from the bottom: pushing left alone
+ * gives the half, pushing down as well gives the quarter. At the top
+ * the window stops at the usable area's top, the title bar under it,
+ * and pushing up as well gives the top quarter.
+ */
+static void test_pinned_pointer_pushing_into_a_corner(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, i;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+    f.box.x = 0;                    /* flush with the left edge ...    */
+    f.box.y = 330;                  /* ... and the bottom: 330+150=480 */
+    f.mouse_x = 60;                 /* pinned in the title bar         */
+    f.mouse_y = 340;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone == ES_ZONE_NONE);
+    for (i = 0; i < 3; i++) {
+        f.push_x = -10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_LEFT);
+    for (i = 0; i < 3; i++) {
+        f.push_x = -10;
+        f.push_y = 10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone_changed == 1 && a.zone == ES_ZONE_BOTTOM_LEFT);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 1 && a.snap_zone == ES_ZONE_BOTTOM_LEFT);
+
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+    f.box.x = 0;
+    f.box.y = 12;                   /* flush with the usable area's top */
+    f.mouse_x = 60;
+    f.mouse_y = 20;                 /* the title bar, under that top    */
+    f.push_x = 0;
+    f.push_y = 0;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone == ES_ZONE_NONE);
+    for (i = 0; i < 3; i++) {
+        f.push_x = -10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_LEFT);
+    for (i = 0; i < 3; i++) {
+        f.push_x = -10;
+        f.push_y = -10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone_changed == 1 && a.zone == ES_ZONE_TOP_LEFT);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 1 && a.snap_zone == ES_ZONE_TOP_LEFT);
+}
+
+/*
  * With the settings as they come, a window whose title bar is just
  * under the screen's bar is not in the maximize zone when it is
  * dragged: the top edge is the screen's bar. Pushed up into it, it is.
@@ -592,6 +656,7 @@ int main(void)
     test_default_corner_is_the_corner();
     test_default_top_is_the_screen_bar();
     test_pinned_pointer_pushing_at_the_edge();
+    test_pinned_pointer_pushing_into_a_corner();
     test_push_without_a_wall_is_ignored();
     test_click_without_drag();
     test_app_moves_window_alone();
