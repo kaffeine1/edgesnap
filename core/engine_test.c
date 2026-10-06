@@ -487,9 +487,9 @@ static void test_pinned_pointer_pushing_at_the_edge(void)
  * a corner is the corner itself, so the pointer has to be on both edges
  * at once. A window flush with the left edge and the bottom holds the
  * pointer up at its title bar, far from the bottom: pushing left alone
- * gives the half, pushing down as well gives the quarter. At the top
- * the window stops at the usable area's top, the title bar under it,
- * and pushing up as well gives the top quarter.
+ * gives the half, pushing on down gives the quarter. At the top the
+ * window stops at the usable area's top, the title bar under it, and
+ * pushing on up gives the top quarter.
  */
 static void test_pinned_pointer_pushing_into_a_corner(void)
 {
@@ -513,7 +513,7 @@ static void test_pinned_pointer_pushing_into_a_corner(void)
     }
     CHECK(a.zone == ES_ZONE_LEFT);
     for (i = 0; i < 3; i++) {
-        f.push_x = -10;
+        f.push_x = -2;
         f.push_y = 10;
         es_engine_motion(&e, &f, &a);
     }
@@ -537,13 +537,157 @@ static void test_pinned_pointer_pushing_into_a_corner(void)
     }
     CHECK(a.zone == ES_ZONE_LEFT);
     for (i = 0; i < 3; i++) {
-        f.push_x = -10;
+        f.push_x = -2;
         f.push_y = -10;
         es_engine_motion(&e, &f, &a);
     }
     CHECK(a.zone_changed == 1 && a.zone == ES_ZONE_TOP_LEFT);
     es_engine_release(&e, &a);
     CHECK(a.do_snap == 1 && a.snap_zone == ES_ZONE_TOP_LEFT);
+}
+
+/*
+ * A hand, not a test script (MorphOS, 2026-10-05): pushing left against
+ * the edge, half the reports carry only a little vertical travel, and
+ * the window, free on that axis, moves with it. The first form of the
+ * push started over at each of those and never reached the edge.
+ */
+static void test_push_survives_a_hand_mixing_the_axes(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, i, changes = 0, reached = 0;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+    f.box.x = 0;
+    f.mouse_x = 60;
+    f.mouse_y = 240;
+    es_engine_motion(&e, &f, &a);
+    for (i = 0; i < 40; i++) {
+        if (i % 2 == 0) {
+            f.push_x = -3;
+            f.push_y = 0;
+        } else {
+            f.push_x = 0;
+            f.push_y = 1;
+            f.mouse_y += 1;          /* the window follows down */
+            f.box.y += 1;
+        }
+        es_engine_motion(&e, &f, &a);
+        if (a.zone_changed) {
+            changes++;
+        }
+        if (a.zone == ES_ZONE_LEFT && !reached) {
+            reached = i + 1;
+        }
+    }
+    CHECK(reached > 0 && reached <= 24);  /* about 24 px of push */
+    CHECK(a.zone == ES_ZONE_LEFT);
+    CHECK(changes == 1);                  /* reached once, kept  */
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 1 && a.snap_zone == ES_ZONE_LEFT);
+}
+
+/*
+ * A window held on both axes, in the bottom left of the screen, pushed
+ * left with the downward drift a hand has: the left half, never the
+ * quarter. A push that means the corner, down more than half as much as
+ * left, gets it.
+ */
+static void test_drift_does_not_make_a_corner(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, i;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+    f.box.x = 0;
+    f.box.y = 330;                   /* flush with the bottom too      */
+    f.mouse_x = 60;
+    f.mouse_y = 340;
+    es_engine_motion(&e, &f, &a);
+    for (i = 0; i < 60; i++) {
+        f.push_x = -3;
+        f.push_y = (i % 3 == 0) ? 1 : 0; /* drift, one in nine        */
+        es_engine_motion(&e, &f, &a);
+        CHECK(a.zone != ES_ZONE_BOTTOM_LEFT);
+    }
+    CHECK(a.zone == ES_ZONE_LEFT);
+    for (i = 0; i < 60; i++) {
+        f.push_x = -3;
+        f.push_y = 1;                /* drift, one in three            */
+        es_engine_motion(&e, &f, &a);
+        CHECK(a.zone != ES_ZONE_BOTTOM_LEFT);
+    }
+    for (i = 0; i < 12; i++) {       /* now the corner, meant          */
+        f.push_x = -2;
+        f.push_y = 4;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_BOTTOM_LEFT);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 1 && a.snap_zone == ES_ZONE_BOTTOM_LEFT);
+
+    /* straight from the middle of nowhere into the corner, at the angle
+     * of a hand aiming at it: both edges together */
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+    f.box.x = 0;
+    f.box.y = 330;
+    f.mouse_x = 60;
+    f.mouse_y = 340;
+    f.push_x = 0;
+    f.push_y = 0;
+    es_engine_motion(&e, &f, &a);
+    for (i = 0; i < 20; i++) {
+        f.push_x = -3;
+        f.push_y = 3;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_BOTTOM_LEFT);
+    es_engine_release(&e, &a);
+}
+
+/*
+ * At the wall, a shaking hand: travel back and forth, a little up and
+ * down. The zone stays; it neither goes nor comes back.
+ */
+static void test_push_holds_under_a_shaking_hand(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, i, changes = 0;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    start_drag(&e, &f);
+    f.box.x = 0;
+    f.mouse_x = 60;
+    f.mouse_y = 240;
+    es_engine_motion(&e, &f, &a);
+    for (i = 0; i < 4; i++) {
+        f.push_x = -10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_LEFT);
+    for (i = 0; i < 50; i++) {
+        f.push_x = (i % 2 == 0) ? 2 : -2;
+        f.push_y = (i % 4 < 2) ? 1 : -1;
+        es_engine_motion(&e, &f, &a);
+        if (a.zone_changed) {
+            changes++;
+        }
+    }
+    CHECK(changes == 0 && a.zone == ES_ZONE_LEFT);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 1 && a.snap_zone == ES_ZONE_LEFT);
 }
 
 /*
@@ -657,6 +801,9 @@ int main(void)
     test_default_top_is_the_screen_bar();
     test_pinned_pointer_pushing_at_the_edge();
     test_pinned_pointer_pushing_into_a_corner();
+    test_push_survives_a_hand_mixing_the_axes();
+    test_drift_does_not_make_a_corner();
+    test_push_holds_under_a_shaking_hand();
     test_push_without_a_wall_is_ignored();
     test_click_without_drag();
     test_app_moves_window_alone();

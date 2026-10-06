@@ -99,7 +99,9 @@ typedef struct ESEngine {
     int zone;
     ESRect zone_rect;   /* fitted target of the current zone            */
     ESWinFacts last;    /* facts snapshot from the latest motion        */
-    int push_acc_x, push_acc_y; /* raw travel while the pointer stood   */
+    int push_acc_x, push_acc_y; /* raw travel while the pointer stood,  */
+                                /* in half pixels (es_push_axis)        */
+    int push_wall_x, push_wall_y; /* -1 low wall, 1 high wall, 0 none   */
 } ESEngine;
 
 /* cfg == NULL uses defaults. */

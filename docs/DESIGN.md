@@ -175,8 +175,8 @@ interfaces). Heuristic instead:
   1 along with every other setting of the call, so the commodity sends
   it the old 4 instead. Where a window may not leave the screen
   (MorphOS as delivered) the corner is reached by the push of library
-  2.7 (below), and a bottom corner needs it on both axes at once: that
-  is the case to watch on real hardware.
+  2.7 (below), and a bottom corner needs it on both axes at once, which
+  holds under a real hand from 2.21 (below).
 - Dock awareness (macOS-style, added 2026-08-26, field-tuned on real
   MorphOS the same day): edge strips reserved by panel-like windows are
   auto-subtracted from the usable area. Detection is split per the
@@ -868,7 +868,8 @@ still names the switch for whoever prefers it.
 **The system's own setting, from EdgeSnap's preferences (0.41,
 2026-10-01).** The push answers, but a window that may go past the edge
 answers better: the zones need two pushes at once for a bottom corner,
-and on real hardware a push can flicker. So the preferences program on
+and on real hardware a push could flicker (until 2.21, below). So the
+preferences program on
 all three systems now shows the system's setting, in a section named
 after the system so that nobody takes it for one of ours, and writes
 it where the system keeps it, that one bit and nothing else of the
@@ -907,6 +908,36 @@ What changed is who asks: the box in the preferences window, at the
 user's hand, and the first installation on MorphOS, which chooses it
 once and says so on a page of its own. An update never touches it:
 whoever turned it back meant it. The push stays for whoever does.
+
+**2.21, the push under a real hand (2026-10-06).** The push of 2.7 was
+right under emulation and wrong under a hand. On real MorphOS hardware,
+with the setting off and the corners as they come, the window stopped
+at the edge and no frame came. The mouse's travel did arrive (the
+ctrl alt d dump counted 949 RAWMOUSE events and no absolute ones); the
+engine threw it away. It started an axis over at every motion step
+without travel on that axis, and a hand mixes the two axes all the
+time, so the count went back to nothing long before it reached 24.
+Emulation sends clean steps, one axis at a time, which is why it never
+showed. Now, per axis (`es_push_axis()` in `core/engine.c`):
+
+- a step without travel on the axis changes nothing; only the pointer
+  moving on the axis, which means it is free, starts over;
+- travel towards a side the window is not flush with builds nothing;
+- until the wall is reached, travel on the other axis wears the count
+  down by half of itself: a drift riding along a push never adds up to
+  a wall, so no corner by accident, while a push into a corner steeper
+  than one in two gets there;
+- once at the wall the axis stays there until the pointer is free or
+  has pushed back half the way, so the zone no longer comes and goes
+  under a shaking hand.
+
+The host tests replay the hand: horizontal steps alternating with
+vertical-only ones, a drift of one in three and one in nine under a
+push, a shake at the wall, a diagonal into a corner. The 2.20 engine
+fails exactly those. On the same machine with 2.21 the frame came up
+regularly, the title bar grabbed far from its end, and a bottom corner
+came straight from a diagonal push. No vector changes; the revision
+moves because the behaviour does.
 
 **Where 0.3 stands (2026-09-06).** The prepared release includes the
 AROS x86_64 ABIv11 lane, library API 2.6 on all three systems, the

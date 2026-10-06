@@ -89,13 +89,15 @@ from reaching it. Each system has its own setting for that, and the
 preferences now show it on all three as "Windows can move off-screen".
 On MorphOS, where it is off as delivered, the first installation turns
 it on and says so. From a Shell: SYS:Prefs/EdgeSnap OFFSCREEN followed
-by QUERY, ON or OFF.
+by QUERY, ON or OFF. Where it stays off, pushing the mouse on against
+the edge now brings the frame up reliably under a real hand, corners
+included.
 
 The preferences program now writes a setting left at its default as a
 comment, so a better default in a later version reaches everyone who
 never changed that setting.
 
-For programmers, edgesnap.library 2.20 gives a layout group gaps
+For programmers, edgesnap.library now gives a layout group gaps
 between its windows and margins from the edges of the screen, applied
 when a program places one of the group's windows as a cell.
 """),
@@ -407,7 +409,8 @@ re-balance them. It installs as a commodity that starts with the system.
 MIT licence."""
 MORPHOS_STORAGE_NEW = ("New in %s: a corner is the corner itself and the top "
                        "edge the screen's bar, the system's off-screen setting "
-                       "in the preferences, defaults written as comments, and "
+                       "in the preferences, a push against the edge that works "
+                       "under a real hand, defaults written as comments, and "
                        "library %s with gaps and margins per group."
                        % (VERSION, LIBRARY_VERSION))
 

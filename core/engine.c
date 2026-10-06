@@ -74,6 +74,77 @@ static void es_engine_clear_tracking(ESEngine *e)
     e->zone = ES_ZONE_NONE;
     e->push_acc_x = 0;
     e->push_acc_y = 0;
+    e->push_wall_x = 0;
+    e->push_wall_y = 0;
+}
+
+/*
+ * One axis of the push against a wall. A window that may not leave the
+ * screen (MorphOS as delivered, AROS with "offscreen move" off, AmigaOS
+ * 4 with off-screen dragging off) stops at the edge, and Intuition keeps
+ * the pointer where it grabbed the title bar: the pointer never reaches
+ * the edge, but the mouse's own travel still arrives. Pushed on far
+ * enough against an edge the window is flush with, the pointer counts as
+ * being ON that edge.
+ *
+ * Under a real hand (MorphOS, 2026-10-05) the first form of this never
+ * got there: it started the count over at every report without travel
+ * on its axis, and a hand mixes the two axes all the time. So:
+ *  - a report with no travel on this axis changes nothing; only the
+ *    pointer moving on this axis, which means it is free, starts over;
+ *  - travel towards a side the window is not flush with builds nothing;
+ *  - until the wall is reached, travel on the other axis wears the count
+ *    down by half of itself, so a drift riding along a push never adds
+ *    up to a wall (no corner by accident), while a push into a corner,
+ *    at an angle steeper than one in two, does;
+ *  - once at the wall the axis stays there until the pointer is free
+ *    again or has pushed back half the way: the zone does not come and
+ *    go under a shaking hand.
+ * The count is kept in half pixels, for that half. push_px 0 or less
+ * turns the push off. Returns -1 at the low wall (left, top), 1 at the
+ * high one (right, bottom), 0 when the pointer is where it is.
+ */
+static int es_push_axis(int *acc, int *wall, int push, int perp,
+                        int pinned, int flush_lo, int flush_hi, int push_px)
+{
+    int reach = 2 * push_px;         /* the count needed, half pixels */
+    int add = 2 * push;
+    int wear;
+
+    if (!pinned || push_px <= 0) {
+        *acc = 0;
+        *wall = 0;
+        return 0;
+    }
+    if ((add < 0 && !flush_lo && *acc <= 0) ||
+        (add > 0 && !flush_hi && *acc >= 0)) {
+        add = 0;                     /* no wall on that side */
+    }
+    *acc += add;
+    if (*wall == 0) {
+        wear = es_abs(perp);
+        if (*acc > 0) {
+            *acc = *acc > wear ? *acc - wear : 0;
+        } else if (*acc < 0) {
+            *acc = -*acc > wear ? *acc + wear : 0;
+        }
+    }
+    if (*acc > 2 * reach) {
+        *acc = 2 * reach;
+    } else if (*acc < -2 * reach) {
+        *acc = -2 * reach;
+    }
+    if (*wall == 0) {
+        if (*acc <= -reach && flush_lo) {
+            *wall = -1;
+        } else if (*acc >= reach && flush_hi) {
+            *wall = 1;
+        }
+    } else if ((*wall < 0 && (*acc > -reach / 2 || !flush_lo)) ||
+               (*wall > 0 && (*acc < reach / 2 || !flush_hi))) {
+        *wall = 0;
+    }
+    return *wall;
 }
 
 void es_engine_init(ESEngine *e, const ESEngineConfig *cfg)
@@ -169,40 +240,26 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
         int my = facts->mouse_y;
         const ESRect *u = &facts->usable;
         const ESRect *b = &facts->box;
-        int z;
+        int z, wall;
 
-        /*
-         * A window that may not leave the screen (MorphOS as delivered,
-         * AROS with "offscreen move" off) stops at the edge, and
-         * Intuition keeps the pointer where it grabbed the title bar:
-         * the pointer never reaches the edge, and nothing would ever
-         * snap. The raw travel of the mouse still arrives. So while the
-         * pointer stands still on an axis and the raw travel keeps
-         * pushing, it is accumulated; once it has pushed far enough
-         * against an edge the window is flush with, the pointer counts
-         * as being ON that edge. A pointer that moves on that axis is
-         * free, and the count starts over.
-         */
-        if (facts->push_x != 0 && mx == prev_mx) {
-            e->push_acc_x += facts->push_x;
-        } else {
-            e->push_acc_x = 0;
-        }
-        if (facts->push_y != 0 && my == prev_my) {
-            e->push_acc_y += facts->push_y;
-        } else {
-            e->push_acc_y = 0;
-        }
-        if (e->push_acc_x <= -e->cfg.push_px && b->x <= u->x) {
+        /* a pointer held back by a window that may not leave the
+         * screen: see es_push_axis() */
+        wall = es_push_axis(&e->push_acc_x, &e->push_wall_x,
+                            facts->push_x, facts->push_y, mx == prev_mx,
+                            b->x <= u->x, b->x + b->w >= u->x + u->w,
+                            e->cfg.push_px);
+        if (wall < 0) {
             mx = u->x;
-        } else if (e->push_acc_x >= e->cfg.push_px &&
-                   b->x + b->w >= u->x + u->w) {
+        } else if (wall > 0) {
             mx = u->x + u->w - 1;
         }
-        if (e->push_acc_y <= -e->cfg.push_px && b->y <= u->y) {
+        wall = es_push_axis(&e->push_acc_y, &e->push_wall_y,
+                            facts->push_y, facts->push_x, my == prev_my,
+                            b->y <= u->y, b->y + b->h >= u->y + u->h,
+                            e->cfg.push_px);
+        if (wall < 0) {
             my = u->y;
-        } else if (e->push_acc_y >= e->cfg.push_px &&
-                   b->y + b->h >= u->y + u->h) {
+        } else if (wall > 0) {
             my = u->y + u->h - 1;
         }
         z = es_zone_from_pointer_top(u, mx, my, e->cfg.edge_px,

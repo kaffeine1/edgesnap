@@ -107,6 +107,11 @@
  *       ES_PF_CELL for PlaceWindow and PlaceWindowsA, which takes them
  *       off a cell of the group's layout (item 9 of the tiler's list in
  *       issue 2). An older library refuses the flag with BAD_ARGS.
+ *   2.21 - the push against an edge that holds the pointer back counts
+ *       under a real hand: a report without travel on an axis no
+ *       longer starts that axis over, a drift along the other axis
+ *       no longer adds up to a corner, and the zone no longer comes
+ *       and goes at the wall. No vector changes.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the
