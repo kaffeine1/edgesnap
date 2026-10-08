@@ -18,7 +18,16 @@
  *     a dock anywhere in the outer band is always reserved;
  *   - it is thin: thickness <= screen dimension / ES_PANEL_MAX_THICK_DIV;
  *   - it is long enough to be a bar, not a corner widget:
- *     length >= ES_PANEL_MIN_LEN_PCT % of its edge.
+ *     length >= ES_PANEL_MIN_LEN_PCT % of its edge. A strip standing
+ *     along a side edge is a bar also when it is at least
+ *     ES_PANEL_MIN_ASPECT times as tall as it is wide, whatever share
+ *     of the edge it covers: a dock is made of icons, which keep their
+ *     size on any screen, and three of them down the side of a
+ *     1080-line screen make 156 lines, under 15% (field case, MorphOS,
+ *     2026-10-08). A strip lying along the top or the bottom keeps the
+ *     share alone: thin and long is also what a tooltip, a label or a
+ *     notification looks like, and they run across the screen, not
+ *     down it.
  * A panel reserves from the screen edge up to its far side, gap
  * included, PLUS ES_PANEL_MARGIN_PX of breathing room so snapped
  * windows never sit glued to the dock. Multiple panels on one edge
@@ -34,6 +43,7 @@
 #define ES_PANEL_MAX_GAP_DIV    4
 #define ES_PANEL_MAX_THICK_DIV  4
 #define ES_PANEL_MIN_LEN_PCT   15
+#define ES_PANEL_MIN_ASPECT     2
 #define ES_PANEL_MARGIN_PX      8
 
 /* es_panel_classify() results. */

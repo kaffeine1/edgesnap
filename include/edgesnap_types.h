@@ -112,6 +112,11 @@
  *       longer starts that axis over, a drift along the other axis
  *       no longer adds up to a corner, and the zone no longer comes
  *       and goes at the wall. No vector changes.
+ *   2.22 - a dock down a side edge is a dock whatever its length: one
+ *       at least twice as tall as it is wide reserves its edge, so a
+ *       short one no longer has windows snapped over it. The usable
+ *       area of QueryScreenArea, the zones and ESWI_PANEL follow. No
+ *       vector changes.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

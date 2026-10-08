@@ -40,7 +40,9 @@ int es_panel_classify(const ESRect *scr, const ESRect *b)
         if (b->w > scr->w / ES_PANEL_MAX_THICK_DIV) {
             return ES_PEDGE_NONE;
         }
-        if (b->h * 100 < scr->h * ES_PANEL_MIN_LEN_PCT) {
+        /* standing: its shape is enough, see panels.h */
+        if (b->h * 100 < scr->h * ES_PANEL_MIN_LEN_PCT &&
+            b->h < b->w * ES_PANEL_MIN_ASPECT) {
             return ES_PEDGE_NONE;
         }
         if (gap_left <= gap_right && gap_left <= band) {

@@ -183,7 +183,9 @@ interfaces). Heuristic instead:
   architecture: the glue filters (no drag bar/size gadget/backdrop, not
   ours - borderless deliberately NOT required), the host-tested core
   policy classifies. A panel is a thin (<= dimension/4), long-enough
-  (>= 15% of the edge) strip living in the OUTER BAND of the screen
+  (>= 15% of the edge, or for a strip standing along a side edge at
+  least twice as tall as it is wide, from 2.22: see below) strip
+  living in the OUTER BAND of the screen
   (gap from its nearest edge <= dimension/4): docks float and users
   raise them, so anywhere in the outer band counts, and the reservation
   runs from the screen edge to the panel's far side, gap included,
@@ -938,6 +940,26 @@ fails exactly those. On the same machine with 2.21 the frame came up
 regularly, the title bar grabbed far from its end, and a bottom corner
 came straight from a diagonal push. No vector changes; the revision
 moves because the behaviour does.
+
+**2.22, docks down the side (2026-10-08).** A user wrote that vertical
+docks were not detected, and that margins set by hand were the way
+round it. The ctrl alt d dump of the author's own MorphOS machine
+already showed it: an Ambient panel of three icons down the right
+edge, 48x156 at 1872,205 on a 1920x1080 screen, marked no-reserve.
+156 lines are 14.4% of 1080, under the 15% of its edge a panel had to
+cover, a rule meant to keep corner widgets out. A dock is made of
+icons, and icons keep their size on any screen, so the share was the
+wrong yardstick for it, and the larger the screen the more docks it
+missed. A strip standing along a side edge now counts as a bar also
+when it is at least twice as tall as it is wide (`ES_PANEL_MIN_ASPECT`
+in `core/panels.h`); one icon with its handle, or anything less than
+twice as tall, still does not. A strip lying along the top or the
+bottom keeps the share alone: thin and long is also the shape of a
+tooltip, a label or a notification, and those run across the screen,
+not down it. The price is that a short dock lying along the bottom,
+three icons or so, is still missed; nobody has reported one. The host
+tests carry the field case and fail on 2.21. No vector changes; the
+revision moves because the behaviour does.
 
 **Where 0.3 stands (2026-09-06).** The prepared release includes the
 AROS x86_64 ABIv11 lane, library API 2.6 on all three systems, the
