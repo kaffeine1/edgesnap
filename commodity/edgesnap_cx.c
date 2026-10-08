@@ -2806,8 +2806,8 @@ static void spike_dump_windows(void)
             it->title[t] = '\0';
             if (spike_is_preview_win(w)) {
                 it->skipped = 1;
-            } else if ((w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET |
-                                    WFLG_BACKDROP)) != 0) {
+            } else if ((w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET)) != 0) {
+                /* the library's own filter: backdrop panels count */
                 it->skipped = 2;
             } else {
                 it->skipped = 0;

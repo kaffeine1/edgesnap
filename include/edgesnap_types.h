@@ -117,6 +117,11 @@
  *       short one no longer has windows snapped over it. The usable
  *       area of QueryScreenArea, the zones and ESWI_PANEL follow. No
  *       vector changes.
+ *   2.23 - a panel kept behind the windows is a panel: backdrop windows
+ *       are no longer refused before the shape is looked at, so an
+ *       Ambient panel set to stay at the back reserves its edge. The
+ *       desktop's own backdrop window covers the screen and still
+ *       reserves nothing. No vector changes.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

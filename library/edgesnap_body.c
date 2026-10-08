@@ -417,10 +417,12 @@ static void esb_usable_area_locked(struct Screen *scr, struct Window *skip,
         if (w == skip || esb_is_ignored(w)) {
             continue;
         }
-        /* Panels do not move, size or sit behind everything. Borderless
-         * is deliberately not required: real docks do not guarantee it. */
-        if ((w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET |
-                         WFLG_BACKDROP)) != 0) {
+        /* Panels do not move or size. Borderless is deliberately not
+         * required: real docks do not guarantee it. Backdrop is not
+         * refused either: Ambient can keep a panel behind the windows
+         * (field case, 2026-10-08), and the desktop windows that are
+         * backdrop cover the whole screen, which the geometry refuses. */
+        if ((w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET)) != 0) {
             continue;
         }
         box.x = w->LeftEdge;
@@ -2316,7 +2318,7 @@ static int esb_looks_like_panel(struct Screen *scr, struct Window *w)
 {
     ESRect scrrect, box;
 
-    if ((w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET | WFLG_BACKDROP)) != 0) {
+    if ((w->Flags & (WFLG_DRAGBAR | WFLG_SIZEGADGET)) != 0) {
         return 0;
     }
     scrrect.x = 0;

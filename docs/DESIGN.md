@@ -180,8 +180,9 @@ interfaces). Heuristic instead:
 - Dock awareness (macOS-style, added 2026-08-26, field-tuned on real
   MorphOS the same day): edge strips reserved by panel-like windows are
   auto-subtracted from the usable area. Detection is split per the
-  architecture: the glue filters (no drag bar/size gadget/backdrop, not
-  ours - borderless deliberately NOT required), the host-tested core
+  architecture: the glue filters (no drag bar/size gadget, not ours -
+  borderless deliberately NOT required, backdrop allowed from 2.23:
+  see below), the host-tested core
   policy classifies. A panel is a thin (<= dimension/4), long-enough
   (>= 15% of the edge, or for a strip standing along a side edge at
   least twice as tall as it is wide, from 2.22: see below) strip
@@ -960,6 +961,21 @@ not down it. The price is that a short dock lying along the bottom,
 three icons or so, is still missed; nobody has reported one. The host
 tests carry the field case and fail on 2.21. No vector changes; the
 revision moves because the behaviour does.
+
+**2.23, panels kept at the back (2026-10-08).** The user who reported
+the vertical docks then sent a dump, and it told another story: their
+dock down the right edge, 48x540 at 1630,23 on a 1680x1050 screen,
+said "skip:flags". It was long enough for any rule; it never reached
+one. Its flags carried WFLG_BACKDROP: Ambient can keep a panel behind
+the windows, and the glue refused every backdrop window before
+looking at its shape, a filter there since the first dock code with no
+field case behind it, meant for the desktop's own backdrop window. That
+window covers the whole screen (Ambient 0,24 1680x1026, the Workbench
+on AmigaOS 4, Wanderer on AROS) and fails the thickness rule anyway, so
+the glue now refuses only a drag bar or a size gadget, in the usable
+area, in ESWI_PANEL and in the commodity's dump alike. A second
+preview has to be 2.23, not a second 2.22: the Installer's copylib
+replaces only an older library. No vector changes.
 
 **Where 0.3 stands (2026-09-06).** The prepared release includes the
 AROS x86_64 ABIv11 lane, library API 2.6 on all three systems, the

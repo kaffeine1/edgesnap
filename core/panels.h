@@ -6,10 +6,13 @@
  * edges (AmiDock on OS4, Ambient panels on MorphOS), macOS-style.
  *
  * Pure C89 geometry, host-tested. The platform glue does the walking
- * and the filtering it alone can do (borderless, no drag bar, no size
- * gadget, no backdrop, not one of our own preview windows) and passes
- * the surviving window boxes here; this module decides which of them
- * are edge panels and how much of each screen edge they reserve.
+ * and the filtering it alone can do (no drag bar, no size gadget, not
+ * one of our own preview windows; borderless is not required and a
+ * backdrop window is not refused, since Ambient can keep a panel
+ * behind the windows) and passes the surviving window boxes here; this
+ * module decides which of them are edge panels and how much of each
+ * screen edge they reserve. The desktop's own backdrop window covers
+ * the whole screen and fails the thickness rule below.
  *
  * Heuristic (documented, field-tuned on real MorphOS, 2026-08-26):
  *   - a panel lives in the OUTER BAND of the screen: its gap from the
