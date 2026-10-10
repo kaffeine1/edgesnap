@@ -27,6 +27,9 @@
 ; to the same places as Install.script on AROS, after asking. AROS One's
 ; InstallerLG and the Installer of the later AROS builds, 44.10 both, are
 ; given Install.script.
+; On aarch64 this script always installs by itself (Michele, 2026-10-10):
+; the Raspberry Pi images change Installer from one build to the next,
+; and one way, the one tried on a Pi 400, is one way to test.
 ;
 ; This Shell's rules, each of which this script has met: a command gets
 ; at most 256 characters of arguments, so every requester text is short
@@ -48,22 +51,24 @@ EndIf
 Delete >NIL: ENV:EdgeSnapCPU QUIET
 Set esdone 0
 
-If EXISTS SYS:Utilities/Installer
-  Search >NIL: SYS:Utilities/Installer "Unimplemented command" QUIET
-  If WARN
-    SYS:Utilities/Installer SCRIPT Install.script APPNAME EdgeSnap
-    Skip restart
+If $esbuild EQ aros64
+  If EXISTS SYS:Utilities/Installer
+    Search >NIL: SYS:Utilities/Installer "Unimplemented command" QUIET
+    If WARN
+      SYS:Utilities/Installer SCRIPT Install.script APPNAME EdgeSnap
+      Skip restart
+    EndIf
   EndIf
-EndIf
-If EXISTS C:Installer
-  Search >NIL: C:Installer "Unimplemented command" QUIET
-  If WARN
-    C:Installer SCRIPT Install.script APPNAME EdgeSnap
-    Skip restart
+  If EXISTS C:Installer
+    Search >NIL: C:Installer "Unimplemented command" QUIET
+    If WARN
+      C:Installer SCRIPT Install.script APPNAME EdgeSnap
+      Skip restart
+    EndIf
   EndIf
 EndIf
 
-; --- no Installer here can copy: the Shell does it --------------------
+; --- aarch64, or no Installer here can copy: the Shell does it --------
 If NOT EXISTS $esbuild/edgesnap.library
   RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.42 beta" "This package has no EdgeSnap for this processor.*N*NAROS has one archive for x86_64 and one for*Naarch64 (Raspberry Pi): download the one for*Nthis machine." "OK"
   If WARN
@@ -84,7 +89,7 @@ If EXISTS SYS:Documentation
   Set esguidef SYS:Documentation/EdgeSnap.guide
 EndIf
 
-RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.42 beta" "The Installer of this AROS copies no files,*Nso this script installs EdgeSnap:*N*NLIBS:edgesnap.library*NSYS:WBStartup/EdgeSnap*NSYS:Prefs/EdgeSnap*NEdgeSnap.guide in $esguide" "Install" "Cancel"
+RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.42 beta" "This installs EdgeSnap:*N*NLIBS:edgesnap.library*NSYS:WBStartup/EdgeSnap, started at every boot*NSYS:Prefs/EdgeSnap, the settings*NEdgeSnap.guide, the manual, in $esguide" "Install" "Cancel"
 If WARN
   Skip norequester
 EndIf
