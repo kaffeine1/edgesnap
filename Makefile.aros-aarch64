@@ -1,0 +1,85 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# AROS aarch64 lane (the native Raspberry Pi port). Built ON the hosted
+# bench with the aarch64-aros cross toolchain (GCC 6.5.0), whose driver
+# already knows its SDK: the default sysroot is the raspi-aarch64
+# Developer tree, and collect-aros links programs with startup.o and
+# autoinit and marks them as AROS binaries. scripts/build-aros-aarch64.sh
+# does the round trip. The same four binaries as the x86_64 lane, from
+# the same sources and the same library/aros/edgesnap.conf.
+#
+# Two flags the platform asks for, both learned on this toolchain:
+#   -ffixed-x18   x18 belongs to the system on AROS aarch64;
+#   -fno-common   the loader rejects COMMON symbols ("file is not
+#                 executable"), and GCC 6 makes a tentative definition
+#                 COMMON unless told otherwise.
+
+AROS_TOOLCHAIN ?= /srv/codex-aros/src/toolchain-core-aarch64/bin
+CC := $(AROS_TOOLCHAIN)/aarch64-aros-gcc
+SDK_ROOT := $(shell $(CC) -print-sysroot)
+SDK_GCC_ROOT ?= $(AROS_TOOLCHAIN)/lib/gcc/aarch64-aros/6.5.0
+
+CFLAGS ?= -Wall -Wextra -O2
+override CFLAGS += -ffixed-x18 -fno-common -fno-asynchronous-unwind-tables \
+	-fno-unwind-tables -D__AROS__ -Icore -Iinclude -Ilibrary -Iprefs
+
+OUT := build/aros-aarch64
+GEN := $(OUT)/gen
+GENMODULE ?= genmodule
+
+LIB_SRC := library/aros/edgesnap_library.c library/edgesnap_body.c \
+	core/zones.c core/panels.c core/engine.c core/registry.c \
+	core/config.c core/gutter.c
+LIB_GEN := $(GEN)/edgesnap_start.c $(GEN)/edgesnap_end.c
+CX_SRC := commodity/edgesnap_cx.c core/config.c core/panels.c core/zones.c \
+	core/engine.c
+PREFS_SRC := prefs/morphos/edgesnap_prefs.c prefs/prefs_io.c \
+	core/config.c core/engine.c core/zones.c core/panels.c \
+	prefs/offscreen_sys.c core/offscreen.c
+
+# A module links without the program startup and without a C runtime.
+MODULE_LDFLAGS ?= -nostartfiles -nostdlib -L"$(SDK_ROOT)/lib" -L"$(SDK_GCC_ROOT)"
+MODULE_LIBS ?= -Wl,--start-group -llibinit -lautoinit -lamiga -laros -lgcc -Wl,--end-group
+
+.PHONY: all clean
+
+all: $(OUT)/edgesnap.library $(OUT)/EdgeSnap $(OUT)/EdgeSnapPrefs $(OUT)/esnaptest
+
+define aros-link
+	mkdir -p "$(dir $@)"
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(1) -o "$@" $(2) $(LDLIBS)
+	@strings "$@" | grep -F '$$VER: ' | head -1
+endef
+
+# genmodule turns edgesnap.conf into the library node, the jump table
+# and the client headers, as on x86_64.
+$(GEN)/edgesnap_start.c: library/aros/edgesnap.conf
+	mkdir -p "$(GEN)/include/proto" "$(GEN)/include/defines" \
+		"$(GEN)/include/inline" "$(GEN)/include/clib"
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)" writefiles edgesnap library
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)" writelibdefs edgesnap library
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)" writefd edgesnap library
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)/include" writeincludes edgesnap library
+
+$(OUT)/edgesnap.library: $(GEN)/edgesnap_start.c $(LIB_SRC)
+	mkdir -p "$(OUT)"
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Wno-unused-parameter -I"$(GEN)" -Ilibrary/aros \
+		-fno-tree-loop-distribute-patterns \
+		$(MODULE_LDFLAGS) -o "$@" $(LIB_GEN) $(LIB_SRC) \
+		-Wl,--undefined=EdgeSnap_1_EdgeSnap_OpenLib $(MODULE_LIBS)
+	@strings "$@" | grep -F '$$VER: ' | head -1
+
+$(OUT)/EdgeSnap: $(CX_SRC) $(GEN)/edgesnap_start.c
+	$(call aros-link,-I"$(GEN)/include",$(CX_SRC))
+
+$(OUT)/esnaptest: tools/esnaptest.c $(GEN)/edgesnap_start.c
+	$(call aros-link,-I"$(GEN)/include",tools/esnaptest.c)
+
+# MUI_NewObject/MUI_MakeObject are link-time wrappers in libmui.a.
+$(OUT)/EdgeSnapPrefs: LDLIBS := -lmui $(LDLIBS)
+$(OUT)/EdgeSnapPrefs: $(PREFS_SRC)
+	$(call aros-link,,$(PREFS_SRC))
+
+clean:
+	rm -rf "$(OUT)"
