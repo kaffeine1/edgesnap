@@ -140,7 +140,10 @@ TO INSTALL: double-click the Install icon. It recognises the system,
 proposes the matching build, and puts everything where it belongs -
 including one line in S:User-Startup (on AROS the commodity goes into
 SYS:WBStartup instead), so snapping is simply there from the next boot.
-Updating is installing again: no reboot needed.
+On the Raspberry Pi, and on any AROS whose own Installer cannot copy
+files, Install does the work itself after one question. Updating is
+installing again: no reboot needed, except that on the Raspberry Pi a
+new library takes over at the next boot.
 
 Docks are now recognised in two more shapes: a short one standing
 along a side of the screen, and a panel kept behind the windows, as

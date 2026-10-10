@@ -73,10 +73,12 @@ first gesture is the drag.
   in an archive of its own, tried on a Raspberry Pi 400; docks are
   recognised in two more shapes, a short one standing along a side of
   the screen and a panel kept behind the windows, as Ambient allows
-  (`edgesnap.library` 2.22 and 2.23); the Installer tells the two AROS
-  processors apart. Checked on real MorphOS hardware, on the Pi 400 and
-  under emulation on AmigaOS 4.1 and AROS One 1.3, each time by
-  installing the package over an earlier version.
+  (`edgesnap.library` 2.22 and 2.23); Install tells the two AROS
+  processors apart, and on the Raspberry Pi, or on any AROS whose own
+  Installer cannot copy files, installs EdgeSnap by itself. Checked on
+  real MorphOS hardware, on the Pi 400 and under emulation on AmigaOS
+  4.1 and AROS One 1.3, each time by installing the package over an
+  earlier version.
 - **0.41 (2026-10-06):** a corner is now the corner itself and the top
   edge the screen's own bar; the system's setting that lets a dragged
   window go past the edge of the screen is in the preferences on all
@@ -114,7 +116,12 @@ first gesture is the drag.
   400 the library, the commodity started from WBStartup, the
   preferences and `esnaptest` all ran at the first build (2026-10-10).
   The two compiler flags the platform asks for are explained in
-  `Makefile.aros-aarch64`.
+  `Makefile.aros-aarch64`. The Installer of that Pi image, AROS's own
+  43.3, copies nothing (`copyfiles`, `copylib` and `protect` are
+  unimplemented in it), so on aarch64 `Install`, a Shell script, does
+  the installation itself; it does the same on an AROS x86_64 that has
+  only that Installer, and on the Pi 400 it installed every file byte
+  for byte.
 - **Library 2.7:** the input handler reports the mouse's own travel
   through `ESnap_FeedMotion`, so a pointer pinned by a window that may
   not leave the screen (MorphOS as delivered) still reaches the zones

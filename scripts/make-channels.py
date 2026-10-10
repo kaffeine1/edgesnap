@@ -93,9 +93,10 @@ behind the windows, as Ambient allows, was never looked at: windows
 snapped over both. Now they keep their edge clear, so margins set by
 hand to keep a dock uncovered can go back to 0.
 
-The Installer recognises which AROS it runs on, x86_64 or aarch64, and
-stops with an explanation when the archive is the one for the other
-processor.
+Install recognises which AROS it runs on, x86_64 or aarch64, and stops
+with an explanation when the archive is the one for the other
+processor. On the Raspberry Pi it installs EdgeSnap by itself, with no
+Installer, as it does on any AROS whose own Installer cannot copy files.
 """),
     ("WHAT IT IS", """
 EdgeSnap gives AmigaOS 4.x, MorphOS and AROS (x86_64 and aarch64) the
@@ -134,8 +135,11 @@ proposes the matching build, and asks before doing anything: the library
 goes to LIBS: and the preferences window to SYS:Prefs/. On AmigaOS 4 and
 MorphOS the commodity goes to C: with a line in S:User-Startup. On AROS
 it goes to SYS:WBStartup with its icon, and the first preview's copy in
-C: is stopped and removed. Updating is just installing again: the
-running copy is stopped and replaced, with no reboot.
+C: is stopped and removed. On the Raspberry Pi, and on any AROS whose
+own Installer cannot copy files, Install does all of this by itself
+after one question. Updating is just installing again: the running copy
+is stopped and replaced, with no reboot, except that on the Raspberry Pi
+a new library takes over at the next boot.
 """),
     ("USING IT", """
   - Drag a window's title bar until the POINTER touches an edge or a

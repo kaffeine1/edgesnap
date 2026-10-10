@@ -990,10 +990,29 @@ unsigned there, as on PowerPC, and the core already reads characters as
 `unsigned char` (the host tests pass with `-funsigned-char`). On a
 Raspberry Pi 400 the first build ran whole: library, commodity from
 WBStartup, preferences, `esnaptest` to the end, snapping by hotkey and
-by drag. It ships as an archive of its own, and the Installer tells
-the two AROS processors apart by exec.library's version string
+by drag. It ships as an archive of its own, and `Install` tells the two
+AROS processors apart by exec.library's version string
 ("exec.library raspi-aarch64 51.9"), stopping with an explanation when
 the archive holds the other processor's build.
+
+**Installing on AROS without the Installer (2026-10-10).** The Pi 400's
+image carries AROS's own Installer, 43.3 of 2004: `copyfiles`,
+`copylib` and `protect` are each an "Unimplemented command" in it, and
+it hands a variable's value on with its first and last characters cut
+off, so the archive guard read "arch64/edgesnap.librar" and aborted.
+The research of August ("AROS ships InstallerLG") holds for AROS One,
+which has InstallerLG 44.10, and for the AROS builds of October, which
+have an Installer 44.10, not for the images before them. `Install` in
+the AROS archives, a Shell script run by IconX, therefore installs
+EdgeSnap itself: on aarch64 always (one way, the one tried on the
+Pi 400), on x86_64 when the Installer it finds carries those words. It
+puts the same files in the same places as `Install.script` on AROS,
+after one requester. Three rules of the AROS Shell shaped it: a command
+receives at most 256 characters of arguments (a longer requester text
+failed, and the script ended with nothing on screen), a variable name
+is letters and digits only, and a command failing at 10 or more ends
+the script unless FailAt says otherwise. `make-release.sh` measures
+the arguments of every line.
 
 **Where 0.3 stands (2026-09-06).** The prepared release includes the
 AROS x86_64 ABIv11 lane, library API 2.6 on all three systems, the
