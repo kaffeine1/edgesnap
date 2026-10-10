@@ -1,4 +1,4 @@
-; EdgeSnap - starts the installation on AROS.
+; EdgeSnap - installs EdgeSnap on AROS.
 ; Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
 ; SPDX-License-Identifier: MIT
 ;
@@ -10,30 +10,190 @@
 ;
 ; Before it, the processor: exec.library names it ("raspi-aarch64" on a
 ; Raspberry Pi), and the script finds ENV:EdgeSnapARM or ENV:EdgeSnapX86
-; with nothing but (exists). After it, what that Installer's (run) cannot
-; do, since it knows neither the command path nor a redirection: stop
-; the copy running, let its library go and start the one just installed
-; - only when the script got to its end and left T:EdgeSnapInstalled.
-; IconX's Shell has only the basic command path, and the Installer is not
-; in the same place everywhere: SYS:Utilities on AROS as built (the
-; Raspberry Pi), C: on AROS One.
+; with nothing but (exists). After it, what an Installer's (run) may not
+; do, since AROS's own knows neither the command path nor a redirection:
+; stop the copy running, let its library go and start the one just
+; installed - only when the script got to its end and left
+; T:EdgeSnapInstalled. IconX's Shell has only the basic command path, and
+; the Installer is not in the same place everywhere: SYS:Utilities, and
+; C: as well on AROS One.
+;
+; Not every Installer can install. The one AROS built for itself up to
+; 43.3, still in the images of September 2026 (the Raspberry Pi's of the
+; 12th among them), copies nothing: copyfiles, copylib and protect are
+; each an "Unimplemented command" in it, words it carries in its own
+; text, and it hands a variable on with its first and last letters cut
+; off. With that one this script installs EdgeSnap itself, the same files
+; to the same places as Install.script on AROS, after asking. AROS One's
+; InstallerLG and the Installer of the later AROS builds, 44.10 both, are
+; given Install.script.
+;
+; This Shell's rules, each of which this script has met: a command gets
+; at most 256 characters of arguments, so every requester text is short
+; (scripts/make-release.sh measures them); a variable name is letters
+; and digits only, an underscore ends it; and a command failing at 10 or
+; more ends the script where it stands - hence FailAt 21, and a look at
+; each return code that matters. The release and library numbers in here
+; are checked against the sources by scripts/make-release.sh as well.
+FailAt 21
 Version >ENV:EdgeSnapCPU exec.library FULL
 Search >NIL: ENV:EdgeSnapCPU aarch64 QUIET
 If WARN
   Echo >ENV:EdgeSnapX86 x86_64
+  Set esbuild aros64
 Else
   Echo >ENV:EdgeSnapARM aarch64
-EndIf
-If EXISTS SYS:Utilities/Installer
-  SYS:Utilities/Installer SCRIPT Install.script APPNAME EdgeSnap
-Else
-  If EXISTS C:Installer
-    C:Installer SCRIPT Install.script APPNAME EdgeSnap
-  Else
-    Installer SCRIPT Install.script APPNAME EdgeSnap
-  EndIf
+  Set esbuild aarch64
 EndIf
 Delete >NIL: ENV:EdgeSnapCPU QUIET
+Set esdone 0
+
+If EXISTS SYS:Utilities/Installer
+  Search >NIL: SYS:Utilities/Installer "Unimplemented command" QUIET
+  If WARN
+    SYS:Utilities/Installer SCRIPT Install.script APPNAME EdgeSnap
+    Skip restart
+  EndIf
+EndIf
+If EXISTS C:Installer
+  Search >NIL: C:Installer "Unimplemented command" QUIET
+  If WARN
+    C:Installer SCRIPT Install.script APPNAME EdgeSnap
+    Skip restart
+  EndIf
+EndIf
+
+; --- no Installer here can copy: the Shell does it --------------------
+If NOT EXISTS $esbuild/edgesnap.library
+  RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.42 beta" "This package has no EdgeSnap for this processor.*N*NAROS has one archive for x86_64 and one for*Naarch64 (Raspberry Pi): download the one for*Nthis machine." "OK"
+  If WARN
+    Skip norequester
+  EndIf
+  Skip restart
+EndIf
+
+; Where Install.script proposes the manual on AROS.
+Set esguide SYS:
+Set esguidef SYS:EdgeSnap.guide
+If EXISTS SYS:Locale/Help
+  Set esguide SYS:Locale/Help
+  Set esguidef SYS:Locale/Help/EdgeSnap.guide
+EndIf
+If EXISTS SYS:Documentation
+  Set esguide SYS:Documentation
+  Set esguidef SYS:Documentation/EdgeSnap.guide
+EndIf
+
+RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.42 beta" "The Installer of this AROS copies no files,*Nso this script installs EdgeSnap:*N*NLIBS:edgesnap.library*NSYS:WBStartup/EdgeSnap*NSYS:Prefs/EdgeSnap*NEdgeSnap.guide in $esguide" "Install" "Cancel"
+If WARN
+  Skip norequester
+EndIf
+If NOT $EdgeSnapAns EQ 1
+  Skip restart
+EndIf
+
+; The first AROS preview, copied to C: by hand: at boot it would start
+; before the new one and keep it from running (see Install.script).
+Set esold 0
+If EXISTS C:EdgeSnap
+  RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.42 beta" "A copy of the first AROS preview is in C:EdgeSnap.*NAt boot it would start before the new one and*Nkeep it from running.*N*NStop it and remove it?" "Remove" "Keep"
+  If WARN
+    Skip norequester
+  EndIf
+  If $EdgeSnapAns EQ 1
+    Set esold 1
+  EndIf
+EndIf
+
+; The library only over an older one, as (copylib) does. Every file is
+; unlocked before it is replaced and left so: one that came off a CD
+; cannot be deleted, and the next installation would stop on it.
+Set eslib 1
+If EXISTS LIBS:edgesnap.library
+  Version >NIL: LIBS:edgesnap.library 2 23 FILE
+  If NOT WARN
+    Set eslib 0
+  EndIf
+EndIf
+If $eslib EQ 1
+  If EXISTS LIBS:edgesnap.library
+    Protect LIBS:edgesnap.library +rwed QUIET
+  EndIf
+  Copy $esbuild/edgesnap.library LIBS: QUIET
+  If WARN
+    Skip failed
+  EndIf
+  Protect LIBS:edgesnap.library +rwed QUIET
+EndIf
+
+If EXISTS SYS:WBStartup/EdgeSnap
+  Protect SYS:WBStartup/EdgeSnap +rwed QUIET
+EndIf
+If EXISTS SYS:WBStartup/EdgeSnap.info
+  Protect SYS:WBStartup/EdgeSnap.info +rwed QUIET
+EndIf
+Copy $esbuild/EdgeSnap $esbuild/EdgeSnap.info SYS:WBStartup QUIET
+If WARN
+  Skip failed
+EndIf
+Protect SYS:WBStartup/EdgeSnap +rwed QUIET
+Protect SYS:WBStartup/EdgeSnap.info +rwed QUIET
+
+If EXISTS SYS:Prefs/EdgeSnap
+  Protect SYS:Prefs/EdgeSnap +rwed QUIET
+EndIf
+If EXISTS SYS:Prefs/EdgeSnap.info
+  Protect SYS:Prefs/EdgeSnap.info +rwed QUIET
+EndIf
+Copy $esbuild/EdgeSnapPrefs SYS:Prefs/EdgeSnap QUIET
+If WARN
+  Skip failed
+EndIf
+Copy $esbuild/EdgeSnapPrefs.info SYS:Prefs/EdgeSnap.info QUIET
+If WARN
+  Skip failed
+EndIf
+Protect SYS:Prefs/EdgeSnap +rwed QUIET
+Protect SYS:Prefs/EdgeSnap.info +rwed QUIET
+
+; No template into ENVARC: from here. Install.script offers it with a
+; question of its own, and ENVARC:EdgeSnap.prefs is the user's: without
+; a question the preferences window writes it, on Save.
+
+If EXISTS $esguidef
+  Protect $esguidef +rwed QUIET
+EndIf
+If EXISTS $esguidef.info
+  Protect $esguidef.info +rwed QUIET
+EndIf
+Copy EdgeSnap.guide EdgeSnap.guide.info $esguide QUIET
+If WARN
+  Skip failed
+EndIf
+Protect $esguidef +rwed QUIET
+Protect $esguidef.info +rwed QUIET
+
+If $esold EQ 1
+  Protect C:EdgeSnap +rwed QUIET
+  Delete C:EdgeSnap QUIET
+EndIf
+
+MakeDir >NIL: T:EdgeSnapInstalled
+Set esdone 1
+Skip restart
+
+; A requester that does not open leaves its reason in ENV:EdgeSnapAns:
+; it goes to IconX's window, which opens for it, and stays there.
+Lab norequester
+Echo "EdgeSnap: no requester could be opened, nothing was installed:"
+Type ENV:EdgeSnapAns
+Wait 30
+Skip restart
+
+Lab failed
+RequestChoice >NIL: "EdgeSnap 0.42 beta" "A file could not be copied, and EdgeSnap is not*Nfully installed: the window behind this one*Nnames it. Is the system volume write-protected,*Nor full?" "OK"
+
+Lab restart
 If EXISTS T:EdgeSnapInstalled
   Delete >NIL: T:EdgeSnapInstalled QUIET
   SYS:WBStartup/EdgeSnap >NIL: QUIT
@@ -50,4 +210,7 @@ If EXISTS T:EdgeSnapInstalled
     Run >NIL: <NIL: SYS:WBStartup/EdgeSnap
   EndIf
 EndIf
-Delete >NIL: ENV:EdgeSnapARM ENV:EdgeSnapX86 QUIET
+If $esdone EQ 1
+  RequestChoice >NIL: "EdgeSnap 0.42 beta" "EdgeSnap is installed: Wanderer starts it from*NSYS:WBStartup at every boot.*NSettings: SYS:Prefs/EdgeSnap*NManual: $esguidef*N*NThe drawer you ran this from can be deleted." "OK"
+EndIf
+Delete >NIL: ENV:EdgeSnapARM ENV:EdgeSnapX86 ENV:EdgeSnapAns QUIET

@@ -33,6 +33,42 @@ do
         exit 1
     fi
 done
+# The AROS launcher installs by itself where the Installer cannot copy:
+# its requesters name the release, and it keeps a newer library as
+# (copylib) does, so it names the library's version too - the one
+# genmodule builds from library/aros/edgesnap.conf.
+if [ "$(grep -o 'EdgeSnap [0-9][0-9.]* beta' "$ROOT/installer/Install-aros" | sort -u)" != "EdgeSnap $VERSION beta" ]; then
+    echo "ERROR: installer/Install-aros does not name version $VERSION everywhere" >&2
+    exit 1
+fi
+LIBVER=$(sed -n 's/^version  *\([0-9][0-9.]*\).*/\1/p' "$ROOT/library/aros/edgesnap.conf")
+if ! grep -qF "LIBS:edgesnap.library ${LIBVER%.*} ${LIBVER#*.} FILE" "$ROOT/installer/Install-aros"; then
+    echo "ERROR: installer/Install-aros does not compare with library $LIBVER" >&2
+    exit 1
+fi
+# AROS hands a command at most 256 characters of arguments (ReadArgs
+# reads them with FGets into 257 bytes): a longer requester text made
+# RequestChoice fail, and the Shell end the script, before anything
+# showed on the Raspberry Pi 400. Every line's arguments are measured
+# with its variables at their longest; a variable not listed here is an
+# error, since it cannot be measured.
+if ! awk '
+    /^[ \t]*;/ || /^[ \t]*$/ { next }
+    {
+        s = $0
+        sub(/^[ \t]*[^ \t]+[ \t]*/, "", s)
+        while (s ~ /^[<>]/) sub(/^[<>]+[^ \t]*[ \t]*/, "", s)
+        gsub(/\$esguidef/, "SYS:Documentation/EdgeSnap.guide", s)
+        gsub(/\$esguide/, "SYS:Documentation", s)
+        gsub(/\$esbuild/, "aarch64", s)
+        gsub(/\$(EdgeSnapAns|esold|eslib|esdone)/, "1", s)
+        if (s ~ /\$/) { printf "line %d: a variable the check cannot measure\n", NR; bad = 1 }
+        if (length(s) > 250) { printf "line %d: %d characters of arguments\n", NR, length(s); bad = 1 }
+    }
+    END { exit bad }' "$ROOT/installer/Install-aros" >&2; then
+    echo "ERROR: installer/Install-aros passes a command more than AROS takes" >&2
+    exit 1
+fi
 echo "version $VERSION agrees across header, installer, guide and staging"
 
 # The host tests are the only proof the portable core has; a release
