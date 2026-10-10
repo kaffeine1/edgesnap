@@ -78,7 +78,7 @@ first gesture is the drag.
   Installer cannot copy files, installs EdgeSnap by itself. Checked on
   real MorphOS hardware, on the Pi 400 and under emulation on AmigaOS
   4.1 and AROS One 1.3, each time by installing the package over an
-  earlier version.
+  earlier installation.
 - **0.41 (2026-10-06):** a corner is now the corner itself and the top
   edge the screen's own bar; the system's setting that lets a dragged
   window go past the edge of the screen is in the preferences on all

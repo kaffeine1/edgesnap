@@ -115,7 +115,7 @@ is simply there. Nobody has to launch anything.
 Version %s is still a beta. I checked it on real MorphOS hardware, on a
 Raspberry Pi 400 with AROS aarch64, and under emulation on AmigaOS 4.1
 and AROS One 1.3 x86_64, each time by installing the package over an
-earlier version. On one AROS installation
+earlier installation. On one AROS installation
 Wanderer's drawers can show black areas after a snap; another program
 that moves windows does the same there, and the AROS developers are
 looking into how Wanderer redraws a drawer. All of it remains worth
