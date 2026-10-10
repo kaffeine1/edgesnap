@@ -448,11 +448,13 @@
 ; So stop it, let the library go, and start what was just installed -
 ; the user should not have to know the words "Avail FLUSH", and this
 ; Installer has no (reboot) to offer them instead.
-; Not from here on AROS: the Installer AROS builds for itself starts a
-; program badly (C:Avail died with an illegal instruction at PC 8 in the
-; aarch64 VM, 2026-10-10), so there the AROS archives' Install, a Shell
-; script, does these three steps once the Installer is done, and only
-; if it was told so: the drawer T:EdgeSnapInstalled, made last of all.
+; Not from here on AROS: the (run) of the Installer AROS builds for
+; itself neither searches the command path nor understands a redirection,
+; so there the AROS archives' Install, a Shell script, does these steps
+; once the Installer is done, and only if it was told so: the drawer
+; T:EdgeSnapInstalled, made last of all. (Avail FLUSH itself dies with
+; an illegal instruction on AROS aarch64, from a Shell too: the script
+; flushes on x86_64 only.)
 (if (= #aros 0)
     (
       (if (= #update 1)

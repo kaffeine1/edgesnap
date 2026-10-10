@@ -10,10 +10,10 @@
 ;
 ; Before it, the processor: exec.library names it ("raspi-aarch64" on a
 ; Raspberry Pi), and the script finds ENV:EdgeSnapARM or ENV:EdgeSnapX86
-; with nothing but (exists). After it, what that Installer cannot do
-; itself, since it starts programs badly: stop the copy running, let its
-; library go and start the one just installed - only when the script got
-; to its end and left T:EdgeSnapInstalled.
+; with nothing but (exists). After it, what that Installer's (run) cannot
+; do, since it knows neither the command path nor a redirection: stop
+; the copy running, let its library go and start the one just installed
+; - only when the script got to its end and left T:EdgeSnapInstalled.
 ; IconX's Shell has only the basic command path, and the Installer is not
 ; in the same place everywhere: SYS:Utilities on AROS as built (the
 ; Raspberry Pi), C: on AROS One.
