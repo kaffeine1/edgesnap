@@ -51,12 +51,13 @@ ARCHIVE = os.path.join(ROOT, "build", "EdgeSnap-%s.lha" % VERSION)
 ARCHIVE_AROS = os.path.join(ROOT, "build", "EdgeSnap-%s-AROS64.lha" % VERSION)
 # From the second AROS release on, the previous archive is named here so
 # the old entry does not survive beside the new one. None for the first.
-AROS_REPLACES_AMINET = "util/cdity/edgesnap.x86_64-aros.lha"  # 0.4, checked 2026-10-03
+AROS_REPLACES_AMINET = "util/cdity/edgesnap.x86_64-aros.lha"  # 0.41, checked 2026-10-10
 AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 # The AROS Archives give a replaced file a NEW id: the 0.4 upload replaced
-# 3393 and became 3441. Before each release, read it off the entry's page
-# (the fileid= in its links) and set it here.
-AROS_ARCHIVES_FILEID = 3441  # 0.4, checked 2026-10-04
+# 3393 and became 3441, the 0.41 one replaced 3441 and became 3464.
+# Before each release, read it off the entry's page (the fileid= in its
+# links) and set it here.
+AROS_ARCHIVES_FILEID = 3464  # 0.41, checked 2026-10-10
 OUT = os.path.join(ROOT, "build", "channels")
 
 AUTHOR = "Michele Dipace <michele.dipace@kaffeine.net>"
