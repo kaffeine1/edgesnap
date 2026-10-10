@@ -224,9 +224,19 @@ cp "$ROOT/assets/aros/EdgeSnapDrawer.info"   "$AROS/EdgeSnap.info"
 cp "$ROOT/assets/aros/Install.info"          "$AROS/EdgeSnap/Install.info"
 cp "$ROOT/assets/aros/EdgeSnap.guide.info"   "$AROS/EdgeSnap/EdgeSnap.guide.info"
 cp "$ROOT/assets/aros/EdgeSnap.readme.info"  "$AROS/EdgeSnap/EdgeSnap.readme.info"
+# Double-clicked, AROS's Installer looks for its script in the tooltypes
+# of its own icon and finds none ("No SCRIPT ToolType in Icon", first
+# seen on a Raspberry Pi 400): it reads them from sm_ArgList[0], the
+# tool, not from the Install icon. So on AROS the Installer script is
+# Install.script, and Install is a Shell script that IconX runs in the
+# package's drawer, handing the Installer its script on the command line.
+mv "$AROS/EdgeSnap/Install" "$AROS/EdgeSnap/Install.script"
+cp "$ROOT/installer/Install-aros" "$AROS/EdgeSnap/Install"
 for f in EdgeSnap.info EdgeSnap/Install.info EdgeSnap/EdgeSnap.guide.info EdgeSnap/EdgeSnap.readme.info; do
     cp "$AROS/$f" "$ARM/$f"
 done
+mv "$ARM/EdgeSnap/Install" "$ARM/EdgeSnap/Install.script"
+cp "$ROOT/installer/Install-aros" "$ARM/EdgeSnap/Install"
 pack_one "$OUT" "$MAIN"
 pack_one "$OUT_AROS" "$AROS"
 pack_one "$OUT_ARM" "$ARM"

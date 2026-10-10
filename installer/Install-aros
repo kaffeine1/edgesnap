@@ -1,0 +1,53 @@
+; EdgeSnap - starts the installation on AROS.
+; Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+; SPDX-License-Identifier: MIT
+;
+; AROS's Installer, started from an icon, looks for its script among the
+; tooltypes of its OWN icon, not of the project double-clicked, so an
+; Install icon cannot hand it the script. This file is what the AROS
+; archives call Install: its icon runs it through IconX, in the drawer
+; of the package, and the Installer gets the script on its command line.
+;
+; Before it, the processor: exec.library names it ("raspi-aarch64" on a
+; Raspberry Pi), and the script finds ENV:EdgeSnapARM or ENV:EdgeSnapX86
+; with nothing but (exists). After it, what that Installer cannot do
+; itself, since it starts programs badly: stop the copy running, let its
+; library go and start the one just installed - only when the script got
+; to its end and left T:EdgeSnapInstalled.
+; IconX's Shell has only the basic command path, and the Installer is not
+; in the same place everywhere: SYS:Utilities on AROS as built (the
+; Raspberry Pi), C: on AROS One.
+Version >ENV:EdgeSnapCPU exec.library FULL
+Search >NIL: ENV:EdgeSnapCPU aarch64 QUIET
+If WARN
+  Echo >ENV:EdgeSnapX86 x86_64
+Else
+  Echo >ENV:EdgeSnapARM aarch64
+EndIf
+If EXISTS SYS:Utilities/Installer
+  SYS:Utilities/Installer SCRIPT Install.script APPNAME EdgeSnap
+Else
+  If EXISTS C:Installer
+    C:Installer SCRIPT Install.script APPNAME EdgeSnap
+  Else
+    Installer SCRIPT Install.script APPNAME EdgeSnap
+  EndIf
+EndIf
+Delete >NIL: ENV:EdgeSnapCPU QUIET
+If EXISTS T:EdgeSnapInstalled
+  Delete >NIL: T:EdgeSnapInstalled QUIET
+  SYS:WBStartup/EdgeSnap >NIL: QUIT
+  Wait 2
+  ; Avail FLUSH lets an older library go, but on AROS aarch64 Avail
+  ; dies with an illegal instruction (nightly 20261005, QEMU raspi3b):
+  ; there an update takes full effect at the next boot.
+  If EXISTS ENV:EdgeSnapX86
+    Avail >NIL: FLUSH
+  EndIf
+  If EXISTS C:WBRun
+    C:WBRun SYS:WBStartup/EdgeSnap
+  Else
+    Run >NIL: <NIL: SYS:WBStartup/EdgeSnap
+  EndIf
+EndIf
+Delete >NIL: ENV:EdgeSnapARM ENV:EdgeSnapX86 QUIET

@@ -178,8 +178,16 @@ def main():
     emit("EdgeSnap.info", icon_commodity,
          chunk(WBTOOL, stack=65536, tooltypes=("DONOTWAIT",)))
     emit("EdgeSnapPrefs.info", icon_prefs, chunk(WBTOOL, stack=65536))
+    # The Install of the AROS archives is installer/Install-aros, a
+    # Shell script that IconX runs in the package's drawer: AROS's
+    # Installer reads its script from its own icon, never from this one.
     emit("Install.info", icon_install,
-         chunk(WBPROJECT, default_tool="Installer", tooltypes=("APPNAME=EdgeSnap",)))
+         # IconX's own window would stay open on the Installer's closing
+         # dump until closed by hand: this one shows any message for a
+         # few seconds and then goes.
+         chunk(WBPROJECT, default_tool="C:IconX",
+               tooltypes=("STACK=65536", "WINDOW=CON:0/50//160/EdgeSnap/AUTO/CLOSE",
+                          "WAIT=5")))
     emit("EdgeSnap.guide.info", lambda: icon_doc(5),
          chunk(WBPROJECT, default_tool="SYS:Utilities/MultiView"))
     emit("EdgeSnap.readme.info", lambda: icon_doc(3),
