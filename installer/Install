@@ -8,7 +8,7 @@
 
 (set #app "EdgeSnap")
 
-(set #app-version "0.41 beta")
+(set #app-version "0.42 beta")
 
 ; Short enough for the first window of AmigaOS 4's Installer: with
 ; the old paragraph the text ran under the buttons that choose the
@@ -108,19 +108,31 @@
     (set #update 0))
 
 ; --- which system? MorphOS is the one with MOSSYS:, AROS the one with
-; aros.library -------------------------------------------------------
+; aros.library, and AROS names its processor in exec.library's version
+; string ("exec.library raspi-aarch64 51.9" on a Raspberry Pi 400) --
 (if (exists "MOSSYS:" (noreq))
     (set #detected 1)
     (if (exists "LIBS:aros.library" (noreq))
-        (set #detected 2)
+        (
+          (set #detected 2)
+          (run "Version >ENV:EdgeSnapCPU exec.library FULL")
+          (if (patmatch "#?aarch64#?" (getenv "EdgeSnapCPU"))
+              (set #detected 3))
+          (delete "ENV:EdgeSnapCPU" (optional "force"))
+        )
         (set #detected 0)))
 
 (set #system
   (askchoice
     (prompt #ask-system)
     (help #ask-system-help)
-    (choices "AmigaOS 4.x" "MorphOS" "AROS x86_64")
+    (choices "AmigaOS 4.x" "MorphOS" "AROS x86_64" "AROS aarch64")
     (default #detected)))
+
+; Both AROS builds install the same way; #system picks only the files.
+(set #aros 0)
+(if (> #system 1)
+    (set #aros 1))
 
 ; Where the commodity lives and how it starts. On AmigaOS 4 and MorphOS
 ; it goes to C: with one line in S:User-Startup. On AROS a Run from
@@ -148,12 +160,29 @@
       (set #libsrc "aros64/edgesnap.library")
       (set #cmdsrc "aros64/EdgeSnap")
       (set #prefssrc "aros64/EdgeSnapPrefs")
+    ))
+(if (= #system 3)
+    (
+      (set #libsrc "aarch64/edgesnap.library")
+      (set #cmdsrc "aarch64/EdgeSnap")
+      (set #prefssrc "aarch64/EdgeSnapPrefs")
+    ))
+(if (= #aros 1)
+    (
       (set #cmd-dest "SYS:WBStartup")
       (set #cmd-path "SYS:WBStartup/EdgeSnap")
       (if (exists "C:WBRun" (noreq))
           (set #startup-line "WBRun SYS:WBStartup/EdgeSnap")
           (set #startup-line "Run >NIL: <NIL: SYS:WBStartup/EdgeSnap"))
     ))
+
+; Each AROS processor has its own archive: the one for the other
+; processor carries no files for the system chosen here.
+(if (not (exists #libsrc (noreq)))
+    (abort (cat "This package has no EdgeSnap for the system you chose.\n\n"
+                "AmigaOS 4 and MorphOS share one archive; AROS has one for "
+                "x86_64 and one for aarch64 (Raspberry Pi). Download the "
+                "one for this machine.")))
 
 (complete 20)
 
@@ -192,7 +221,7 @@
 (protect #cmd-path "+rwed")
 ; On AROS the icon beside it, as a plain file (see the preferences for
 ; why not (infos)): it is what makes Wanderer start it from WBStartup.
-(if (= #system 2)
+(if (= #aros 1)
     (if (exists (cat #cmdsrc ".info") (noreq))
         (
           (copyfiles
@@ -271,7 +300,7 @@
                 (set #offscreen 1)))))
 
 ; --- start it with the system ---------------------------------------
-(if (= #system 2)
+(if (= #aros 1)
     (startup #app
       (prompt (cat "On AROS EdgeSnap starts from SYS:WBStartup, so no line is "
                    "needed in S:User-Startup. A note is left there in its "
@@ -337,7 +366,7 @@
 
 ; The manual and its icon; on AROS the icon as a plain file, for the
 ; reason given at the preferences above.
-(if (= #system 2)
+(if (= #aros 1)
     (
       (copyfiles
         (source "EdgeSnap.guide")
@@ -367,7 +396,7 @@
 ; the markers this Installer maintains, so it stays; once C:EdgeSnap is
 ; gone it does nothing, and the closing text names it for deletion.
 (set #old-preview 0)
-(if (= #system 2)
+(if (= #aros 1)
     (if (exists "C:EdgeSnap" (noreq))
         (if (askbool
               (prompt (cat "A copy of the first AROS preview is in C:EdgeSnap. "
@@ -435,7 +464,7 @@
 (exit (cat #done-head
            "    " #cmd-path "\n"
            #done-mid
-           (if (= #system 2)
+           (if (= #aros 1)
                "    (started by Wanderer at every boot)\n"
                "    one line in S:User-Startup\n")
            "    " (tackon #guide-dest "EdgeSnap.guide") "\n\n"

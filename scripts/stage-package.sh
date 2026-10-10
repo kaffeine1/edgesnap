@@ -9,7 +9,7 @@
 #   EdgeSnap.guide (+icon)  the documentation
 #   EdgeSnap.readme (+icon) the Aminet-style summary
 #   EdgeSnap.prefs          the commented settings template (no icon)
-#   os4/ mos/ aros64/       one build per system, picked by the installer
+#   os4/ mos/ aros64/ aarch64/  one build per system, picked by the installer
 #
 # Only those three carry icons. The programs themselves are deliberately
 # invisible: the installer knows where they go, and a drawer full of
@@ -74,6 +74,22 @@ else
     echo "WARNING: no AROS build - aros64/ left empty" >&2
 fi
 
+# AROS aarch64, the native Raspberry Pi system: the same sources built on
+# the bench with the aarch64 toolchain (scripts/build-aros-aarch64.sh),
+# the same AROS icons. The installer tells the two AROS processors apart
+# by exec.library's version string.
+mkdir -p "$DEST/aarch64"
+if [ -f "$ROOT/build/aros-aarch64/EdgeSnap" ]; then
+    cp "$ROOT/build/aros-aarch64/EdgeSnap"          "$DEST/aarch64/EdgeSnap"
+    cp "$ROOT/build/aros-aarch64/edgesnap.library"  "$DEST/aarch64/edgesnap.library"
+    cp "$ROOT/build/aros-aarch64/esnaptest"         "$DEST/aarch64/esnaptest"
+    cp "$ROOT/build/aros-aarch64/EdgeSnapPrefs"     "$DEST/aarch64/EdgeSnapPrefs"
+    cp "$ROOT/assets/aros/EdgeSnap.info"            "$DEST/aarch64/EdgeSnap.info"
+    cp "$ROOT/assets/aros/EdgeSnapPrefs.info"       "$DEST/aarch64/EdgeSnapPrefs.info"
+else
+    echo "WARNING: no AROS aarch64 build - aarch64/ left empty" >&2
+fi
+
 # The licence travels with the package. The readme and the guide both
 # say the MIT text is in here, and a licence that is only in the
 # repository is not in the hands of the person holding the archive.
@@ -93,12 +109,12 @@ Short:        Tile windows by dragging them to an edge
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/cdity
-Version:      0.41 (beta)
-Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros
+Version:      0.42 (beta)
+Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros; aarch64-aros
 License:      MIT
 
-EdgeSnap gives AmigaOS 4.x, MorphOS and AROS x86_64 the window snapping
-of Windows and macOS. Drag a window by its title bar until the POINTER
+EdgeSnap gives AmigaOS 4.x, MorphOS and AROS (x86_64 and aarch64) the
+window snapping of Windows and macOS. Drag a window by its title bar until the POINTER
 touches a screen edge or corner: a frame shows where it will land, and letting
 go fills that half or quarter of the screen.
 
@@ -115,14 +131,20 @@ The behaviour lives in edgesnap.library, not in the commodity, so any
 program can ask for the same things - the commodity is a client like
 any other. esnaptest, in the package, is a worked example.
 
-The AROS build requires x86_64 ABIv11, as in AROS One 1.3. It does not
-run on i386 AROS. AmigaOS 4 and MorphOS share a separate archive.
+AmigaOS 4 and MorphOS share one archive; AROS has one for each
+processor. The x86_64 build requires ABIv11, as in AROS One 1.3; the
+aarch64 build is for the native AROS on the Raspberry Pi, and I tried it
+on a Pi 400. Neither runs on i386 AROS.
 
 TO INSTALL: double-click the Install icon. It recognises the system,
 proposes the matching build, and puts everything where it belongs -
 including one line in S:User-Startup (on AROS the commodity goes into
 SYS:WBStartup instead), so snapping is simply there from the next boot.
 Updating is installing again: no reboot needed.
+
+Docks are now recognised in two more shapes: a short one standing
+along a side of the screen, and a panel kept behind the windows, as
+Ambient allows. Snapped windows used to cover both.
 
 A corner is now the corner itself. If you saved EdgeSnap's preferences
 with an earlier version, they keep the corner size they had, 4, a band

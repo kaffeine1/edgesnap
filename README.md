@@ -3,9 +3,10 @@
 **Author:** Michele Dipace <michele.dipace@kaffeine.net>
 **License:** MIT (see [LICENSE](LICENSE))
 
-Windows/macOS-style window snapping for AmigaOS 4.x and MorphOS: drag a
-window against a screen edge or corner to tile it to a half or quarter of
-the screen, with a divider to resize the tiled pair afterwards.
+Windows/macOS-style window snapping for AmigaOS 4.x, MorphOS and AROS
+(x86_64 and aarch64): drag a window against a screen edge or corner to
+tile it to a half or quarter of the screen, with a divider to resize the
+tiled pair afterwards.
 
 Written in C89. No system patches: a commodity input handler plus public
 Intuition calls only. See [docs/DESIGN.md](docs/DESIGN.md) for the full
@@ -68,6 +69,14 @@ first gesture is the drag.
 
 *The MorphOS preferences window (MUI), version 0.2. The AmigaOS 4 window is the same sections in ReAction: both are generated from one settings table.*
 
+- **0.42 (2026-10-10):** an AROS build for the Raspberry Pi (aarch64),
+  in an archive of its own, tried on a Raspberry Pi 400; docks are
+  recognised in two more shapes, a short one standing along a side of
+  the screen and a panel kept behind the windows, as Ambient allows
+  (`edgesnap.library` 2.22 and 2.23); the Installer tells the two AROS
+  processors apart. Checked on real MorphOS hardware, on the Pi 400 and
+  under emulation on AmigaOS 4.1 and AROS One 1.3, each time by
+  installing the package over an earlier version.
 - **0.41 (2026-10-06):** a corner is now the corner itself and the top
   edge the screen's own bar; the system's setting that lets a dragged
   window go past the edge of the screen is in the preferences on all
@@ -100,6 +109,12 @@ first gesture is the drag.
   The real-hardware report of black drawer areas remains open; this
   result does not establish whether its cause is hardware or an old
   preview still running. The client headers are in `include/aros/`.
+- **AROS aarch64 (0.42):** the same sources built with the aarch64-aros
+  toolchain for the native AROS on the Raspberry Pi. On a Raspberry Pi
+  400 the library, the commodity started from WBStartup, the
+  preferences and `esnaptest` all ran at the first build (2026-10-10).
+  The two compiler flags the platform asks for are explained in
+  `Makefile.aros-aarch64`.
 - **Library 2.7:** the input handler reports the mouse's own travel
   through `ESnap_FeedMotion`, so a pointer pinned by a window that may
   not leave the screen (MorphOS as delivered) still reaches the zones

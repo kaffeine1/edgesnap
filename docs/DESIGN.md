@@ -977,6 +977,24 @@ area, in ESWI_PANEL and in the commodity's dump alike. A second
 preview has to be 2.23, not a second 2.22: the Installer's copylib
 replaces only an older library. No vector changes.
 
+**AROS aarch64, the Raspberry Pi (2026-10-10).** The third AROS lane
+asked nothing of the code. The same sources and the same
+`library/aros/edgesnap.conf` build on the bench with the aarch64-aros
+cross toolchain (GCC 6.5.0), whose driver already knows the raspi
+SDK and whose collect-aros marks the binaries as AROS ones, so the
+link needs none of the x86_64 lane's objcopy and OS/ABI byte. Two
+compiler flags are the platform's: `-ffixed-x18`, because x18 belongs
+to the system, and `-fno-common`, because the loader refuses COMMON
+symbols and GCC 6 makes a tentative definition COMMON. Plain `char` is
+unsigned there, as on PowerPC, and the core already reads characters as
+`unsigned char` (the host tests pass with `-funsigned-char`). On a
+Raspberry Pi 400 the first build ran whole: library, commodity from
+WBStartup, preferences, `esnaptest` to the end, snapping by hotkey and
+by drag. It ships as an archive of its own, and the Installer tells
+the two AROS processors apart by exec.library's version string
+("exec.library raspi-aarch64 51.9"), stopping with an explanation when
+the archive holds the other processor's build.
+
 **Where 0.3 stands (2026-09-06).** The prepared release includes the
 AROS x86_64 ABIv11 lane, library API 2.6 on all three systems, the
 window-size and drag-press fixes, Wanderer repaint handling and the

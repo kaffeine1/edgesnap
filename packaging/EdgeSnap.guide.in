@@ -4,9 +4,9 @@
 @(c) "Copyright (c) 2026 Michele Dipace - MIT licence"
 @wordwrap
 
-@node MAIN "EdgeSnap 0.41 beta"
-@{b}EdgeSnap 0.41 beta@{ub}
-Window snapping for AmigaOS 4.x, MorphOS and AROS x86_64
+@node MAIN "EdgeSnap 0.42 beta"
+@{b}EdgeSnap 0.42 beta@{ub}
+Window snapping for AmigaOS 4.x, MorphOS and AROS (x86_64 and aarch64)
 by Michele Dipace <michele.dipace@kaffeine.net>
 
   @{" What it does        " link ABOUT}
@@ -216,8 +216,9 @@ script - is noticed at once.
 @{b}For programmers@{ub}
 
 @{b}Two version numbers, and why@{ub}
-EdgeSnap is 0.41: a beta, complete in what it does and tested on real
-MorphOS hardware and on AmigaOS 4 and AROS under emulation.
+EdgeSnap is 0.42: a beta, complete in what it does and tested on real
+MorphOS hardware, on a Raspberry Pi 400 with AROS, and on AmigaOS 4 and
+AROS x86_64 under emulation.
 @{b}edgesnap.library@{ub} says %%LIBVER%%, and that is not a mistake: a
 library's version is its interface, not its product. It reached 2 when
 the seam was added to the API, and the revision climbs with every build
@@ -281,10 +282,10 @@ that has been closed gives an error rather than a crash. The contract
 of every call, with what it returns and from which revision it exists,
 is in @{b}include/edgesnap.h@{ub} in the source repository.
 
-@{b}esnaptest@{ub}, in the os4, mos and aros64 drawers of this package,
-is a small client that opens the library and drives the whole API: a
-worked example, and the quickest way to see which revision a machine
-is really running.
+@{b}esnaptest@{ub}, in this package's drawer for each system (os4, mos,
+aros64 or aarch64), is a small client that opens the library and
+drives the whole API: a worked example, and the quickest way to see
+which revision a machine is really running.
 
 @endnode
 
@@ -303,9 +304,10 @@ copyright notice and the licence text travel with it. It comes with
 no warranty.
 
 @{b}Source, and where to report what you find@{ub}
-This is a first public release and it has run on two machines. If
-EdgeSnap covers your dock, misses your seam, or draws something odd
-with window transparency on, that is exactly the report worth having:
+EdgeSnap is still a beta, and every report has made it better: the
+docks it missed, the corners, the push against the edge all came from
+people who wrote in. If it covers your dock, misses your seam, or draws
+something odd, that is exactly the report worth having:
 
   https://github.com/kaffeine1/edgesnap/issues
 

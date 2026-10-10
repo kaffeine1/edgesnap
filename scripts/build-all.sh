@@ -5,7 +5,8 @@
 # Rebuild EVERYTHING the package carries, on every lane, from clean:
 # the commodity, the library, the preferences program and the test
 # client for AmigaOS 4 and MorphOS (locally, in the cross containers),
-# and the whole AROS x86_64 lane on the bench. Then the host tests.
+# and the whole AROS x86_64 and aarch64 lanes on the bench. Then the
+# host tests.
 #
 #   scripts/build-all.sh
 #
@@ -33,12 +34,14 @@ run sh scripts/build-moslib.sh clean all
 run sh scripts/build-mosprefs.sh clean all
 run sh scripts/build-mostool.sh clean all
 run sh scripts/build-aros.sh
+run sh scripts/build-aros-aarch64.sh
 run make -s -f Makefile.host test
 
 echo
 echo "all lanes rebuilt:"
 for b in os4/EdgeSnap os4/edgesnap.library os4/EdgeSnapPrefs os4/esnaptest \
          morphos/EdgeSnap morphos/edgesnap.library morphos/EdgeSnapPrefs morphos/esnaptest \
-         aros-x86_64/EdgeSnap aros-x86_64/edgesnap.library aros-x86_64/EdgeSnapPrefs aros-x86_64/esnaptest; do
+         aros-x86_64/EdgeSnap aros-x86_64/edgesnap.library aros-x86_64/EdgeSnapPrefs aros-x86_64/esnaptest \
+         aros-aarch64/EdgeSnap aros-aarch64/edgesnap.library aros-aarch64/EdgeSnapPrefs aros-aarch64/esnaptest; do
     printf '  %-36s %s\n' "$b" "$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "build/$b")"
 done

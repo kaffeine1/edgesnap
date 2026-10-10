@@ -14,7 +14,9 @@
 #   build/channels/os4depot/        edgesnap.lha + edgesnap_lha.readme
 #   build/channels/morphos-storage/ edgesnap.lha + edgesnap.readme
 #   build/channels/aminet-aros/     edgesnap.x86_64-aros.lha + .readme
+#   build/channels/aminet-aarch64/  edgesnap.aarch64-aros.lha + .readme
 #   build/channels/arosarchives/    edgesnap.x86_64-aros-v11.lha + _lha.readme
+#                                   edgesnap.aarch64-aros.lha + _lha.readme
 #
 # AROS has an archive of its own (make-release.sh packs it): Aminet has
 # no x86_64 token, so the x86_64 build is declared i386-aros and carries
@@ -25,6 +27,11 @@
 # no account and no captcha; a passphrase set on our own uploads is what
 # lets a later replace go through without the previous uploader's nod,
 # and its value lives in SECRETS, never here.
+#
+# AROS on the Raspberry Pi (aarch64) has a third archive from 0.42. Its
+# entries are new ones, named as BebboSSH's: edgesnap.aarch64-aros.lha,
+# filed on Aminet under i386-aros like the x86_64 one (no aarch64 token
+# there either), and a new submission on the AROS Archives.
 #
 # Each channel gets its OWN directory on purpose. The archives are named
 # the same for all three, and on macOS's case-insensitive filesystem two
@@ -49,6 +56,7 @@ with open(os.path.join(ROOT, "library", "aros", "edgesnap.conf")) as source:
 VERSION = sys.argv[1] if len(sys.argv) > 1 else PRODUCT_VERSION
 ARCHIVE = os.path.join(ROOT, "build", "EdgeSnap-%s.lha" % VERSION)
 ARCHIVE_AROS = os.path.join(ROOT, "build", "EdgeSnap-%s-AROS64.lha" % VERSION)
+ARCHIVE_ARM = os.path.join(ROOT, "build", "EdgeSnap-%s-AROS-aarch64.lha" % VERSION)
 # From the second AROS release on, the previous archive is named here so
 # the old entry does not survive beside the new one. None for the first.
 AROS_REPLACES_AMINET = "util/cdity/edgesnap.x86_64-aros.lha"  # 0.41, checked 2026-10-10
@@ -76,35 +84,22 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-A corner is now the corner itself. Anywhere along a side edge gives the
-half, even with the title bar right under the screen's own; for a
-quarter, push the pointer on into the corner, where the screen stops
-it. The top edge is the screen's own title bar, so a window that sits
-at the top is no longer maximised the moment it is touched. The Corner
-size setting gives the longer corners back. Preferences saved by an
-earlier version keep the corner size they had, 4: set it to 0 for the
-corner itself.
+EdgeSnap now runs on AROS for the Raspberry Pi as well: an aarch64
+build, with an archive of its own, tried on a Raspberry Pi 400.
 
-A window that may not go past the edge of the screen keeps the pointer
-from reaching it. Each system has its own setting for that, and the
-preferences now show it on all three as "Windows can move off-screen".
-On MorphOS, where it is off as delivered, the first installation turns
-it on and says so. From a Shell: SYS:Prefs/EdgeSnap OFFSCREEN followed
-by QUERY, ON or OFF. Where it stays off, pushing the mouse on against
-the edge now brings the frame up reliably under a real hand, corners
-included.
+Docks are recognised in two more shapes. A short dock standing along a
+side of the screen was taken for a small widget, and a panel kept
+behind the windows, as Ambient allows, was never looked at: windows
+snapped over both. Now they keep their edge clear, so margins set by
+hand to keep a dock uncovered can go back to 0.
 
-The preferences program now writes a setting left at its default as a
-comment, so a better default in a later version reaches everyone who
-never changed that setting.
-
-For programmers, edgesnap.library now gives a layout group gaps
-between its windows and margins from the edges of the screen, applied
-when a program places one of the group's windows as a cell.
+The Installer recognises which AROS it runs on, x86_64 or aarch64, and
+stops with an explanation when the archive is the one for the other
+processor.
 """),
     ("WHAT IT IS", """
-EdgeSnap gives AmigaOS 4.x, MorphOS and AROS x86_64 the window snapping that Windows
-and macOS users reach for without thinking. Drag a window against a
+EdgeSnap gives AmigaOS 4.x, MorphOS and AROS (x86_64 and aarch64) the
+window snapping that Windows and macOS users reach for without thinking. Drag a window against a
 screen edge or corner and it glides into that half or quarter of the
 screen. A frame shows where it will land before you let go.
 
@@ -116,9 +111,10 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. I checked it on real MorphOS hardware and
-under emulation on AmigaOS 4.1 and AROS One 1.3 x86_64, each time by
-installing the package over an earlier version. On one AROS installation
+Version %s is still a beta. I checked it on real MorphOS hardware, on a
+Raspberry Pi 400 with AROS aarch64, and under emulation on AmigaOS 4.1
+and AROS One 1.3 x86_64, each time by installing the package over an
+earlier version. On one AROS installation
 Wanderer's drawers can show black areas after a snap; another program
 that moves windows does the same there, and the AROS developers are
 looking into how Wanderer redraws a drawer. All of it remains worth
@@ -169,7 +165,7 @@ keep an identity across a screen mode change, and a layout group can
 keep every other program, the commodity's drag included, off its
 windows. Since 2.20 a group can also keep gaps between its windows and
 margins from the edges of the screen. The included esnaptest client
-exercises the whole API on all three systems.
+exercises the whole API on every system.
 
 The library says %s while EdgeSnap says %s, and that is not a mistake:
 a library's version is its interface, not its product. While EdgeSnap is
@@ -276,14 +272,32 @@ AROS_NOTE = [
     "This is the AROS x86_64 build (ABIv11, as on AROS One x64). Aminet",
     "has no token for it, so it is filed under i386-aros: it does not run",
     "on i386 AROS. AmigaOS 4 and MorphOS have their own archive,",
-    "edgesnap.lha.",
+    "edgesnap.lha, and AROS on the Raspberry Pi has",
+    "edgesnap.aarch64-aros.lha.",
     "",
 ]
 
 AROS_ARCHIVES_NOTE = [
     "This is the AROS x86_64 build (ABIv11, as on AROS One x64); it does",
     "not run on i386 AROS. AmigaOS 4 and MorphOS have their own archive,",
-    "on Aminet, OS4Depot and MorphOS-Storage.",
+    "on Aminet, OS4Depot and MorphOS-Storage, and AROS on the Raspberry",
+    "Pi has edgesnap.aarch64-aros.lha.",
+    "",
+]
+
+ARM_NOTE = [
+    "This is the AROS aarch64 build, for the native AROS on the Raspberry",
+    "Pi; I tried it on a Raspberry Pi 400. Aminet has no token for it, so",
+    "it is filed under i386-aros, where it does not run. AROS x86_64 has",
+    "edgesnap.x86_64-aros.lha, AmigaOS 4 and MorphOS edgesnap.lha.",
+    "",
+]
+
+ARM_ARCHIVES_NOTE = [
+    "This is the AROS aarch64 build, for the native AROS on the Raspberry",
+    "Pi; I tried it on a Raspberry Pi 400. AROS x86_64 has",
+    "edgesnap.x86_64-aros-v11.lha here; AmigaOS 4 and MorphOS have their",
+    "own archive, on Aminet, OS4Depot and MorphOS-Storage.",
     "",
 ]
 
@@ -323,6 +337,39 @@ def arosarchives_readme():
     return head + AROS_ARCHIVES_NOTE + body_lines()
 
 
+def aminet_arm_readme():
+    # A new entry: nothing to replace yet.
+    head = [
+        "Short:        %s" % SHORT,
+        "Uploader:     %s (Michele Dipace)" % EMAIL,
+        "Author:       %s" % AUTHOR,
+        "Type:         util/cdity",
+        "Version:      %s" % VERSION,
+        "Architecture: i386-aros",
+        "",
+    ]
+    return head + ARM_NOTE + body_lines()
+
+
+def arosarchives_arm_readme():
+    head = [
+        "name:EdgeSnap",
+        "description:Tile windows by dragging them to an edge",
+        "version:%s" % VERSION,
+        "author:Michele Dipace",
+        "submitter:Michele Dipace",
+        "email:%s" % EMAIL,
+        "url:%s" % URL,
+        "category:utility/workbench",
+        "requirements:AROS aarch64 (Raspberry Pi)",
+        "license:Other",
+        "distribute:yes",
+        "hend:",
+        "",
+    ]
+    return head + ARM_ARCHIVES_NOTE + body_lines()
+
+
 # ------------------------------------------- the two channels done by hand
 #
 # Both used to be written by hand into build/channels, which this script
@@ -333,7 +380,8 @@ def arosarchives_readme():
 # never types a passphrase anywhere.
 AROS_ARCHIVES_SCRIPT = r'''#!/bin/bash
 # EdgeSnap @@VERSION@@ to The AROS Archives: the x86_64 archive replaces
-# the previous one (FileID @@FILEID@@, "Replace file"). The passphrase
+# the previous one (FileID @@FILEID@@, "Replace file"); the aarch64 one is
+# a new entry. The passphrase
 # (telegram-amiga SECRETS, entry for EdgeSnap's AROS Archives) is asked of
 # you, never shown and never written to disk; curl reads it from stdin, so
 # it does not appear among the process arguments either. The site's answer
@@ -397,6 +445,7 @@ send() { # $1 = archive, $2 = URL tail
 }
 
 send edgesnap.x86_64-aros-v11.lha '&replace=@@FILEID@@&mode=go'
+send edgesnap.aarch64-aros.lha '&mode=go'
 unset PASS
 echo "Coda: https://archives.arosworld.org/index.php?function=uploads"
 '''
@@ -408,12 +457,11 @@ screen edge or corner and it glides into that half or quarter of the
 screen. Two windows side by side share a seam that can be dragged to
 re-balance them. It installs as a commodity that starts with the system.
 MIT licence."""
-MORPHOS_STORAGE_NEW = ("New in %s: a corner is the corner itself and the top "
-                       "edge the screen's bar, the system's off-screen setting "
-                       "in the preferences, a push against the edge that works "
-                       "under a real hand, defaults written as comments, and "
-                       "library %s with gaps and margins per group."
-                       % (VERSION, LIBRARY_VERSION))
+MORPHOS_STORAGE_NEW = ("New in %s: docks are recognised in two more shapes, "
+                       "a short one along a side of the screen and an Ambient "
+                       "panel kept behind the windows, so snapped windows no "
+                       "longer cover them (library %s); and an AROS build for "
+                       "the Raspberry Pi." % (VERSION, LIBRARY_VERSION))
 
 
 def arosarchives_script():
@@ -474,7 +522,7 @@ def main():
         print("ERROR: requested %s but the product header says %s" %
               (VERSION, PRODUCT_VERSION), file=sys.stderr)
         return 1
-    for archive in (ARCHIVE, ARCHIVE_AROS):
+    for archive in (ARCHIVE, ARCHIVE_AROS, ARCHIVE_ARM):
         if not os.path.exists(archive):
             print("ERROR: %s missing - run scripts/make-release.sh first" %
                   archive, file=sys.stderr)
@@ -493,12 +541,17 @@ def main():
          "edgesnap.x86_64-aros.readme", aminet_aros_readme()),
         ("arosarchives", ARCHIVE_AROS, "edgesnap.x86_64-aros-v11.lha",
          "edgesnap.x86_64-aros-v11_lha.readme", arosarchives_readme()),
+        ("aminet-aarch64", ARCHIVE_ARM, "edgesnap.aarch64-aros.lha",
+         "edgesnap.aarch64-aros.readme", aminet_arm_readme()),
+        # beside the x86_64 one: the publishing script sends both
+        ("arosarchives", ARCHIVE_ARM, "edgesnap.aarch64-aros.lha",
+         "edgesnap.aarch64-aros_lha.readme", arosarchives_arm_readme()),
     ]
     problems = []
 
     for name, archive, lha, readme, lines in channels:
         d = os.path.join(OUT, name)
-        os.makedirs(d)
+        os.makedirs(d, exist_ok=True)
         shutil.copy2(archive, os.path.join(d, lha))
         rp = os.path.join(d, readme)
         write(rp, lines)
@@ -522,7 +575,7 @@ def main():
            os.path.relpath(form, ROOT)))
 
     print()
-    for archive in (ARCHIVE, ARCHIVE_AROS):
+    for archive in (ARCHIVE, ARCHIVE_AROS, ARCHIVE_ARM):
         if os.path.exists(archive):
             digest = hashlib.md5(open(archive, "rb").read()).hexdigest()
             print("%s md5: %s  (%d bytes)" % (os.path.basename(archive), digest,
