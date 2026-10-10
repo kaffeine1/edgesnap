@@ -290,6 +290,9 @@ ARM_NOTE = [
     "Pi; I tried it on a Raspberry Pi 400. Aminet has no token for it, so",
     "it is filed under i386-aros, where it does not run. AROS x86_64 has",
     "edgesnap.x86_64-aros.lha, AmigaOS 4 and MorphOS edgesnap.lha.",
+    "The AROS images for the Raspberry Pi I tried have no LhA command: if",
+    "yours has none, unpack the archive on another computer and copy the",
+    "EdgeSnap drawer to the card.",
     "",
 ]
 
@@ -298,6 +301,9 @@ ARM_ARCHIVES_NOTE = [
     "Pi; I tried it on a Raspberry Pi 400. AROS x86_64 has",
     "edgesnap.x86_64-aros-v11.lha here; AmigaOS 4 and MorphOS have their",
     "own archive, on Aminet, OS4Depot and MorphOS-Storage.",
+    "The AROS images for the Raspberry Pi I tried have no LhA command: if",
+    "yours has none, unpack the archive on another computer and copy the",
+    "EdgeSnap drawer to the card.",
     "",
 ]
 
