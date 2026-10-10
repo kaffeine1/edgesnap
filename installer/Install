@@ -498,9 +498,12 @@
 ; where any of it went.
 (exit (cat #done-head
            "    " #cmd-path "\n"
-           #done-mid
            (if (= #aros 1)
                "    (started by Wanderer at every boot)\n"
+               "")
+           #done-mid
+           (if (= #aros 1)
+               ""
                "    one line in S:User-Startup\n")
            "    " (tackon #guide-dest "EdgeSnap.guide") "\n\n"
            "The drawer you ran this from can be deleted.\n"
