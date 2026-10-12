@@ -62,10 +62,13 @@ ARCHIVE_ARM = os.path.join(ROOT, "build", "EdgeSnap-%s-AROS-aarch64.lha" % VERSI
 AROS_REPLACES_AMINET = "util/cdity/edgesnap.x86_64-aros.lha"  # 0.41, checked 2026-10-10
 AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 # The AROS Archives give a replaced file a NEW id: the 0.4 upload replaced
-# 3393 and became 3441, the 0.41 one replaced 3441 and became 3464.
-# Before each release, read it off the entry's page (the fileid= in its
-# links) and set it here.
-AROS_ARCHIVES_FILEID = 3464  # 0.41, checked 2026-10-10
+# 3393 and became 3441, the 0.41 one replaced 3441 and became 3464, the
+# 0.42 one replaced 3464 and became 3497. Before each release, read both
+# off the entries' pages (the fileid= in their links) and set them here.
+AROS_ARCHIVES_FILEID = 3497  # x86_64, 0.42, checked 2026-10-12
+# The aarch64 entry, new in 0.42, replaced from 0.43 on.
+AROS_ARCHIVES_FILEID_ARM = 3498  # aarch64, 0.42, checked 2026-10-12
+AROS_REPLACES_ARCHIVES_ARM = "utility/workbench/edgesnap.aarch64-aros.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
 AUTHOR = "Michele Dipace <michele.dipace@kaffeine.net>"
@@ -348,7 +351,10 @@ def arosarchives_readme():
 
 
 def aminet_arm_readme():
-    # A new entry: nothing to replace yet.
+    # No Replaces: Aminet overwrites a package uploaded again under the same
+    # name, its preferred way to update, and Replaces is for other names.
+    # The first 0.42 upload got a page but lost its file (404 for two days,
+    # no answer by mail); the same pair sent again on 2026-10-12.
     head = [
         "Short:        %s" % SHORT,
         "Uploader:     %s (Michele Dipace)" % EMAIL,
@@ -373,10 +379,10 @@ def arosarchives_arm_readme():
         "category:utility/workbench",
         "requirements:AROS aarch64 (Raspberry Pi)",
         "license:Other",
-        "distribute:yes",
-        "hend:",
-        "",
     ]
+    if AROS_REPLACES_ARCHIVES_ARM:
+        head.append("replaces:%s" % AROS_REPLACES_ARCHIVES_ARM)
+    head += ["distribute:yes", "hend:", ""]
     return head + ARM_ARCHIVES_NOTE + body_lines()
 
 
@@ -389,9 +395,9 @@ def arosarchives_arm_readme():
 # Michele runs this one: it asks for the passphrase itself, and the agent
 # never types a passphrase anywhere.
 AROS_ARCHIVES_SCRIPT = r'''#!/bin/bash
-# EdgeSnap @@VERSION@@ to The AROS Archives: the x86_64 archive replaces
-# the previous one (FileID @@FILEID@@, "Replace file"); the aarch64 one is
-# a new entry. The passphrase
+# EdgeSnap @@VERSION@@ to The AROS Archives: each archive replaces the
+# previous one ("Replace file"), x86_64 FileID @@FILEID@@ and aarch64
+# FileID @@FILEID_ARM@@. The passphrase
 # (telegram-amiga SECRETS, entry for EdgeSnap's AROS Archives) is asked of
 # you, never shown and never written to disk; curl reads it from stdin, so
 # it does not appear among the process arguments either. The site's answer
@@ -455,7 +461,7 @@ send() { # $1 = archive, $2 = URL tail
 }
 
 send edgesnap.x86_64-aros-v11.lha '&replace=@@FILEID@@&mode=go'
-send edgesnap.aarch64-aros.lha '&mode=go'
+send edgesnap.aarch64-aros.lha '&replace=@@FILEID_ARM@@&mode=go'
 unset PASS
 echo "Coda: https://archives.arosworld.org/index.php?function=uploads"
 '''
@@ -476,6 +482,7 @@ MORPHOS_STORAGE_NEW = ("New in %s: docks are recognised in two more shapes, "
 
 def arosarchives_script():
     return (AROS_ARCHIVES_SCRIPT.replace("@@VERSION@@", VERSION)
+            .replace("@@FILEID_ARM@@", str(AROS_ARCHIVES_FILEID_ARM))
             .replace("@@FILEID@@", str(AROS_ARCHIVES_FILEID)))
 
 
@@ -580,9 +587,9 @@ def main():
     write(form, morphos_storage_form())
     check(form, "morphos-storage/" + os.path.basename(form), problems,
           name_max=None)
-    print("by hand          %s (replaces FileID %d), %s" %
+    print("by hand          %s (replaces FileIDs %d and %d), %s" %
           (os.path.relpath(script, ROOT), AROS_ARCHIVES_FILEID,
-           os.path.relpath(form, ROOT)))
+           AROS_ARCHIVES_FILEID_ARM, os.path.relpath(form, ROOT)))
 
     print()
     for archive in (ARCHIVE, ARCHIVE_AROS, ARCHIVE_ARM):
