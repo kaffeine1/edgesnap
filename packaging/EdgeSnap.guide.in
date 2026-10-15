@@ -6,7 +6,7 @@
 
 @node MAIN "EdgeSnap 0.42 beta"
 @{b}EdgeSnap 0.42 beta@{ub}
-Window snapping for AmigaOS 4.x, MorphOS and AROS (x86_64 and aarch64)
+Window snapping for AmigaOS 4.x, MorphOS and AROS (x86_64, aarch64, i386)
 by Michele Dipace <michele.dipace@kaffeine.net>
 
   @{" What it does        " link ABOUT}
@@ -67,9 +67,9 @@ icon instead, and Wanderer starts it at every boot: a Run line in
 S:User-Startup would open a console window for it there and keep it
 open. S:User-Startup is not touched.
 
-On AROS for the Raspberry Pi there is no Installer to go through:
-Install does the work itself, as it does on any AROS whose own
-Installer cannot copy files. One requester says what goes where and
+On AROS for the Raspberry Pi and on 32-bit AROS there is no Installer
+to go through: Install does the work itself, as it does on any AROS
+whose own Installer cannot copy files. One requester says what goes where and
 asks; the manual goes to SYS:Documentation, or SYS:Locale/Help where
 there is none; and no settings file is written, since the preferences
 window writes one when you press Save.
@@ -226,8 +226,8 @@ script - is noticed at once.
 
 @{b}Two version numbers, and why@{ub}
 EdgeSnap is 0.42: a beta, complete in what it does and tested on real
-MorphOS hardware, on a Raspberry Pi 400 with AROS, and on AmigaOS 4 and
-AROS x86_64 under emulation.
+MorphOS hardware, on a Raspberry Pi 400 with AROS, and on AmigaOS 4,
+AROS x86_64 and AROS i386 under emulation.
 @{b}edgesnap.library@{ub} says %%LIBVER%%, and that is not a mistake: a
 library's version is its interface, not its product. It reached 2 when
 the seam was added to the API, and the revision climbs with every build
@@ -292,7 +292,7 @@ of every call, with what it returns and from which revision it exists,
 is in @{b}include/edgesnap.h@{ub} in the source repository.
 
 @{b}esnaptest@{ub}, in this package's drawer for each system (os4, mos,
-aros64 or aarch64), is a small client that opens the library and
+aros64, aarch64 or i386), is a small client that opens the library and
 drives the whole API: a worked example, and the quickest way to see
 which revision a machine is really running.
 

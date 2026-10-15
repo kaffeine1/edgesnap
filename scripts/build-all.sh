@@ -35,6 +35,7 @@ run sh scripts/build-mosprefs.sh clean all
 run sh scripts/build-mostool.sh clean all
 run sh scripts/build-aros.sh
 run sh scripts/build-aros-aarch64.sh
+run sh scripts/build-aros-i386.sh
 run make -s -f Makefile.host test
 
 echo
@@ -42,6 +43,7 @@ echo "all lanes rebuilt:"
 for b in os4/EdgeSnap os4/edgesnap.library os4/EdgeSnapPrefs os4/esnaptest \
          morphos/EdgeSnap morphos/edgesnap.library morphos/EdgeSnapPrefs morphos/esnaptest \
          aros-x86_64/EdgeSnap aros-x86_64/edgesnap.library aros-x86_64/EdgeSnapPrefs aros-x86_64/esnaptest \
-         aros-aarch64/EdgeSnap aros-aarch64/edgesnap.library aros-aarch64/EdgeSnapPrefs aros-aarch64/esnaptest; do
+         aros-aarch64/EdgeSnap aros-aarch64/edgesnap.library aros-aarch64/EdgeSnapPrefs aros-aarch64/esnaptest \
+         aros-i386/EdgeSnap aros-i386/edgesnap.library aros-i386/EdgeSnapPrefs aros-i386/esnaptest; do
     printf '  %-36s %s\n' "$b" "$(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "build/$b")"
 done

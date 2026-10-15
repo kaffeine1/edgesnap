@@ -29,7 +29,10 @@
 ; given Install.script.
 ; On aarch64 this script always installs by itself (Michele, 2026-10-10):
 ; the Raspberry Pi images change Installer from one build to the next,
-; and one way, the one tried on a Pi 400, is one way to test.
+; and one way, the one tried on a Pi 400, is one way to test. On i386 too
+; (Michele, 2026-10-15): AROS One x86 has InstallerLG in C:, but in
+; SYS:Utilities the Installer that copies nothing, and the way tried on
+; it, install and boot, is this one.
 ;
 ; This Shell's rules, each of which this script has met: a command gets
 ; at most 256 characters of arguments, so every requester text is short
@@ -42,8 +45,15 @@ FailAt 21
 Version >ENV:EdgeSnapCPU exec.library FULL
 Search >NIL: ENV:EdgeSnapCPU aarch64 QUIET
 If WARN
-  Echo >ENV:EdgeSnapX86 x86_64
-  Set esbuild aros64
+  ; "exec.library pc-i386 51.7" on AROS One x86
+  Search >NIL: ENV:EdgeSnapCPU i386 QUIET
+  If WARN
+    Echo >ENV:EdgeSnapX86 x86_64
+    Set esbuild aros64
+  Else
+    Echo >ENV:EdgeSnapI386 i386
+    Set esbuild i386
+  EndIf
 Else
   Echo >ENV:EdgeSnapARM aarch64
   Set esbuild aarch64
@@ -68,9 +78,9 @@ If $esbuild EQ aros64
   EndIf
 EndIf
 
-; --- aarch64, or no Installer here can copy: the Shell does it --------
+; --- aarch64, i386, or no Installer here can copy: the Shell does it --
 If NOT EXISTS $esbuild/edgesnap.library
-  RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.42 beta" "This package has no EdgeSnap for this processor.*N*NAROS has one archive for x86_64 and one for*Naarch64 (Raspberry Pi): download the one for*Nthis machine." "OK"
+  RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.42 beta" "This package has no EdgeSnap for this processor.*N*NAROS has one archive each for x86_64, aarch64*N(Raspberry Pi) and i386: download the one for*Nthis machine." "OK"
   If WARN
     Skip norequester
   EndIf
@@ -209,6 +219,9 @@ If EXISTS T:EdgeSnapInstalled
   If EXISTS ENV:EdgeSnapX86
     Avail >NIL: FLUSH
   EndIf
+  If EXISTS ENV:EdgeSnapI386
+    Avail >NIL: FLUSH
+  EndIf
   If EXISTS C:WBRun
     C:WBRun SYS:WBStartup/EdgeSnap
   Else
@@ -218,4 +231,4 @@ EndIf
 If $esdone EQ 1
   RequestChoice >NIL: "EdgeSnap 0.42 beta" "EdgeSnap is installed: Wanderer starts it from*NSYS:WBStartup at every boot.*NSettings: SYS:Prefs/EdgeSnap*NManual: $esguidef*N*NThe drawer you ran this from can be deleted." "OK"
 EndIf
-Delete >NIL: ENV:EdgeSnapARM ENV:EdgeSnapX86 ENV:EdgeSnapAns QUIET
+Delete >NIL: ENV:EdgeSnapARM ENV:EdgeSnapX86 ENV:EdgeSnapI386 ENV:EdgeSnapAns QUIET

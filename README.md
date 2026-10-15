@@ -4,7 +4,7 @@
 **License:** MIT (see [LICENSE](LICENSE))
 
 Windows/macOS-style window snapping for AmigaOS 4.x, MorphOS and AROS
-(x86_64 and aarch64): drag a window against a screen edge or corner to
+(x86_64, aarch64 and i386): drag a window against a screen edge or corner to
 tile it to a half or quarter of the screen, with a divider to resize the
 tiled pair afterwards.
 
@@ -122,6 +122,15 @@ first gesture is the drag.
   the installation itself; it does the same on an AROS x86_64 that has
   only that Installer, and on the Pi 400 it installed every file byte
   for byte.
+- **AROS i386 (0.42, added 2026-10-15):** the 32-bit AROS with ABI v0,
+  as on AROS One x86, built on the Mac with the alt-abiv0 cross
+  toolchain and AROS One x86's SDK (`Makefile.aros-i386`). Built whole
+  at the first try; on AROS One x86 under emulation `esnaptest` ran to
+  the end, `Install` installed it by itself (the system's
+  `SYS:Utilities/Installer` is the one that copies nothing), and after a
+  reboot EdgeSnap was there and snapping. Its own archive,
+  `EdgeSnap-0.42-AROS-i386.lha`, joined 0.42 on its own; from 0.43 the
+  four archives go out together.
 - **Library 2.7:** the input handler reports the mouse's own travel
   through `ESnap_FeedMotion`, so a pointer pinned by a window that may
   not leave the screen (MorphOS as delivered) still reaches the zones

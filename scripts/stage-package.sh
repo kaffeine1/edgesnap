@@ -9,7 +9,7 @@
 #   EdgeSnap.guide (+icon)  the documentation
 #   EdgeSnap.readme (+icon) the Aminet-style summary
 #   EdgeSnap.prefs          the commented settings template (no icon)
-#   os4/ mos/ aros64/ aarch64/  one build per system, picked by the installer
+#   os4/ mos/ aros64/ aarch64/ i386/  one build per system, picked by the installer
 #
 # Only those three carry icons. The programs themselves are deliberately
 # invisible: the installer knows where they go, and a drawer full of
@@ -90,6 +90,22 @@ else
     echo "WARNING: no AROS aarch64 build - aarch64/ left empty" >&2
 fi
 
+# AROS i386, ABI v0 (AROS One x86): the same sources built on this Mac
+# with the alt-abiv0 toolchain and AROS One x86's SDK
+# (scripts/build-aros-i386.sh), the same AROS icons. Install tells it
+# from the others by exec.library's version string ("pc-i386").
+mkdir -p "$DEST/i386"
+if [ -f "$ROOT/build/aros-i386/EdgeSnap" ]; then
+    cp "$ROOT/build/aros-i386/EdgeSnap"          "$DEST/i386/EdgeSnap"
+    cp "$ROOT/build/aros-i386/edgesnap.library"  "$DEST/i386/edgesnap.library"
+    cp "$ROOT/build/aros-i386/esnaptest"         "$DEST/i386/esnaptest"
+    cp "$ROOT/build/aros-i386/EdgeSnapPrefs"     "$DEST/i386/EdgeSnapPrefs"
+    cp "$ROOT/assets/aros/EdgeSnap.info"         "$DEST/i386/EdgeSnap.info"
+    cp "$ROOT/assets/aros/EdgeSnapPrefs.info"    "$DEST/i386/EdgeSnapPrefs.info"
+else
+    echo "WARNING: no AROS i386 build - i386/ left empty" >&2
+fi
+
 # The licence travels with the package. The readme and the guide both
 # say the MIT text is in here, and a licence that is only in the
 # repository is not in the hands of the person holding the archive.
@@ -110,13 +126,13 @@ Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/cdity
 Version:      0.42 (beta)
-Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros; aarch64-aros
+Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros; aarch64-aros; i386-aros
 License:      MIT
 
-EdgeSnap gives AmigaOS 4.x, MorphOS and AROS (x86_64 and aarch64) the
-window snapping of Windows and macOS. Drag a window by its title bar until the POINTER
-touches a screen edge or corner: a frame shows where it will land, and letting
-go fills that half or quarter of the screen.
+EdgeSnap gives AmigaOS 4.x, MorphOS and AROS (x86_64, aarch64 and i386)
+the window snapping of Windows and macOS. Drag a window by its title bar
+until the POINTER touches a screen edge or corner: a frame shows where it
+will land, and letting go fills that half or quarter of the screen.
 
   - docks and panels are detected and never covered;
   - two windows side by side share their edge: press the seam and the
@@ -134,16 +150,17 @@ any other. esnaptest, in the package, is a worked example.
 AmigaOS 4 and MorphOS share one archive; AROS has one for each
 processor. The x86_64 build requires ABIv11, as in AROS One 1.3; the
 aarch64 build is for the native AROS on the Raspberry Pi, and I tried it
-on a Pi 400. Neither runs on i386 AROS.
+on a Pi 400; the i386 build is for the 32-bit AROS with ABI v0, and I
+tried it on AROS One x86.
 
 TO INSTALL: double-click the Install icon. It recognises the system,
 proposes the matching build, and puts everything where it belongs -
 including one line in S:User-Startup (on AROS the commodity goes into
 SYS:WBStartup instead), so snapping is simply there from the next boot.
-On the Raspberry Pi, and on any AROS whose own Installer cannot copy
-files, Install does the work itself after one question. Updating is
-installing again: no reboot needed, except that on the Raspberry Pi a
-new library takes over at the next boot.
+On the Raspberry Pi and on 32-bit AROS, and on any AROS whose own
+Installer cannot copy files, Install does the work itself after one
+question. Updating is installing again: no reboot needed, except that
+on the Raspberry Pi a new library takes over at the next boot.
 
 Docks are now recognised in two more shapes: a short one standing
 along a side of the screen, and a panel kept behind the windows, as

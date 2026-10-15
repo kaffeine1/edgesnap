@@ -103,7 +103,8 @@ stale=0
 for b in os4/EdgeSnap os4/edgesnap.library os4/EdgeSnapPrefs os4/esnaptest \
          morphos/EdgeSnap morphos/edgesnap.library morphos/EdgeSnapPrefs morphos/esnaptest \
          aros-x86_64/EdgeSnap aros-x86_64/edgesnap.library aros-x86_64/EdgeSnapPrefs aros-x86_64/esnaptest \
-         aros-aarch64/EdgeSnap aros-aarch64/edgesnap.library aros-aarch64/EdgeSnapPrefs aros-aarch64/esnaptest; do
+         aros-aarch64/EdgeSnap aros-aarch64/edgesnap.library aros-aarch64/EdgeSnapPrefs aros-aarch64/esnaptest \
+         aros-i386/EdgeSnap aros-i386/edgesnap.library aros-i386/EdgeSnapPrefs aros-i386/esnaptest; do
     f="$ROOT/build/$b"
     if [ ! -f "$f" ]; then
         echo "ERROR: build/$b is missing" >&2
@@ -117,7 +118,7 @@ if [ "$stale" != "0" ]; then
     echo "       rebuild every lane first: scripts/build-all.sh" >&2
     exit 1
 fi
-echo "binaries: all 16 newer than the newest source (${newest_name#$ROOT/})"
+echo "binaries: all 20 newer than the newest source (${newest_name#$ROOT/})"
 STAGE="$ROOT/build/release"
 OUT="$ROOT/build/EdgeSnap-$VERSION.lha"
 # AROS travels on its own: Aminet has no x86_64 token and the AROS
@@ -127,6 +128,8 @@ OUT_AROS="$ROOT/build/EdgeSnap-$VERSION-AROS64.lha"
 # And AROS on the Raspberry Pi has its own: the same AROS stage with the
 # aarch64 build in place of the x86_64 one.
 OUT_ARM="$ROOT/build/EdgeSnap-$VERSION-AROS-aarch64.lha"
+# And the 32-bit AROS (ABI v0: AROS One x86) its own, the same way.
+OUT_I386="$ROOT/build/EdgeSnap-$VERSION-AROS-i386.lha"
 
 rm -rf "$STAGE"
 mkdir -p "$STAGE/EdgeSnap"
@@ -173,6 +176,12 @@ EdgeSnap/aarch64/edgesnap.library
 EdgeSnap/aarch64/esnaptest
 EdgeSnap/aarch64/EdgeSnapPrefs
 EdgeSnap/aarch64/EdgeSnapPrefs.info
+EdgeSnap/i386/EdgeSnap
+EdgeSnap/i386/EdgeSnap.info
+EdgeSnap/i386/edgesnap.library
+EdgeSnap/i386/esnaptest
+EdgeSnap/i386/EdgeSnapPrefs
+EdgeSnap/i386/EdgeSnapPrefs.info
 "
 missing=0
 for f in $MANIFEST; do
@@ -230,10 +239,12 @@ pack_one() {
 MAIN="$ROOT/build/release-main"
 AROS="$ROOT/build/release-aros"
 ARM="$ROOT/build/release-aros-aarch64"
-rm -rf "$MAIN" "$AROS" "$ARM"
-cp -R "$STAGE" "$MAIN" && rm -rf "$MAIN/EdgeSnap/aros64" "$MAIN/EdgeSnap/aarch64"
-cp -R "$STAGE" "$AROS" && rm -rf "$AROS/EdgeSnap/os4" "$AROS/EdgeSnap/mos" "$AROS/EdgeSnap/aarch64"
-cp -R "$STAGE" "$ARM" && rm -rf "$ARM/EdgeSnap/os4" "$ARM/EdgeSnap/mos" "$ARM/EdgeSnap/aros64"
+I386="$ROOT/build/release-aros-i386"
+rm -rf "$MAIN" "$AROS" "$ARM" "$I386"
+cp -R "$STAGE" "$MAIN" && rm -rf "$MAIN/EdgeSnap/aros64" "$MAIN/EdgeSnap/aarch64" "$MAIN/EdgeSnap/i386"
+cp -R "$STAGE" "$AROS" && rm -rf "$AROS/EdgeSnap/os4" "$AROS/EdgeSnap/mos" "$AROS/EdgeSnap/aarch64" "$AROS/EdgeSnap/i386"
+cp -R "$STAGE" "$ARM" && rm -rf "$ARM/EdgeSnap/os4" "$ARM/EdgeSnap/mos" "$ARM/EdgeSnap/aros64" "$ARM/EdgeSnap/i386"
+cp -R "$STAGE" "$I386" && rm -rf "$I386/EdgeSnap/os4" "$I386/EdgeSnap/mos" "$I386/EdgeSnap/aros64" "$I386/EdgeSnap/aarch64"
 # The combined stage names all three lanes; each archive names only
 # what it contains. Aminet's i386-aros filing workaround belongs in its
 # channel readme, not in the package's actual architecture declaration.
@@ -250,6 +261,7 @@ package_readme() {
 package_readme 'ppc-amigaos >= 4.0.0; ppc-morphos' "$MAIN"
 package_readme 'x86_64-aros' "$AROS"
 package_readme 'aarch64-aros' "$ARM"
+package_readme 'i386-aros' "$I386"
 # The AROS archive carries icons in AROS's own PNG format in place of
 # the classic Workbench ones, which AROS's icon.library reads badly:
 # one sent the Installer into an illegal access, another had Wanderer
@@ -270,11 +282,15 @@ mv "$AROS/EdgeSnap/Install" "$AROS/EdgeSnap/Install.script"
 cp "$ROOT/installer/Install-aros" "$AROS/EdgeSnap/Install"
 for f in EdgeSnap.info EdgeSnap/Install.info EdgeSnap/EdgeSnap.guide.info EdgeSnap/EdgeSnap.readme.info; do
     cp "$AROS/$f" "$ARM/$f"
+    cp "$AROS/$f" "$I386/$f"
 done
 mv "$ARM/EdgeSnap/Install" "$ARM/EdgeSnap/Install.script"
 cp "$ROOT/installer/Install-aros" "$ARM/EdgeSnap/Install"
+mv "$I386/EdgeSnap/Install" "$I386/EdgeSnap/Install.script"
+cp "$ROOT/installer/Install-aros" "$I386/EdgeSnap/Install"
 pack_one "$OUT" "$MAIN"
 pack_one "$OUT_AROS" "$AROS"
 pack_one "$OUT_ARM" "$ARM"
+pack_one "$OUT_I386" "$I386"
 
-ls -l "$OUT" "$OUT_AROS" "$OUT_ARM"
+ls -l "$OUT" "$OUT_AROS" "$OUT_ARM" "$OUT_I386"

@@ -769,7 +769,8 @@ more with a maintainer than "runs on two".
 
 **x86_64 only.** The 32-bit AROS is being wound down according to the
 people who asked, and a lane nobody will run is a lane that rots. Not a
-judgement on i386 AROS, a decision not to spend time there.
+judgement on i386 AROS, a decision not to spend time there. (Reversed
+in 0.42, when it cost almost nothing: see "AROS i386, ABI v0" below.)
 
 In stages, each one useful on its own:
 
@@ -1013,6 +1014,22 @@ failed, and the script ended with nothing on screen), a variable name
 is letters and digits only, and a command failing at 10 or more ends
 the script unless FailAt says otherwise. `make-release.sh` measures
 the arguments of every line.
+
+**AROS i386, ABI v0 (2026-10-15).** The decision of 0.3, x86_64 only,
+fell to a reason it did not have then: the tools were already there.
+The alt-abiv0 cross compiler (GCC 6.5.0, built for macOS) and AROS One
+x86's SDK, on the Mac for a sibling project, build the same sources as
+the other AROS lanes with no change to the code; 32-bit pointers were
+never the question, 64-bit ones were. The compiler's default sysroot,
+a build of alt-abiv0, lacks libexec, libdos and the rest, so
+`Makefile.aros-i386` names the SDK with `--sysroot`; genmodule is the
+alt-abiv0 one, built for macOS, and its headers are the SDK's. On AROS
+One x86 under emulation `esnaptest` ran to the end, hotkeys and the
+preferences worked, `Install` installed it and EdgeSnap came up from
+WBStartup after a reboot. AROS One x86 has InstallerLG in C: but the
+43.3 Installer in SYS:Utilities, so on i386, as on aarch64, `Install`
+always installs by itself; `Avail FLUSH` works there. The archive
+joined 0.42 on its own, and from 0.43 the four go out together.
 
 **Where 0.3 stands (2026-09-06).** The prepared release includes the
 AROS x86_64 ABIv11 lane, library API 2.6 on all three systems, the

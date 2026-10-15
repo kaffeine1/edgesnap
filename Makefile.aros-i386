@@ -1,0 +1,84 @@
+# Copyright (c) 2026 Michele Dipace <michele.dipace@kaffeine.net>
+# SPDX-License-Identifier: MIT
+
+# AROS i386 lane, ABI v0: the 32-bit AROS of AROS One i386 and Icaros.
+# Built on the Mac, not on the bench: the bench's i386 toolchain is the
+# trunk one (GCC 10, ABI v1), while this lane uses the alt-abiv0 cross
+# compiler (GCC 6.5.0, built for macOS) with AROS One i386's own SDK as
+# the sysroot. The compiler's default sysroot, a build of alt-abiv0, lacks
+# libexec, libdos and the rest, so the SDK is named on every command.
+# genmodule is the alt-abiv0 one, built for macOS with that tree; its
+# headers (aros/genmodule.h) are the same as the SDK's. collect-aros marks
+# the binaries as AROS ones by itself. scripts/build-aros-i386.sh runs
+# this and checks what comes out. The same four binaries as the other
+# AROS lanes, from the same sources and the same library/aros/edgesnap.conf.
+
+AROS_TOOLCHAIN ?= $(HOME)/amiga-dev/toolchains/aros-i386-abiv0
+SDK_ROOT ?= $(HOME)/amiga-dev/toolchains/aros-one-i386-sdk/Development
+GENMODULE ?= $(HOME)/amiga-dev/build/aros-alt-abiv0-collect/bin/darwin-aarch64/tools/genmodule
+CC := $(AROS_TOOLCHAIN)/i386-aros-gcc
+SDK_GCC_ROOT ?= $(AROS_TOOLCHAIN)/lib/gcc/i386-aros/6.5.0
+
+CFLAGS ?= -Wall -Wextra -O2
+override CFLAGS += --sysroot="$(SDK_ROOT)" -fno-common \
+	-fno-asynchronous-unwind-tables -fno-unwind-tables \
+	-D__AROS__ -Icore -Iinclude -Ilibrary -Iprefs
+
+OUT := build/aros-i386
+GEN := $(OUT)/gen
+
+LIB_SRC := library/aros/edgesnap_library.c library/edgesnap_body.c \
+	core/zones.c core/panels.c core/engine.c core/registry.c \
+	core/config.c core/gutter.c
+LIB_GEN := $(GEN)/edgesnap_start.c $(GEN)/edgesnap_end.c
+CX_SRC := commodity/edgesnap_cx.c core/config.c core/panels.c core/zones.c \
+	core/engine.c
+PREFS_SRC := prefs/morphos/edgesnap_prefs.c prefs/prefs_io.c \
+	core/config.c core/engine.c core/zones.c core/panels.c \
+	prefs/offscreen_sys.c core/offscreen.c
+
+# A module links without the program startup and without a C runtime.
+MODULE_LDFLAGS ?= -nostartfiles -nostdlib -L"$(SDK_ROOT)/lib" -L"$(SDK_GCC_ROOT)"
+MODULE_LIBS ?= -Wl,--start-group -llibinit -lautoinit -lamiga -laros -lgcc -Wl,--end-group
+
+.PHONY: all clean
+
+all: $(OUT)/edgesnap.library $(OUT)/EdgeSnap $(OUT)/EdgeSnapPrefs $(OUT)/esnaptest
+
+define aros-link
+	mkdir -p "$(dir $@)"
+	$(CC) $(CPPFLAGS) $(CFLAGS) $(1) -o "$@" $(2) $(LDLIBS)
+	@strings "$@" | grep -F '$$VER: ' | head -1
+endef
+
+# genmodule turns edgesnap.conf into the library node, the jump table
+# and the client headers, as on the other AROS lanes.
+$(GEN)/edgesnap_start.c: library/aros/edgesnap.conf
+	mkdir -p "$(GEN)/include/proto" "$(GEN)/include/defines" \
+		"$(GEN)/include/inline" "$(GEN)/include/clib"
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)" writefiles edgesnap library
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)" writelibdefs edgesnap library
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)" writefd edgesnap library
+	$(GENMODULE) -c library/aros/edgesnap.conf -d "$(GEN)/include" writeincludes edgesnap library
+
+$(OUT)/edgesnap.library: $(GEN)/edgesnap_start.c $(LIB_SRC)
+	mkdir -p "$(OUT)"
+	$(CC) $(CPPFLAGS) $(CFLAGS) -Wno-unused-parameter -I"$(GEN)" -Ilibrary/aros \
+		-fno-tree-loop-distribute-patterns \
+		$(MODULE_LDFLAGS) -o "$@" $(LIB_GEN) $(LIB_SRC) \
+		-Wl,--undefined=EdgeSnap_1_EdgeSnap_OpenLib $(MODULE_LIBS)
+	@strings "$@" | grep -F '$$VER: ' | head -1
+
+$(OUT)/EdgeSnap: $(CX_SRC) $(GEN)/edgesnap_start.c
+	$(call aros-link,-I"$(GEN)/include",$(CX_SRC))
+
+$(OUT)/esnaptest: tools/esnaptest.c $(GEN)/edgesnap_start.c
+	$(call aros-link,-I"$(GEN)/include",tools/esnaptest.c)
+
+# MUI_NewObject/MUI_MakeObject are link-time wrappers in libmui.a.
+$(OUT)/EdgeSnapPrefs: LDLIBS := -lmui $(LDLIBS)
+$(OUT)/EdgeSnapPrefs: $(PREFS_SRC)
+	$(call aros-link,,$(PREFS_SRC))
+
+clean:
+	rm -rf "$(OUT)"
