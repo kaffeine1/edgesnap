@@ -77,6 +77,9 @@ AROS_ARCHIVES_FILEID = 3497  # x86_64, 0.42, checked 2026-10-12
 # The aarch64 entry, new in 0.42, replaced from 0.43 on.
 AROS_ARCHIVES_FILEID_ARM = 3498  # aarch64, 0.42, checked 2026-10-12
 AROS_REPLACES_ARCHIVES_ARM = "utility/workbench/edgesnap.aarch64-aros.lha"
+# The i386 entry, added to 0.42 on 2026-10-15, replaced from 0.43 on.
+AROS_ARCHIVES_FILEID_I386 = 3516  # i386, 0.42, checked 2026-10-16
+AROS_REPLACES_ARCHIVES_I386 = "utility/workbench/edgesnap.i386-aros.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
 AUTHOR = "Michele Dipace <michele.dipace@kaffeine.net>"
@@ -418,7 +421,8 @@ def arosarchives_arm_readme():
 
 
 def aminet_i386_readme():
-    # A new entry under Aminet's own i386-aros: nothing to replace yet.
+    # Aminet's own i386-aros. No Replaces, as for aarch64: a package sent
+    # again under the same name overwrites it.
     head = [
         "Short:        %s" % SHORT,
         "Uploader:     %s (Michele Dipace)" % EMAIL,
@@ -432,7 +436,6 @@ def aminet_i386_readme():
 
 
 def arosarchives_i386_readme():
-    # New on the AROS Archives with 0.42: no replaces yet.
     head = [
         "name:EdgeSnap",
         "description:Tile windows by dragging them to an edge",
@@ -444,10 +447,10 @@ def arosarchives_i386_readme():
         "category:utility/workbench",
         "requirements:AROS i386 ABI v0 (AROS One x86)",
         "license:Other",
-        "distribute:yes",
-        "hend:",
-        "",
     ]
+    if AROS_REPLACES_ARCHIVES_I386:
+        head.append("replaces:%s" % AROS_REPLACES_ARCHIVES_I386)
+    head += ["distribute:yes", "hend:", ""]
     return head + I386_ARCHIVES_NOTE + body_lines()
 
 
@@ -460,10 +463,10 @@ def arosarchives_i386_readme():
 # Michele runs this one: it asks for the passphrase itself, and the agent
 # never types a passphrase anywhere.
 AROS_ARCHIVES_SCRIPT = r'''#!/bin/bash
-# EdgeSnap @@VERSION@@ to The AROS Archives: x86_64 and aarch64 replace
-# the previous entries ("Replace file"), FileIDs @@FILEID@@ and
-# @@FILEID_ARM@@; i386 is a new entry. ONLY=<archive name> sends that one
-# alone (the i386 archive joined 0.42 after the others). The passphrase
+# EdgeSnap @@VERSION@@ to The AROS Archives: each archive replaces the
+# previous entry ("Replace file"), x86_64 FileID @@FILEID@@, aarch64
+# @@FILEID_ARM@@ and i386 @@FILEID_I386@@. ONLY=<archive name> sends that
+# one alone (the i386 archive joined 0.42 after the others). The passphrase
 # (telegram-amiga SECRETS, entry for EdgeSnap's AROS Archives) is asked of
 # you, never shown and never written to disk; curl reads it from stdin, so
 # it does not appear among the process arguments either. The site's answer
@@ -529,7 +532,7 @@ send() { # $1 = archive, $2 = URL tail
 
 send edgesnap.x86_64-aros-v11.lha '&replace=@@FILEID@@&mode=go'
 send edgesnap.aarch64-aros.lha '&replace=@@FILEID_ARM@@&mode=go'
-send edgesnap.i386-aros.lha '&mode=go'
+send edgesnap.i386-aros.lha '&replace=@@FILEID_I386@@&mode=go'
 unset PASS
 echo "Coda: https://archives.arosworld.org/index.php?function=uploads"
 '''
@@ -551,6 +554,7 @@ MORPHOS_STORAGE_NEW = ("New in %s: docks are recognised in two more shapes, "
 def arosarchives_script():
     return (AROS_ARCHIVES_SCRIPT.replace("@@VERSION@@", VERSION)
             .replace("@@FILEID_ARM@@", str(AROS_ARCHIVES_FILEID_ARM))
+            .replace("@@FILEID_I386@@", str(AROS_ARCHIVES_FILEID_I386))
             .replace("@@FILEID@@", str(AROS_ARCHIVES_FILEID)))
 
 
@@ -659,9 +663,10 @@ def main():
     write(form, morphos_storage_form())
     check(form, "morphos-storage/" + os.path.basename(form), problems,
           name_max=None)
-    print("by hand          %s (replaces FileIDs %d and %d), %s" %
+    print("by hand          %s (replaces FileIDs %d, %d and %d), %s" %
           (os.path.relpath(script, ROOT), AROS_ARCHIVES_FILEID,
-           AROS_ARCHIVES_FILEID_ARM, os.path.relpath(form, ROOT)))
+           AROS_ARCHIVES_FILEID_ARM, AROS_ARCHIVES_FILEID_I386,
+           os.path.relpath(form, ROOT)))
 
     print()
     for archive in (ARCHIVE, ARCHIVE_AROS, ARCHIVE_ARM, ARCHIVE_I386):
