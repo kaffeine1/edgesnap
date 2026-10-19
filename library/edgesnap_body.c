@@ -81,6 +81,7 @@ static ULONG g_client_next = 1;
 /* groups (2.12) live further down, next to the identities they use */
 struct ESBGroup;
 static int esb_locked_for(struct Window *win);
+static int esb_grouped(struct Window *win);
 static int esb_group_locked_for(const struct ESBGroup *g);
 static void esb_groups_drop_owner(ULONG client);
 static void esb_groups_clear(void);
@@ -1173,6 +1174,9 @@ LONG esb_set_options(const struct TagItem *tags)
         case ES_OPT_Animate:
             cfg.animate = v ? 1 : 0;
             break;
+        case ES_OPT_DragRestore:
+            cfg.drag_restore = v ? 1 : 0;
+            break;
         case ES_OPT_BypassQual:
             if (v < ES_QUAL_NONE || v > ES_QUAL_SHIFT) {
                 return ES_ERR_BAD_ARGS;
@@ -2246,6 +2250,69 @@ static void esb_absorb(const ESEngineActions *a, struct ESnapReport *out)
     }
 }
 
+/*
+ * 2.24: a window EdgeSnap snapped, dragged by its title bar and let go
+ * outside every zone, gets back the size it had before the snap, under
+ * the pointer (es_unsnap_rect). esb_input calls this once it has let go
+ * of the semaphore, with the release's actions in a.
+ *
+ * The decision needs the window where the drop left it. A window that
+ * follows the pointer is there already. AROS drags an outline and moves
+ * the window as the button comes up, inside the input handler's pass
+ * that sees the release, ahead of this task; AmigaOS 4 in its ghost and
+ * outline modes may do it later. So the window is looked at until it
+ * has left the box it had when the drag began, for ESB_DROP_TICKS at
+ * most, holding no lock. Only a window that never moves waits that
+ * long, a press that slid off a gadget or a drag put back where it
+ * began, and then nothing happens.
+ *
+ * Then, under the semaphore, the refusals of a snap and the registry's
+ * own: snapped to a zone, still the snapped size, and let go beyond the
+ * slack from where the snap put it and from where the drag began. The
+ * glide is the restore hotkey's, ANIMATE and all; a drag never changes
+ * depth on the Amiga, so nothing is raised.
+ */
+#define ESB_DROP_TICKS 10
+
+static void esb_drag_out(const ESEngineActions *a)
+{
+    struct Window *win = (struct Window *)a->drop_ref;
+    struct ESBSnap s;
+    ESRect pre, r;
+    int t;
+
+    for (t = 0; ; t++) {
+        if (!esb_sample(win, &s)) {
+            ObtainSemaphore(&g_sem);
+            es_registry_forget(&g_registry, win);
+            ReleaseSemaphore(&g_sem);
+            return;
+        }
+        if (s.box.x != a->drop_from.x || s.box.y != a->drop_from.y ||
+            s.box.w != a->drop_from.w || s.box.h != a->drop_from.h ||
+            t >= ESB_DROP_TICKS) {
+            break;
+        }
+        Delay(1);
+    }
+    ObtainSemaphore(&g_sem);
+    if (!esb_sample(win, &s)) {
+        es_registry_forget(&g_registry, win);
+    } else if (!esb_is_excluded(win) && esb_snappable(&s) &&
+               !esb_locked_for(win) && !esb_grouped(win) &&
+               es_registry_drag_out(&g_registry, win, &a->drop_from,
+                                    &s.box, &pre) == ES_OK) {
+        es_unsnap_rect(&pre, &a->drop_from, a->drop_grab_x,
+                       a->drop_grab_y, a->drop_x, a->drop_y, &s.usable,
+                       s.min_w, s.min_h, s.max_w, s.max_h, &r);
+        if (!esb_same_box(&r, &s.box)) {
+            esb_member_placed(win, &s.box, &r);
+            esb_glide_box(win, &s.box, &r, 0);
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+}
+
 void esb_input(int press, int motion, int release, ULONG quals,
                struct ESnapReport *out)
 {
@@ -2253,6 +2320,7 @@ void esb_input(int press, int motion, int release, ULONG quals,
     struct ESBSnap s;
     struct Window *win = NULL;
     int do_snap = 0;
+    int do_drop = 0;
     int snap_zone = ES_ZONE_NONE;
     ESRect snap_rect;
 
@@ -2276,17 +2344,22 @@ void esb_input(int press, int motion, int release, ULONG quals,
 
     if (press) {
         struct ESBSnap ps;
+        struct Window *pw;
         int mx = -1, my = -1;
 
         /* where the button went down: the pointer on the screen of
          * whatever window is active right now, which may still be the
-         * one about to lose the activation */
-        if (esb_sample_active(&ps) != NULL) {
+         * one about to lose the activation; and that window's box,
+         * read with it, for a pull that has taken the window away by
+         * the first motion (2.24, es_engine_press_on) */
+        pw = esb_sample_active(&ps);
+        if (pw != NULL) {
             mx = ps.mouse_x;
             my = ps.mouse_y;
         }
         esb_clients_sweep();   /* a dead owner locks nothing; once per press */
-        es_engine_press(&g_engine, mx, my, &a);
+        es_engine_press_on(&g_engine, pw, pw != NULL ? &ps.box : NULL,
+                           mx, my, &a);
         esb_absorb(&a, out);
     }
 
@@ -2346,6 +2419,16 @@ void esb_input(int press, int motion, int release, ULONG quals,
             snap_zone = a.snap_zone;
             snap_rect = a.snap_rect;
             win = (struct Window *)a.snap_ref;
+        } else if (a.do_drop) {
+            int z = es_registry_zone(&g_registry, a.drop_ref);
+
+            /* the cheap half of the decision, here: nothing is waited
+             * for on a window EdgeSnap did not snap, nor with the
+             * bypass key down as the button came up */
+            do_drop = g_cfg.drag_restore &&
+                      (quals & esb_bypass_mask()) == 0 &&
+                      z != ES_ZONE_NONE && z != ES_ZONE_RECT &&
+                      !esb_grouped((struct Window *)a.drop_ref);
         }
     }
     ReleaseSemaphore(&g_sem);
@@ -2357,6 +2440,11 @@ void esb_input(int press, int motion, int release, ULONG quals,
         out->snapZone = (ULONG)snap_zone;
         out->snapWindow = win;
         out->snapResult = esb_snap_rect(win, (ULONG)snap_zone, &snap_rect);
+    }
+    /* so does the drop, which waits for Intuition first; a still holds
+     * the release's actions */
+    if (do_drop) {
+        esb_drag_out(&a);
     }
     out->dragActive = g_engine.button_down;
 }
@@ -3105,6 +3193,13 @@ static int esb_group_locked_for(const struct ESBGroup *g)
 static int esb_locked_for(struct Window *win)
 {
     return esb_group_locked_for(esb_group_of_serial(esb_serial_of_ptr(win)));
+}
+
+/* g_sem held. Is win in a group at all, locked or not? A drag gives no
+ * member its old size back (2.24): where it goes is its group's. */
+static int esb_grouped(struct Window *win)
+{
+    return esb_group_of_serial(esb_serial_of_ptr(win)) != NULL;
 }
 
 /* g_sem held. Is this an id QueryWorkAreas handed out? */

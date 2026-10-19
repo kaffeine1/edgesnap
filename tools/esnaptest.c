@@ -11,7 +11,8 @@
  * this stops working, the library broke its contract.
  *
  * From 2.24 it also opens windows of its own, to lay them out as a
- * tiler would and try the seams between them.
+ * tiler would and try the seams between them, and to snap one that a
+ * hand then drags away.
  */
 
 #ifndef __USE_INLINE__
@@ -1425,6 +1426,129 @@ static void drag_seam(int locked)
     summary(locked ? "a locked seam by hand" : "a seam by hand");
 }
 
+/* How far an application may round a size the library asked for, and
+ * a box still count as the one asked for: the library's own slack. */
+#define TEST_SLACK 16
+
+static int near_px(LONG a, LONG b)
+{
+    return a - b <= TEST_SLACK && b - a <= TEST_SLACK;
+}
+
+/* Is the pointer on w's title bar? Read with w's box, under the lock. */
+static int pointer_on_bar(struct Window *w, LONG *px, LONG *py)
+{
+    ULONG ilock = LockIBase(0);
+    int on;
+
+    *px = w->WScreen->MouseX;
+    *py = w->WScreen->MouseY;
+    on = *px >= w->LeftEdge && *px < w->LeftEdge + w->Width &&
+         *py >= w->TopEdge && *py < w->TopEdge + w->BorderTop;
+    UnlockIBase(ilock);
+    return on;
+}
+
+/*
+ * esnaptest D (2.24): a window of our own snapped to the left half, for
+ * twenty seconds, so that it can be dragged away by its title bar by
+ * hand or by a script. Let go away from the edges, it must have its size
+ * from before the snap back and no zone, and the pointer must be on its
+ * title bar, which only holds when the mouse is left alone after the
+ * drop. esnaptest DL puts the window in a locked group of ours first and
+ * snaps it as the owner: the drag must then leave the snapped size and
+ * the zone alone.
+ */
+static void drag_away(int locked)
+{
+    struct ESnapRect before, snapped, after;
+    ULONG me = 0, grp = 0, zone = 99;
+    LONG rc = ES_OK, px = 0, py = 0;
+    struct Window *w;
+    int on_bar, moved;
+
+    g_pass = 0;
+    g_fail = 0;
+    w = open_test_window("esnaptest D");
+    printf("esnaptest: a window of our own, D -> %p", (void *)w);
+    if (verdict(w != NULL)) {
+        if (locked) {
+            rc = ES_CALL(ESnap_RegisterClient)("esnaptest", ES_CL_LAYOUT, &me);
+            if (rc == ES_OK) {
+                rc = ES_CALL(ESnap_CreateGroup)(0, "drag", ES_GF_LOCKED, &grp);
+            }
+            if (rc == ES_OK) {
+                rc = ES_CALL(ESnap_GroupAddWindow)(grp, w);
+            }
+            printf("esnaptest: D into a locked group of ours -> %s, group %lu",
+                   rcname(rc), (unsigned long)grp);
+            verdict(rc == ES_OK);
+        }
+    }
+    if (w != NULL && rc == ES_OK) {
+        box_of(w, &before);
+        rc = ES_CALL(ESnap_SnapWindow)(w, ES_ZONE_LEFT);
+        Delay(50L);
+        box_of(w, &snapped);
+        printf("esnaptest: ESnap_SnapWindow(D, left)%s -> %s, from %ld,%ld "
+               "%ldx%ld to %ld,%ld %ldx%ld", locked ? " by the owner" : "",
+               rcname(rc), (long)before.x, (long)before.y, (long)before.w,
+               (long)before.h, (long)snapped.x, (long)snapped.y,
+               (long)snapped.w, (long)snapped.h);
+        if (verdict(rc == ES_OK && (!near_px(snapped.w, before.w) ||
+                                    !near_px(snapped.h, before.h)))) {
+            printf("esnaptest: drag D by its title bar to the middle of the "
+                   "screen, let go and leave the mouse there: you have "
+                   "twenty seconds\n");
+            fflush(stdout);
+            Delay(50L * 20);
+            box_of(w, &after);
+            on_bar = pointer_on_bar(w, &px, &py);
+            rc = ES_CALL(ESnap_QueryWindow)(w, &zone);
+            moved = !near_px(after.x, snapped.x) ||
+                    !near_px(after.y, snapped.y);
+            if (locked) {
+                printf("esnaptest: D at %ld,%ld %ldx%ld (%s), zone %lu "
+                       "(expected dragged, at the snapped size %ldx%ld, zone "
+                       "%d: left alone)", (long)after.x, (long)after.y,
+                       (long)after.w, (long)after.h,
+                       moved ? "dragged" : "NOT DRAGGED", (unsigned long)zone,
+                       (long)snapped.w, (long)snapped.h, ES_ZONE_LEFT);
+                verdict(moved && near_px(after.w, snapped.w) &&
+                        near_px(after.h, snapped.h) && rc == ES_OK &&
+                        zone == ES_ZONE_LEFT);
+            } else {
+                printf("esnaptest: D at %ld,%ld %ldx%ld (expected %ldx%ld, "
+                       "its size from before the snap)", (long)after.x,
+                       (long)after.y, (long)after.w, (long)after.h,
+                       (long)before.w, (long)before.h);
+                verdict(near_px(after.w, before.w) &&
+                        near_px(after.h, before.h));
+                printf("esnaptest: ESnap_QueryWindow(D) -> %s, zone %lu "
+                       "(expected ES_OK, %d: no longer snapped)", rcname(rc),
+                       (unsigned long)zone, ES_ZONE_NONE);
+                verdict(rc == ES_OK && zone == ES_ZONE_NONE);
+                printf("esnaptest: the pointer at %ld,%ld, %s (expected on "
+                       "D's title bar, if the mouse was left alone after the "
+                       "drop)", (long)px, (long)py,
+                       on_bar ? "on D's title bar" : "NOT ON IT");
+                verdict(on_bar);
+            }
+        }
+    }
+    if (w != NULL) {
+        CloseWindow(w);
+    }
+    if (grp != 0) {
+        ES_CALL(ESnap_DeleteGroup)(grp);
+    }
+    if (me != 0) {
+        ES_CALL(ESnap_UnregisterClient)(me);
+    }
+    summary(locked ? "a locked window dragged away" :
+                     "a snapped window dragged away");
+}
+
 /*
  * esnaptest LOCK: keep win in a locked group for twenty seconds, so
  * that a drag by hand (or by a tester's script) can show that the
@@ -1525,21 +1649,26 @@ int main(int argc, char **argv)
      * group for twenty seconds (see lock_window()); S makes a seam of a
      * group of ours, gap 20, to drag by hand with the commodity's handle
      * for twenty seconds, and SL the same locked, to be left alone (see
-     * drag_seam()). Each cleans up and exits, also on a library too old
-     * for it, rather than go on with the run that snaps the active
-     * window.
+     * drag_seam()); D snaps a window of ours to the left half, to be
+     * dragged away by hand within twenty seconds, and DL the same in a
+     * locked group, to be left at its size (see drag_away()). Each
+     * cleans up and exits, also on a library too old for it, rather than
+     * go on with the run that snaps the active window.
      */
-    if (argc > 1 && (argv[1][0] == 'L' || argv[1][0] == 'S')) {
+    if (argc > 1 && (argv[1][0] == 'L' || argv[1][0] == 'S' ||
+                     argv[1][0] == 'D')) {
         if (argv[1][0] == 'L' && EdgeSnapBase->lib_Revision >= 12) {
             lock_window(active_window());
         } else if (argv[1][0] == 'L') {
             printf("esnaptest: LOCK needs library revision 12, this is %d\n",
                    (int)EdgeSnapBase->lib_Revision);
-        } else if (EdgeSnapBase->lib_Revision >= 24) {
+        } else if (EdgeSnapBase->lib_Revision < 24) {
+            printf("esnaptest: %c needs library revision 24, this is %d\n",
+                   argv[1][0], (int)EdgeSnapBase->lib_Revision);
+        } else if (argv[1][0] == 'S') {
             drag_seam(argv[1][1] == 'L');
         } else {
-            printf("esnaptest: S needs library revision 24, this is %d\n",
-                   (int)EdgeSnapBase->lib_Revision);
+            drag_away(argv[1][1] == 'L');
         }
 #if defined(__amigaos4__)
         DropInterface((struct Interface *)IEdgeSnap);

@@ -338,6 +338,72 @@ void es_centre_rect(const ESRect *u, const ESRect *win,
     }
 }
 
+void es_unsnap_rect(const ESRect *want, const ESRect *from, int gx, int gy,
+                    int px, int py, const ESRect *u,
+                    int min_w, int min_h, int max_w, int max_h, ESRect *out)
+{
+    int w = want->w;
+    int h = want->h;
+    int ox, oy;
+
+    /* the size first: area, then limits, as es_centre_rect has it */
+    if (w > u->w) {
+        w = u->w;
+    }
+    if (h > u->h) {
+        h = u->h;
+    }
+    if (min_w > 0 && w < min_w) {
+        w = min_w;
+    }
+    if (max_w > 0 && w > max_w) {
+        w = max_w;
+    }
+    if (min_h > 0 && h < min_h) {
+        h = min_h;
+    }
+    if (max_h > 0 && h > max_h) {
+        h = max_h;
+    }
+    /*
+     * Where the pointer held the bar, kept inside the box it held: the
+     * engine judged the press against that box, but a caller may pass
+     * anything. Across, as a share of the width; down, as it was, since
+     * a title bar is as tall in either size.
+     */
+    ox = gx - from->x;
+    if (ox > from->w - 1) {
+        ox = from->w - 1;
+    }
+    if (ox < 0) {
+        ox = 0;
+    }
+    ox = from->w > 0 ? (int)(((long)ox * w) / from->w) : 0;
+    oy = gy - from->y;
+    if (oy > h - 1) {
+        oy = h - 1;
+    }
+    if (oy < 0) {
+        oy = 0;
+    }
+    out->w = w;
+    out->h = h;
+    out->x = px - ox;
+    out->y = py - oy;
+    if (out->x + w > u->x + u->w) {
+        out->x = u->x + u->w - w;
+    }
+    if (out->y + h > u->y + u->h) {
+        out->y = u->y + u->h - h;
+    }
+    if (out->x < u->x) {
+        out->x = u->x;
+    }
+    if (out->y < u->y) {
+        out->y = u->y;
+    }
+}
+
 void es_order_by_growth(const long *delta, int n, int *order)
 {
     int i, j;

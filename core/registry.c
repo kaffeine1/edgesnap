@@ -142,6 +142,30 @@ int es_registry_restore(ESRegistry *reg, void *ref, const ESRect *current,
     return ES_OK;
 }
 
+int es_registry_drag_out(ESRegistry *reg, void *ref, const ESRect *start,
+                         const ESRect *now, ESRect *out)
+{
+    ESRegistryEntry *e;
+
+    e = es_registry_lookup(reg, ref);
+    if (e == 0 || !((e->zone >= ES_ZONE_LEFT && e->zone <= ES_ZONE_MAX) ||
+                    e->zone == ES_ZONE_CENTRE)) {
+        return ES_ERR_NOT_SNAPPED;
+    }
+    /* a drag moves a window; one that changed size is not ours to size */
+    if (!es_near(start->w, e->snapped.w) || !es_near(start->h, e->snapped.h) ||
+        !es_near(now->w, e->snapped.w) || !es_near(now->h, e->snapped.h)) {
+        return ES_ERR_CHANGED;
+    }
+    if ((es_near(now->x, e->snapped.x) && es_near(now->y, e->snapped.y)) ||
+        (es_near(now->x, start->x) && es_near(now->y, start->y))) {
+        return ES_ERR_CHANGED;     /* it hardly moved */
+    }
+    *out = e->prebox;
+    e->used = 0;
+    return ES_OK;
+}
+
 void es_registry_forget(ESRegistry *reg, void *ref)
 {
     ESRegistryEntry *e;

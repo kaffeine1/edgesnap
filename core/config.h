@@ -39,6 +39,8 @@ typedef struct ESConfig {
     int preview;             /* show the zone preview frame             */
     int cycle_sizes;         /* same hotkey again = next width          */
     int animate;             /* glide into the zone instead of jumping  */
+    int drag_restore;        /* a snapped window dragged away gets its  */
+                             /* size back (2.24)                        */
     int bypass_qual;         /* ES_QUAL_*                               */
 } ESConfig;
 

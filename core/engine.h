@@ -72,7 +72,8 @@ int es_engine_corner_px(const ESEngineConfig *cfg, int usable_h);
 int es_engine_top_px(const ESEngineConfig *cfg);
 
 /* Actions emitted by one input step. Flags say which fields are valid.
- * On release both hide_preview and do_snap can be set: hide first. */
+ * On release both hide_preview and do_snap can be set: hide first.
+ * do_drop and do_snap are never set together. */
 typedef struct ESEngineActions {
     int show_preview;   /* preview_rect (and preview_ref) are valid     */
     int hide_preview;
@@ -85,6 +86,12 @@ typedef struct ESEngineActions {
     void *snap_ref;     /* MAY BE STALE - executor must re-validate     */
     int snap_zone;
     ESRect snap_rect;
+    int do_drop;        /* 2.24: a drag by the drag bar was let go      */
+                        /* outside every zone; drop_* are valid         */
+    void *drop_ref;     /* MAY BE STALE: the executor re-validates it   */
+    ESRect drop_from;   /* the window's box when the drag began         */
+    int drop_grab_x, drop_grab_y; /* where the pointer held its bar then */
+    int drop_x, drop_y; /* the pointer at the last motion               */
 } ESEngineActions;
 
 typedef struct ESEngine {
@@ -102,6 +109,8 @@ typedef struct ESEngine {
     int push_acc_x, push_acc_y; /* raw travel while the pointer stood,  */
                                 /* in half pixels (es_push_axis)        */
     int push_wall_x, push_wall_y; /* -1 low wall, 1 high wall, 0 none   */
+    void *press_ref;    /* 2.24: the active window at the press, 0 if   */
+    ESRect press_box;   /* unknown, and its box then                    */
 } ESEngine;
 
 /* cfg == NULL uses defaults. */
@@ -111,12 +120,29 @@ void es_engine_init(ESEngine *e, const ESEngineConfig *cfg);
 /* mx, my: the pointer where the button went down, -1 when unknown. */
 void es_engine_press(ESEngine *e, int mx, int my, ESEngineActions *out);
 
+/*
+ * The press, knowing which window was active then and its box, sampled
+ * together with mx, my (2.24). When the first motion names that window,
+ * the drag is judged from this box rather than from the box of the
+ * first motion: where windows move with the pointer, a fast pull can
+ * take the window well away before the first motion is sampled, and a
+ * press on the title bar of a window pulled down would then look like a
+ * press below it. ref or box NULL is es_engine_press.
+ */
+void es_engine_press_on(ESEngine *e, void *ref, const ESRect *box,
+                        int mx, int my, ESEngineActions *out);
+
 /* Pointer moved while tracking. facts describes the active window at
  * this instant, or NULL when there is none. */
 void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
                       ESEngineActions *out);
 
-/* Primary button released. */
+/* Primary button released. A drag that began on the drag bar and is let
+ * go outside every zone, the window snappable and the bypass qualifier
+ * not held at the last motion, emits do_drop (2.24). The engine only
+ * reports the gesture: whether the window gets its old size back is the
+ * registry's to say (es_registry_drag_out), since the engine never sees
+ * it. */
 void es_engine_release(ESEngine *e, ESEngineActions *out);
 
 /* Abort any tracking (disable, shutdown): emits hide_preview if one

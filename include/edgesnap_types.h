@@ -132,7 +132,10 @@
  *       group's windows placed without a registry slot, never report or
  *       move a seam of a group locked for the caller, and MoveDividerAt
  *       follows the seam QueryDividerAt last reported to the same task,
- *       or the one it last moved.
+ *       or the one it last moved. A snapped window dragged by its title
+ *       bar and let go outside every zone gets its size from before the
+ *       snap back, under the pointer; ES_OPT_DragRestore (default TRUE)
+ *       turns it off. No vector.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

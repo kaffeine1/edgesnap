@@ -119,6 +119,10 @@ typedef ULONG ESTagData;
                                                  Placement by a client
                                                  is never animated
                                                  (2.13)                 */
+#define ES_OPT_DragRestore  (ES_TAGBASE + 15) /* BOOL, default TRUE: a window
+                    snapped to a zone, dragged by its title bar and let go
+                    outside every zone, gets back its size from before the
+                    snap, under the pointer (2.24) */
 
 /* Bypass qualifier values for ES_OPT_BypassQual. */
 #define ES_QUAL_NONE  0
@@ -178,6 +182,13 @@ struct ESnapReport {
  * presses, pointer motions and releases arrived (counts, so a fast
  * press+release pair is never lost) and the qualifier bits that came
  * with the last mouse event. Fills *report; never fails.
+ *
+ * From 2.24 a release outside every zone can give a window EdgeSnap
+ * snapped its size back (ES_OPT_DragRestore). The report does not say
+ * so, since it does not grow: ESnap_QueryWindow answers ES_ZONE_NONE for
+ * that window afterwards. Such a release can keep the call for up to a
+ * fifth of a second, waiting for Intuition to put the window where the
+ * drag left it.
  */
 void ESnap_FeedInput(ULONG presses, ULONG motions, ULONG releases,
                      ULONG qualifiers, struct ESnapReport *report);
@@ -326,7 +337,9 @@ ULONG ESnap_QueryCapabilities(void);
 LONG ESnap_SnapWindow(struct Window *win, ULONG zone);
 
 /*
- * Restore win to its pre-snap geometry and drop its snap state.
+ * Restore win to its pre-snap geometry and drop its snap state. From
+ * 2.24 a snapped window the user drags away gets that size back, under
+ * the pointer, and loses its snap state the same way.
  *   ES_OK / ES_ERR_STALE / ES_ERR_NOT_SNAPPED /
  *   ES_ERR_CHANGED (window was moved/resized independently since the
  *   snap: state dropped, geometry untouched).

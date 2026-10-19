@@ -86,6 +86,26 @@ int es_registry_snapped(const ESRegistry *reg, void *ref, ESRect *out);
 int es_registry_restore(ESRegistry *reg, void *ref, const ESRect *current,
                         ESRect *out);
 
+/*
+ * 2.24: ref was dragged by its title bar and let go outside every zone;
+ * start is its box when the drag began, now its box after the drop.
+ *   ES_OK: *out = the box from before the first snap, entry consumed.
+ *     The registry snapped it to a zone (not ES_ZONE_RECT), it had the
+ *     snapped size at the start and still has it, and the drop took it
+ *     beyond ES_RESTORE_SLACK_PX both from where the snap put it and
+ *     from start.
+ *   ES_ERR_NOT_SNAPPED: no entry, or a client's placement.
+ *   ES_ERR_CHANGED: resized since the snap or by the drag, or not moved
+ *     out.
+ * Unlike es_registry_restore, a refusal changes nothing: a window let go
+ * within the slack is still where the snap put it. The position at the
+ * start is not compared, because where the window moves with the
+ * pointer, start can be sampled after it has gone further than the
+ * slack.
+ */
+int es_registry_drag_out(ESRegistry *reg, void *ref, const ESRect *start,
+                         const ESRect *now, ESRect *out);
+
 /* Drop the entry for ref (window closed, app opted out, ...). */
 void es_registry_forget(ESRegistry *reg, void *ref);
 

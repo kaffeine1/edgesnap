@@ -193,6 +193,158 @@ static void test_snapped_accessor(void)
     CHECK(out.x == 0 && out.y == 0 && out.w == 10 && out.h == 20);
 }
 
+/*
+ * 2.24: a snapped window dragged by its title bar and let go outside
+ * every zone gets back the box from before the snap, and only when it
+ * was snapped to a zone, kept the snapped size and really moved out.
+ */
+static void test_drag_out_restores_a_moved_window(void)
+{
+    ESRegistry reg;
+    ESRect pre = rect(100, 100, 200, 150);
+    ESRect left = rect(0, 12, 320, 468);
+    ESRect right = rect(320, 12, 320, 468);
+    ESRect out;
+    int w1;
+
+    es_registry_init(&reg);
+    CHECK(es_registry_remember(&reg, &w1, &pre, &left,
+                               ES_ZONE_LEFT) == ES_OK);
+    {
+        ESRect now = rect(300, 200, 320, 468);
+
+        CHECK(es_registry_drag_out(&reg, &w1, &left, &now, &out) == ES_OK);
+        CHECK(out.x == 100 && out.y == 100 && out.w == 200 && out.h == 150);
+        CHECK(es_registry_zone(&reg, &w1) == ES_ZONE_NONE);  /* consumed */
+        CHECK(es_registry_drag_out(&reg, &w1, &left, &now, &out) ==
+              ES_ERR_NOT_SNAPPED);
+    }
+
+    /* an application that rounds the box to its cells, both times */
+    CHECK(es_registry_remember(&reg, &w1, &pre, &left,
+                               ES_ZONE_LEFT) == ES_OK);
+    {
+        ESRect start = rect(0, 12, 312, 460);
+        ESRect now = rect(400, 100, 312, 460);
+
+        CHECK(es_registry_drag_out(&reg, &w1, &start, &now, &out) == ES_OK);
+        CHECK(out.w == 200 && out.h == 150);
+    }
+
+    /* snapped left, then right: the first box is the one that comes back */
+    CHECK(es_registry_remember(&reg, &w1, &pre, &left,
+                               ES_ZONE_LEFT) == ES_OK);
+    CHECK(es_registry_remember(&reg, &w1, &left, &right,
+                               ES_ZONE_RIGHT) == ES_OK);
+    {
+        ESRect now = rect(100, 150, 320, 468);
+
+        CHECK(es_registry_drag_out(&reg, &w1, &right, &now, &out) == ES_OK);
+        CHECK(out.x == 100 && out.y == 100 && out.w == 200 && out.h == 150);
+    }
+
+    /* the centre keeps the size, and goes back all the same */
+    CHECK(es_registry_remember(&reg, &w1, &pre, &pre,
+                               ES_ZONE_CENTRE) == ES_OK);
+    {
+        ESRect now = rect(300, 300, 200, 150);
+
+        CHECK(es_registry_drag_out(&reg, &w1, &pre, &now, &out) == ES_OK);
+        CHECK(out.x == 100 && out.y == 100);
+        CHECK(es_registry_zone(&reg, &w1) == ES_ZONE_NONE);
+    }
+}
+
+/*
+ * Where the window moves with the pointer, the box at the start of the
+ * drag can be sampled after it has already gone further than the slack:
+ * only its size is compared. The drop must still be beyond the slack
+ * from that start, so a drag put back where it began does nothing.
+ */
+static void test_drag_out_judges_the_start_by_its_size(void)
+{
+    ESRegistry reg;
+    ESRect pre = rect(100, 100, 200, 150);
+    ESRect left = rect(0, 12, 320, 468);
+    ESRect late = rect(200, 150, 320, 468);   /* 200 px into the drag */
+    ESRect out = rect(-1, -1, -1, -1);
+    int w1;
+
+    es_registry_init(&reg);
+    CHECK(es_registry_remember(&reg, &w1, &pre, &left,
+                               ES_ZONE_LEFT) == ES_OK);
+    {
+        ESRect near_start = rect(210, 150, 320, 468);
+        ESRect far = rect(500, 300, 320, 468);
+        ESRect home = rect(10, 20, 320, 468);
+
+        CHECK(es_registry_drag_out(&reg, &w1, &late, &near_start, &out) ==
+              ES_ERR_CHANGED);
+        CHECK(out.x == -1);                       /* untouched */
+        CHECK(es_registry_zone(&reg, &w1) == ES_ZONE_LEFT);
+        /* taken away and brought back to where the snap put it */
+        CHECK(es_registry_drag_out(&reg, &w1, &late, &home, &out) ==
+              ES_ERR_CHANGED);
+        CHECK(out.x == -1 && es_registry_zone(&reg, &w1) == ES_ZONE_LEFT);
+        CHECK(es_registry_drag_out(&reg, &w1, &late, &far, &out) == ES_OK);
+        CHECK(out.x == 100 && out.w == 200);
+    }
+}
+
+/* Every refusal leaves the entry as it was, and the restore hotkey then
+ * decides about it as it always did. */
+static void test_drag_out_refusals_keep_the_entry(void)
+{
+    ESRegistry reg;
+    ESRect pre = rect(100, 100, 200, 150);
+    ESRect left = rect(0, 12, 320, 468);
+    ESRect out;
+    int w1, w2;
+
+    es_registry_init(&reg);
+    CHECK(es_registry_remember(&reg, &w1, &pre, &left,
+                               ES_ZONE_LEFT) == ES_OK);
+    {
+        ESRect within = rect(10, 20, 320, 468);
+        ESRect thin = rect(0, 12, 280, 468);
+        ESRect away = rect(300, 200, 320, 468);
+        ESRect shrunk = rect(300, 200, 280, 468);
+        ESRect taller = rect(300, 200, 320, 500);
+
+        /* let go within the slack: still snapped */
+        CHECK(es_registry_drag_out(&reg, &w1, &left, &within, &out) ==
+              ES_ERR_CHANGED);
+        CHECK(es_registry_zone(&reg, &w1) == ES_ZONE_LEFT);
+        /* resized since the snap, before the drag began */
+        CHECK(es_registry_drag_out(&reg, &w1, &thin, &away, &out) ==
+              ES_ERR_CHANGED);
+        /* resized by the drag, or so it looks */
+        CHECK(es_registry_drag_out(&reg, &w1, &left, &shrunk, &out) ==
+              ES_ERR_CHANGED);
+        CHECK(es_registry_drag_out(&reg, &w1, &left, &taller, &out) ==
+              ES_ERR_CHANGED);
+        CHECK(es_registry_zone(&reg, &w1) == ES_ZONE_LEFT);
+        /* the hotkey still puts it back */
+        CHECK(es_registry_restore(&reg, &w1, &within, &out) == ES_OK);
+        CHECK(out.x == 100 && out.w == 200);
+    }
+
+    /* a client's placement is not a snap, and no entry is no entry */
+    CHECK(es_registry_remember(&reg, &w1, &pre, &left,
+                               ES_ZONE_RECT) == ES_OK);
+    {
+        ESRect away = rect(300, 200, 320, 468);
+
+        CHECK(es_registry_drag_out(&reg, &w1, &left, &away, &out) ==
+              ES_ERR_NOT_SNAPPED);
+        CHECK(es_registry_zone(&reg, &w1) == ES_ZONE_RECT);
+        CHECK(es_registry_drag_out(&reg, &w2, &left, &away, &out) ==
+              ES_ERR_NOT_SNAPPED);
+        CHECK(es_registry_drag_out(&reg, 0, &left, &away, &out) ==
+              ES_ERR_NOT_SNAPPED);
+    }
+}
+
 int main(void)
 {
     test_remember_restore_roundtrip();
@@ -201,6 +353,9 @@ int main(void)
     test_slack_tolerates_app_rounding();
     test_forget_and_capacity();
     test_snapped_accessor();
+    test_drag_out_restores_a_moved_window();
+    test_drag_out_judges_the_start_by_its_size();
+    test_drag_out_refusals_keep_the_entry();
 
     if (g_failures == 0) {
         printf("registry_test: all tests passed\n");

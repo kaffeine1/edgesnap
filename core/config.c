@@ -21,6 +21,7 @@ void es_config_defaults(ESConfig *cfg)
     cfg->preview = 1;
     cfg->cycle_sizes = 1;
     cfg->animate = 1;
+    cfg->drag_restore = 1;
     cfg->bypass_qual = ES_QUAL_NONE;
 }
 
@@ -323,6 +324,13 @@ int es_config_set(ESConfig *cfg, const char *key, const char *value)
         cfg->animate = iv;
         return ES_OK;
     }
+    if (es_key_eq(key, "dragrestore")) {
+        if (!es_parse_bool(value, &iv)) {
+            return ES_ERR_BAD_ARGS;
+        }
+        cfg->drag_restore = iv;
+        return ES_OK;
+    }
     if (es_key_eq(key, "zones")) {
         if (!es_parse_zones(value, &mask)) {
             return ES_ERR_BAD_ARGS;
@@ -426,6 +434,11 @@ static const ESSetting es_setting_table[] = {
       "Pressing the same side hotkey again gives the window two "
       "thirds of the screen, then one third, then a half again.",
       ES_SET_BOOL, 0, 0, 0 },
+    { "DRAGRESTORE", "Zones", "Old size when dragged away",
+      "A snapped window dragged by its title bar and let go away from the "
+      "edges gets back the size it had before it was snapped, under the "
+      "pointer. With the bypass key held it keeps the snapped size.",
+      ES_SET_BOOL, 0, 0, 0 },
     { "EDGEPX", "Sensitivity", "Edge distance",
       "How close to an edge the pointer must come, in pixels.",
       ES_SET_INT, ES_EDGE_PX_MIN, ES_EDGE_PX_MAX, 0 },
@@ -514,6 +527,9 @@ int es_setting_value(const ESConfig *cfg, int index)
         }
         if (es_key_eq(key, "animate")) {
             return cfg->animate;
+        }
+        if (es_key_eq(key, "dragrestore")) {
+            return cfg->drag_restore;
         }
         if (es_key_eq(key, "paneldetect")) {
             return cfg->panel_detect;

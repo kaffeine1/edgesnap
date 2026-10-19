@@ -110,6 +110,20 @@ If a window is already snapped to one side, snapping another to the
 other side gives it the space that is actually left, not a rigid
 half - so a sixty/forty split stays sixty/forty.
 
+@{b}Dragging a snapped window away@{ub}
+Drag a snapped window by its title bar and let go away from the edges,
+and it gets back the size it had before it was snapped. It comes back
+under the pointer, which keeps its place along the title bar: a
+maximised window grabbed a third of the way across comes back with the
+pointer a third of the way across, as on Windows. Let go at an edge or
+a corner instead and it snaps there. A window you resized after
+snapping it keeps its size; so does one that hardly moved, and one let
+go with the bypass key held. @{b}DRAGRESTORE@{ub} turns this off.
+
+Where windows may not leave the screen, a maximised window has little
+or no room to move, so a drag may not take it away: @{b}ctrl alt
+cursor down@{ub} puts it back instead.
+
 @{b}Windows that may not leave the screen@{ub}
 A drag snaps where the pointer reaches the edge. Whether a dragged
 window may go on past the edge is the system's own setting: in IControl
@@ -184,7 +198,9 @@ EdgeSnap's, and the system follows it at once.
 @{b}Getting past the zones@{ub}
 If you want to drag a window right up to the edge without it
 snapping, set @{b}BYPASSQUAL@{ub} (see @{" Settings " link SETTINGS})
-and hold that key while you drag.
+and hold that key while you drag. Held as you let go, the same key
+keeps a snapped window at its snapped size when you drag it away from
+the edges.
 
 @endnode
 

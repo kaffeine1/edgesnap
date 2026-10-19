@@ -205,6 +205,8 @@ cat > "$DEST/EdgeSnap.prefs" <<'EOF'
 # CYCLESIZES  the same side hotkey again gives two thirds, then one
 #             third, then a half again: yes | no
 # ANIMATE     glide into the zone instead of jumping: yes | no
+# DRAGRESTORE a snapped window dragged away from the edges gets its old
+#             size back: yes | no
 
 #ZONES=all
 #EDGEPX=12
@@ -214,4 +216,5 @@ cat > "$DEST/EdgeSnap.prefs" <<'EOF'
 #BYPASSQUAL=alt
 #CYCLESIZES=yes
 #ANIMATE=yes
+#DRAGRESTORE=yes
 EOF

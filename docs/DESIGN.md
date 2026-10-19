@@ -199,12 +199,17 @@ interfaces). Heuristic instead:
 - One `ChangeWindowBox()` (atomic move+resize, V36+, async). Honor
   Min/Max window limits; clamped rects stay anchored to the zone's outer
   edge. Non-resizable windows: move only, or skip (configurable).
-- Snap registry: pre-snap geometry per window, restored when the window is
-  dragged out of its zone (Windows behavior). Window pointers are NEVER
+- Snap registry: the box a window had before its first snap, kept
+  across re-snaps, and the box the snap gave it. The restore hotkey
+  puts the first one back, and from library 2.24 a drag does too: a
+  snapped window dragged by its title bar and let go outside every zone
+  gets that size back under the pointer, which keeps its share of the
+  title bar's width, as Windows does with a maximised window (see "A
+  snapped window dragged away" under 0.4). Window pointers are NEVER
   trusted: re-validate by walking the screen/window lists under
-  `LockIBase()` before every touch; under the lock only read, release it
-  before calling Intuition. If the app moves/resizes the window itself,
-  its snap state decays.
+  `LockIBase()` before every touch; under the lock only read, release
+  it before calling Intuition. If the app moves/resizes the window
+  itself, its snap state decays.
 
 ## Zone preview (Aero-style)
 
@@ -296,7 +301,9 @@ commodity/  Exchange controller
 - Apps hostile to external resizing (fixed size increments, terminals):
   imperfect result accepted; the API opt-out is the escape valve.
 - Race with Intuition's own drop handling on release (spike question): if
-  real, commit the snap deferred via timer.device.
+  real, commit the snap deferred via timer.device. Not seen for the snap
+  (2026-08-11, below). The drag restore of 2.24 waits for the drop
+  explicitly (see 0.4).
 
 ## Spike findings
 
@@ -1176,6 +1183,88 @@ of this verification.
   settings table, so both preference windows and the manual get it for
   free - and measured on real hardware, because in emulation the redraw
   cost is not the real one.
+
+- **A snapped window dragged away gets its size back (done, library
+  2.24, 2026-10-19).** A MorphOS user asked for it, expecting it from
+  Windows: a maximised window pulled down by its title bar comes back
+  at its old size, under the pointer. The snap registry was meant for
+  this from the start and it was never built: up to 2.23 a release
+  outside every zone did nothing, and the restore hotkey then refused
+  the entry, the window having moved beyond the slack, so the old size
+  was lost. Now a drag that began on the title bar and is let go
+  outside every zone, a zone switched off in `ZONES` included, gives
+  the window the box it had before its first snap, under the pointer:
+  the pointer keeps its share of the bar's width and its depth into
+  the bar, and the box is kept inside the usable area, docks, margins
+  and the window's own limits included.
+
+  It happens at the release, not during the drag as on Windows:
+  AmigaOS 4 holds another program's window operations until the button
+  is up (see "The preview frame on AmigaOS 4"), and AROS drags an
+  outline and moves the window only then. The engine reports the
+  gesture and nothing more, `do_drop` from `es_engine_release` with the
+  box the drag began from, where the pointer held the bar and where it
+  is now; the registry decides and consumes the entry
+  (`es_registry_drag_out`); the box is `es_unsnap_rect`, next to
+  `es_centre_rect`; the library body does what needs the system.
+
+  The conditions: the window was snapped to a zone (halves, quarters,
+  maximise, centre, a cycled width; never a client's placement,
+  `ES_ZONE_RECT`); it had the snapped size when the drag began and
+  still has it after the drop; it was let go beyond the slack both from
+  where the snap put it and from where the drag began; it is not
+  excluded, and it is in no layout group, locked or not; the bypass key
+  is not held as the button comes up; and `DRAGRESTORE` is on, as it
+  comes.
+  A refusal leaves the registry as it was, so a window let go within
+  the slack stays snapped and `ctrl alt cursor down` still puts it
+  back. The position at the start is not compared: where the window
+  follows the pointer the library first samples it at the first motion
+  it sees, and a fast pull can have taken it further than the slack by
+  then. So a snapped window moved once with the bypass key held, or
+  while the setting was off, gets its old size at its next plain drag;
+  I think that is right.
+
+  The press carries the box of the window that was active at it
+  (`es_engine_press_on`). On AmigaOS 4 and MorphOS a window pulled down
+  fast can stand 30 pixels lower at the first motion than at the press,
+  and judged from that box a press on its title bar looked like a press
+  below it: the drag still started, the window having moved, but not
+  as a drag by the bar. Where the pressed window becomes active a beat
+  after the press (AROS) the press names the window before it, and the
+  engine judges as it always did. Snapping does not change: the host
+  tests drive the same drags, live and outline, into every kind of zone
+  and into none, through both kinds of press, and compare every action.
+
+  The decision needs the window where the drop left it, so the library
+  waits for it, in the caller's task and holding no lock: it looks at
+  the window until it has left the box the drag began from, ten ticks
+  at most. In the AROS sources the drag bar answers the release with
+  `GMR_NOREUSE` (`rom/intuition/windowclasses.c`), `GM_GOINACTIVE`
+  follows in the same event (`inputhandler_support.c`), and the drag
+  bar's `GM_GOINACTIVE` makes the outline's final `MoveWindow`, which
+  `DoASyncAction` runs at once when called from the input.device task
+  (`movewindow.c`, `inputhandler_actions.c`): the drop has landed
+  before our task, at priority 0, runs. A `ChangeWindowBox` of ours is
+  queued, and the queue is not handled while a drag or size gadget is
+  active (`HandleIntuiActions`), so nothing we ask for can be overtaken
+  by the drop. The wait is for AmigaOS 4 in its ghost and outline
+  modes, whose drop cannot be seen from outside, and for an AROS on
+  several cores. A window that never moves, a press that slid off a
+  close or depth gadget or a drag put back where it began, waits the
+  whole fifth of a second, and then nothing happens. The restore
+  glides as the restore hotkey does, `ANIMATE` and all, and raises
+  nothing: a drag never changes depth on the Amiga.
+
+  No vector: one tag, `ES_OPT_DragRestore`, and one row in the settings
+  table, from which the preference windows and the manual take it. The
+  report of `ESnap_FeedInput` does not grow, so it does not say that a
+  window got its size back; `ESnap_QueryWindow` answers `ES_ZONE_NONE`
+  for it afterwards. The host tests are in `core/zones_test.c`
+  (`es_unsnap_rect`), `core/registry_test.c` (`es_registry_drag_out`)
+  and `core/engine_test.c` (`do_drop`, `es_engine_press_on`);
+  `esnaptest D` and `DL` give a window to drag away by hand or by a
+  script.
 
 ### 2.5 - what a tiling client asked for first
 

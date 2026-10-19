@@ -118,6 +118,24 @@ void es_centre_rect(const ESRect *usable, const ESRect *win,
                     ESRect *out);
 
 /*
+ * A snapped window dragged away by its title bar gets back the size it
+ * had before the snap (2.24), under the pointer, as Windows does with a
+ * maximised window. Only want's size is used, as es_centre_rect uses
+ * only the window's: cut down to the usable area, the window's own
+ * limits winning last. from is the window's box when the drag began
+ * and (gx, gy) where the pointer held its title bar then; (px, py) is
+ * the pointer now. The pointer keeps its share of the bar's width and
+ * its depth into the bar: a maximised window grabbed three quarters of
+ * the way across would otherwise come back with its bar beside the
+ * pointer, not under it. The box is then kept inside the usable area:
+ * the right and bottom edges first, the left and top ones last, so that
+ * a box larger than the area keeps the area's top left corner.
+ */
+void es_unsnap_rect(const ESRect *want, const ESRect *from, int gx, int gy,
+                    int px, int py, const ESRect *usable,
+                    int min_w, int min_h, int max_w, int max_h, ESRect *out);
+
+/*
  * Order placements so that windows which shrink go first and windows
  * which grow go last: an overlap on screen is then transient at worst.
  * delta[i] is the new area minus the old one; order[] receives the

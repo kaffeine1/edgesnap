@@ -61,6 +61,11 @@ static void es_actions_clear(ESEngineActions *out)
     out->snap_ref = 0;
     out->snap_zone = ES_ZONE_NONE;
     out->snap_rect = out->preview_rect;
+    out->do_drop = 0;
+    out->drop_ref = 0;
+    out->drop_from = out->preview_rect;
+    out->drop_grab_x = out->drop_grab_y = 0;
+    out->drop_x = out->drop_y = 0;
 }
 
 static void es_engine_clear_tracking(ESEngine *e)
@@ -70,6 +75,7 @@ static void es_engine_clear_tracking(ESEngine *e)
     e->on_bar = 0;
     e->press_mx = -1;
     e->press_my = -1;
+    e->press_ref = 0;
     e->candidate = 0;
     e->zone = ES_ZONE_NONE;
     e->push_acc_x = 0;
@@ -170,6 +176,16 @@ void es_engine_press(ESEngine *e, int mx, int my, ESEngineActions *out)
     e->press_my = my;
 }
 
+void es_engine_press_on(ESEngine *e, void *ref, const ESRect *box,
+                        int mx, int my, ESEngineActions *out)
+{
+    es_engine_press(e, mx, my, out);
+    if (ref != 0 && box != 0) {
+        e->press_ref = ref;
+        e->press_box = *box;
+    }
+}
+
 void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
                       ESEngineActions *out)
 {
@@ -201,9 +217,23 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
          */
         int px = e->press_mx >= 0 ? e->press_mx : facts->mouse_x;
         int py = e->press_my >= 0 ? e->press_my : facts->mouse_y;
+        const ESRect *b;
 
         e->candidate = facts->ref;
-        e->base_box = facts->box;
+        /*
+         * The window that was active at the press, as it stood then
+         * (2.24, es_engine_press_on): the press position and that box
+         * were sampled together. On AmigaOS 4 and MorphOS the window
+         * follows the pointer, and when the press and the first motion
+         * are handled apart a fast pull can have taken it well down
+         * before this sample; the press would then miss its bar.
+         */
+        if (e->press_ref != 0 && facts->ref == e->press_ref) {
+            e->base_box = e->press_box;
+        } else {
+            e->base_box = facts->box;
+        }
+        b = &e->base_box;
         e->base_mx = px;
         e->base_my = py;
         e->dragging = 0;
@@ -217,8 +247,8 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
          */
         e->on_bar = (facts->flags & ES_WF_DRAGBAR) != 0 &&
                     facts->bar_h > 0 &&
-                    px >= facts->box.x && px < facts->box.x + facts->box.w &&
-                    py >= facts->box.y && py < facts->box.y + facts->bar_h;
+                    px >= b->x && px < b->x + b->w &&
+                    py >= b->y && py < b->y + facts->bar_h;
         return;
     }
 
@@ -306,6 +336,24 @@ void es_engine_release(ESEngine *e, ESEngineActions *out)
         out->snap_ref = e->candidate;
         out->snap_zone = e->zone;
         out->snap_rect = e->zone_rect;
+    } else if (e->dragging && e->on_bar && e->zone == ES_ZONE_NONE &&
+               e->candidate != 0 &&
+               (e->last.flags & (ES_WF_SNAPPABLE | ES_WF_BYPASS)) ==
+                   ES_WF_SNAPPABLE) {
+        /*
+         * 2.24: let go outside every zone, a zone switched off
+         * included. The press and base_box are the pair on_bar was
+         * judged on, so the press less the box's corner is where the
+         * pointer held the bar; the pointer of the last motion is
+         * where it is now.
+         */
+        out->do_drop = 1;
+        out->drop_ref = e->candidate;
+        out->drop_from = e->base_box;
+        out->drop_grab_x = e->base_mx;
+        out->drop_grab_y = e->base_my;
+        out->drop_x = e->last.mouse_x;
+        out->drop_y = e->last.mouse_y;
     }
     es_engine_clear_tracking(e);
 }

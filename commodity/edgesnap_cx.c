@@ -3207,7 +3207,7 @@ static void spike_close_edgesnap(void)
  */
 static void spike_push_config(void)
 {
-    struct TagItem tags[16];
+    struct TagItem tags[20];
     int n = 0;
     int corner_div = g_cfg.engine.corner_div;
 
@@ -3249,6 +3249,9 @@ static void spike_push_config(void)
     tags[n++].ti_Data = (ULONG)g_cfg.cycle_sizes;
     tags[n].ti_Tag = ES_OPT_Animate;
     tags[n++].ti_Data = (ULONG)g_cfg.animate;
+    /* 2.24 and later; an older library ignores it, as above */
+    tags[n].ti_Tag = ES_OPT_DragRestore;
+    tags[n++].ti_Data = (ULONG)g_cfg.drag_restore;
     tags[n].ti_Tag = TAG_DONE;
     tags[n].ti_Data = 0;
 
@@ -3284,11 +3287,13 @@ static void spike_config_reload(void)
               (unsigned)g_cfg.engine.zones_mask, g_cfg.engine.edge_px,
               spike_corner_words(), g_cfg.engine.drag_min_px);
     spike_out("edgesnap:        preview %s, panel detect %s (margin %d), "
-              "width cycle %s, glide %s\n",
+              "width cycle %s, glide %s,\n",
               g_cfg.preview ? "on" : "off",
               g_cfg.panel_detect ? "on" : "off", g_cfg.panel_margin,
               g_cfg.cycle_sizes ? "on" : "off",
               g_cfg.animate ? "on" : "off");
+    spike_out("edgesnap:        drag restore %s\n",
+              g_cfg.drag_restore ? "on" : "off");
 }
 
 /* ------------------------------------------------------------ commodity */
@@ -4032,10 +4037,12 @@ int main(int argc, char **argv)
            g_cfg.bypass_qual == ES_QUAL_CTRL ? "ctrl" :
            g_cfg.bypass_qual == ES_QUAL_SHIFT ? "shift" : "none");
     spike_out("edgesnap:        margins l%d t%d r%d b%d, width cycle %s, "
-           "glide %s\n", g_cfg.margin.l, g_cfg.margin.t,
+           "glide %s,\n", g_cfg.margin.l, g_cfg.margin.t,
            g_cfg.margin.r, g_cfg.margin.b,
            g_cfg.cycle_sizes ? "on" : "off",
            g_cfg.animate ? "on" : "off");
+    spike_out("edgesnap:        drag restore %s\n",
+           g_cfg.drag_restore ? "on" : "off");
     spike_out("edgesnap:        (file: " ES_PREFS_ENV ")\n");
     spike_dump_windows();
 

@@ -291,6 +291,95 @@ static void test_centre_honours_area_and_limits(void)
     CHECK(es_zone_name(ES_ZONE_CENTRE)[0] == 'c');
 }
 
+/*
+ * 2.24: a snapped window dragged away gets its old size back under the
+ * pointer. A maximised window grabbed three quarters of the way across
+ * comes back with the pointer three quarters of the way across, and as
+ * deep into its bar as it was.
+ */
+static void test_unsnap_under_the_pointer(void)
+{
+    ESRect u, from, want, r;
+    int gx;
+
+    u.x = 0; u.y = 20; u.w = 1024; u.h = 673;
+    from = u;                                 /* maximised */
+    want.x = 100; want.y = 100; want.w = 400; want.h = 300;
+    es_unsnap_rect(&want, &from, 768, 30, 700, 400, &u, 0, 0, 0, 0, &r);
+    CHECK(r.x == 400 && r.y == 390 && r.w == 400 && r.h == 300);
+
+    /* the same width: the grab is kept to the pixel */
+    from.w = 512;
+    want.w = 512; want.h = 400;
+    es_unsnap_rect(&want, &from, 100, 25, 600, 200, &u, 0, 0, 0, 0, &r);
+    CHECK(r.x == 500 && r.y == 195 && r.w == 512 && r.h == 400);
+
+    /* wherever the bar was grabbed, the pointer is on the bar it gets
+     * back, at the same depth, as long as nothing has to be clamped */
+    from = u;
+    want.w = 400; want.h = 300;
+    for (gx = 0; gx < 1024; gx += 37) {
+        es_unsnap_rect(&want, &from, gx, 30, 512, 300, &u, 0, 0, 0, 0, &r);
+        CHECK(r.x <= 512 && 512 < r.x + r.w);
+        CHECK(r.y == 290 && r.w == 400 && r.h == 300);
+        CHECK(512 - r.x == (gx * 400) / 1024);
+    }
+
+    /* only the size of want counts, never where it was */
+    want.x = -5000; want.y = 9000;
+    es_unsnap_rect(&want, &from, 768, 30, 700, 400, &u, 0, 0, 0, 0, &r);
+    CHECK(r.x == 400 && r.y == 390);
+}
+
+/* Kept inside the usable area, the limits winning over the area, and
+ * nothing a caller passes can divide by zero or put the grab outside. */
+static void test_unsnap_keeps_to_the_area(void)
+{
+    ESRect u, d, from, half, want, r;
+
+    u.x = 0; u.y = 20; u.w = 1024; u.h = 673;
+    from = u;
+    want.x = 0; want.y = 0; want.w = 400; want.h = 300;
+
+    es_unsnap_rect(&want, &from, 768, 30, 1000, 300, &u, 0, 0, 0, 0, &r);
+    CHECK(r.x == 624 && r.y == 290);          /* right edge */
+    es_unsnap_rect(&want, &from, 768, 30, 700, 22, &u, 0, 0, 0, 0, &r);
+    CHECK(r.x == 400 && r.y == 20);           /* top: under the bar */
+    es_unsnap_rect(&want, &from, 768, 30, 700, 690, &u, 0, 0, 0, 0, &r);
+    CHECK(r.y == 393 && r.y + r.h == 693);    /* bottom */
+
+    /* a dock on the left: the usable area starts at 60 */
+    d.x = 60; d.y = 20; d.w = 964; d.h = 673;
+    half = d;
+    half.w = 482;
+    es_unsnap_rect(&want, &half, 70, 25, 62, 300, &d, 0, 0, 0, 0, &r);
+    CHECK(r.x == 60 && r.y == 295 && r.w == 400);
+
+    /* larger than the area: cut to it, at its top left corner */
+    want.w = 2000; want.h = 1000;
+    es_unsnap_rect(&want, &from, 768, 30, 700, 400, &u, 0, 0, 0, 0, &r);
+    CHECK(r.x == 0 && r.y == 20 && r.w == 1024 && r.h == 673);
+
+    /* the limits win last: wider than the area, from its left edge */
+    want.w = 400; want.h = 300;
+    es_unsnap_rect(&want, &from, 768, 30, 700, 400, &u, 1200, 0, 0, 200,
+                   &r);
+    CHECK(r.w == 1200 && r.x == 0);
+    CHECK(r.h == 200 && r.y == 390);
+    es_unsnap_rect(&want, &from, 768, 30, 700, 400, &u, 0, 800, 0, 0, &r);
+    CHECK(r.h == 800 && r.y == 20);           /* taller: from the top */
+
+    /* a box of no width, and grabs outside the box */
+    from.w = 0;
+    es_unsnap_rect(&want, &from, 768, 30, 500, 400, &u, 0, 0, 0, 0, &r);
+    CHECK(r.x == 500 && r.y == 390 && r.w == 400);
+    from = u;
+    es_unsnap_rect(&want, &from, -50, -50, 500, 300, &u, 0, 0, 0, 0, &r);
+    CHECK(r.x == 500 && r.y == 300);
+    es_unsnap_rect(&want, &from, 5000, 5000, 700, 400, &u, 0, 0, 0, 0, &r);
+    CHECK(r.x == 700 - (1023 * 400) / 1024 && r.y == 400 - 299);
+}
+
 static void test_glide_moves_and_lands(void)
 {
     ESRect from, to, r, prev;
@@ -352,6 +441,8 @@ int main(void)
     test_glide_declines_when_it_should();
     test_centre_keeps_the_size();
     test_centre_honours_area_and_limits();
+    test_unsnap_under_the_pointer();
+    test_unsnap_keeps_to_the_area();
     test_side_zones_cycle_widths();
     test_stepped_zone_honours_limits();
     test_zone_from_pointer();

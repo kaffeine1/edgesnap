@@ -45,6 +45,7 @@ static void test_defaults(void)
     CHECK(c.panel_detect == 1);
     CHECK(c.panel_margin == ES_PANEL_MARGIN_PX);
     CHECK(c.preview == 1);
+    CHECK(c.drag_restore == 1);
     CHECK(c.bypass_qual == ES_QUAL_NONE);
     CHECK(c.margin.l == 0 && c.margin.b == 0);
 }
@@ -124,6 +125,12 @@ static void test_booleans(void)
     CHECK(c.panel_detect == 0);
     CHECK(es_config_line(&c, "PANELDETECT=maybe") == ES_ERR_BAD_ARGS);
     CHECK(c.panel_detect == 0);
+    CHECK(es_config_line(&c, "DRAGRESTORE=no") == ES_OK);
+    CHECK(c.drag_restore == 0);
+    CHECK(es_config_line(&c, "Drag_Restore=yes") == ES_OK);
+    CHECK(c.drag_restore == 1);
+    CHECK(es_config_line(&c, "DRAGRESTORE=maybe") == ES_ERR_BAD_ARGS);
+    CHECK(c.drag_restore == 1);
 }
 
 static void test_zones(void)
@@ -187,6 +194,9 @@ static int same_config(const ESConfig *a, const ESConfig *b)
            a->panel_detect == b->panel_detect &&
            a->panel_margin == b->panel_margin &&
            a->preview == b->preview &&
+           a->cycle_sizes == b->cycle_sizes &&
+           a->animate == b->animate &&
+           a->drag_restore == b->drag_restore &&
            a->bypass_qual == b->bypass_qual;
 }
 
@@ -235,6 +245,9 @@ static void test_write_round_trip(void)
     a.panel_detect = 0;
     a.panel_margin = 21;
     a.preview = 0;
+    a.cycle_sizes = 0;
+    a.animate = 0;
+    a.drag_restore = 0;
     a.bypass_qual = ES_QUAL_SHIFT;
     n = es_config_write(&a, buf, (int)sizeof(buf));
     CHECK(n > 0);
@@ -267,11 +280,14 @@ static void test_write_defaults_as_comments(void)
     CHECK(pinned == 0);
     CHECK(strstr(buf, "\n#CORNERDIV=0\n") != NULL);
     CHECK(strstr(buf, "\n#EDGEPX=12\n") != NULL);
+    CHECK(strstr(buf, "\n#DRAGRESTORE=yes\n") != NULL);
 
     a.engine.corner_div = 4;
+    a.drag_restore = 0;
     es_config_write(&a, buf, (int)sizeof(buf));
     CHECK(strstr(buf, "\nCORNERDIV=4\n") != NULL);
     CHECK(strstr(buf, "\n#EDGEPX=12\n") != NULL);
+    CHECK(strstr(buf, "\nDRAGRESTORE=no\n") != NULL);
     feed_text(&b, buf);
     CHECK(same_config(&a, &b));
 
@@ -405,11 +421,15 @@ int main(void)
     test_bypass_qualifier();
     test_groups_are_named_and_contiguous();
 
+    /* the table and the writer stand on the parser: only once it holds,
+     * and their failures count as much as its own */
     if (g_failures == 0) {
         test_settings_table();
-    test_write_round_trip();
-    test_write_defaults_as_comments();
-    printf("config_test: all tests passed\n");
+        test_write_round_trip();
+        test_write_defaults_as_comments();
+    }
+    if (g_failures == 0) {
+        printf("config_test: all tests passed\n");
         return 0;
     }
     printf("config_test: %d failure(s)\n", g_failures);
