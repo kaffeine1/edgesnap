@@ -242,9 +242,9 @@ script) is noticed at once.
 
 @{b}Two version numbers, and why@{ub}
 EdgeSnap is 0.43: a beta, complete in what it does. This version was
-tested on real MorphOS hardware and on AmigaOS 4, MorphOS and AROS
-x86_64 under emulation; earlier ones also on a Raspberry Pi 400 with
-AROS and on AROS i386.
+tested on real MorphOS hardware and on AmigaOS 4, MorphOS, AROS x86_64
+and AROS i386 under emulation; earlier ones also on a Raspberry Pi 400
+with AROS.
 @{b}edgesnap.library@{ub} says %%LIBVER%%, and that is not a mistake: a
 library's version is its interface, not its product. It reached 2 when
 the seam was added to the API, and the revision climbs with every build

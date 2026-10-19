@@ -77,8 +77,9 @@ first gesture is the drag.
   of a layout group, each with a token that moves it, and a seam
   between windows kept apart by a gap keeps the gap when dragged, with
   all of the gap to grab it by. The four archives, AROS i386 included,
-  come out together. Checked on real MorphOS hardware and under
-  emulation on AmigaOS 4.1, MorphOS and AROS One 1.3.
+  come out together. Checked on real MorphOS hardware, and under
+  emulation on AmigaOS 4.1, MorphOS, AROS One 1.3 and AROS One x86,
+  each time by installing the package over an earlier version.
 - **0.42 (2026-10-10):** an AROS build for the Raspberry Pi (aarch64),
   in an archive of its own, tried on a Raspberry Pi 400; docks are
   recognised in two more shapes, a short one standing along a side of
