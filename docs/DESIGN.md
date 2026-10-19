@@ -420,10 +420,12 @@ never had the frame up over the moving window - verified both ways.
 
 Implemented across the three layers, and now confirmed end to end.
 
-- `core/gutter.c` finds the seam between two snapped windows and works
-  out what dragging it does to both. Host-tested (7 scenarios: vertical
-  and horizontal seams, clamping so neither window can be squeezed
-  away, pairs that only touch by accident, a lone window).
+- `core/gutter.c` finds the seam between two snapped windows (from
+  2.24 also between the windows of a layout group, across the gap
+  they keep: see below) and works out what dragging it does to both.
+  Host-tested (7 scenarios: vertical and horizontal seams, clamping so
+  neither window can be squeezed away, pairs that only touch by
+  accident, a lone window).
 - The library exposes it as API generation 2: `ESnap_QueryDivider` and
   `ESnap_MoveDivider`, with `ES_CAP_GUTTER` in the capability mask.
 - The commodity puts an invisible strip on the seam and reports drags
@@ -1220,8 +1222,45 @@ them is the library's to keep the same everywhere; a window's size
 limits are fitted against the area less the margins, so one that has
 to grow still keeps to its margin. The arithmetic is `es_cell_rect` in
 `core/zones.c`, host-tested; esnaptest places its own window in a half
-cell and finds it where it should be, on all three systems. Item 6,
-divider tokens per group, waits for the tiler that would use them.
+cell and finds it where it should be, on all three systems.
+
+Item 6, divider tokens per group, came as revision 2.24 (2026-10-16).
+`ESnap_QueryDividers` lists the seams between the windows of a group,
+each with a token, its limits, the gap it keeps and the first window
+of each side by serial; `ESnap_MoveDividerT` moves the seam a token
+names, and only its windows; `ESnap_QueryDividerWindows` gives the
+serials of all of them. A token names windows, not a line: the seam is
+rebuilt from exactly those windows (`es_seam_by_refs` in
+`core/gutter.c`), so a drag cannot slide over to a seam nobody
+grabbed, and once they stop being that seam the token is retired and
+its value never comes back. The seams are found from the boxes
+EdgeSnap last put the windows in, not from where they stand, because
+`ChangeWindowBox` is asynchronous and a tiler asks right after it
+places; a window EdgeSnap asked to move in the last two seconds is
+never taken for one moved by hand, whatever box it shows on its way.
+
+The same revision makes true what the header has said since 2.20: up
+to 2.23 a seam found its windows through the snap registry alone,
+closed a gap of up to twelve pixels when dragged and was not found
+across a wider one. Now `es_seams_find` finds a group's seams across
+the group's gap and `es_gutter_apply` keeps it. Where the gap is wider
+than the strip a frontend asks for, the strip is the gap itself: a
+handle of ten pixels in the middle of a gap of twenty lit up under a
+pointer it could not be grabbed by, and a press beside it went to
+whatever lay behind the space (found in the AmigaOS 4 VM). The calls
+of 2.2 and 2.3 take in the groups as well, on the front screen only;
+they never offer a seam of a group locked for the caller, and
+`MoveDividerAt` follows the seam `QueryDividerAt` last reported to its
+task rather than whatever seam lies nearest the line. A seam's
+position can lie outside its limits where a window's own size limits
+kept it from filling its cell, so the commodity moves nothing on a
+click without a drag, sends and draws the position clamped, handles a
+seam only on the front screen, and passes the focus by the seam it
+finds under the pointer after the release. The geometry is host-tested
+in `core/gutter_test.c`, the token table and the walk that decides
+whether a point of a seam is covered in `core/divtokens_test.c`;
+esnaptest drives the three calls on windows of its own, and from a
+second task, which a locked group refuses.
 
 ### Before the ABI freeze
 
@@ -1255,6 +1294,9 @@ Four structural changes. Each one moves a public signature, which is why
    wanted something and decides what. A group dies with its client.
    The names the issue mentioned are kept but do nothing yet, and gaps
    per group (item 9) are still to come.*
+   *Gaps and margins per group (item 9) came as library 2.20
+   (2026-10-02), and divider tokens per group (item 6) as 2.24
+   (2026-10-16): both are in the 2.5 section above.*
 2. **Divider tokens.** `QueryDivider` reports one global seam and
    `MoveDivider` takes only a position, then re-finds the first pair it
    can. With more than one work area that does not hold. A token must
@@ -1266,6 +1308,20 @@ Four structural changes. Each one moves a public signature, which is why
    compatibility promise: a 2.x client works on every later 2.x. A
    first cut at the token idea, not the final one - the line is a name
    that survives a drag but not a re-layout.*
+   *Done for the seams of a group, library 2.24 (2026-10-16):
+   `QueryDividers` gives each of them a token, `MoveDividerT` moves
+   the seam a token names and `QueryDividerWindows` names its windows
+   (the 2.5 section above). The rule written here was too strict: a
+   drag changes both windows, so a token that died with any change
+   would not survive its own drag. A token names the windows on each
+   side, survives every move it makes, and is retired once those
+   windows are no longer that seam (one gone or out of the group, or
+   another window of the group joined them across it). A window moved
+   by hand keeps the token but makes `MoveDividerT` answer
+   `ES_ERR_CHANGED` until the tiler places it again. The calls of 2.3,
+   which name a seam by its line, stay for the commodity, which only
+   drags what is under the pointer, and from 2.24 `MoveDividerAt`
+   follows the seam `QueryDividerAt` last reported to its task.*
 3. **Frontend ownership.** The engine, registry, configuration, ignore
    list and enable state are one global set: two frontends would
    overwrite each other, and any client at all can disable the service

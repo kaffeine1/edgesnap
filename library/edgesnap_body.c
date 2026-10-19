@@ -42,6 +42,7 @@
 #include "edgesnap_body.h"
 #include "panels.h"
 #include "gutter.h"
+#include "divtokens.h"
 #include "zones.h"
 
 /* OS4 declares IntuitionBase as struct Library *; classic/MorphOS as
@@ -78,12 +79,23 @@ static struct ESBClient g_clients[ESB_CLIENT_SLOTS];
 static ULONG g_client_next = 1;
 
 /* groups (2.12) live further down, next to the identities they use */
+struct ESBGroup;
 static int esb_locked_for(struct Window *win);
+static int esb_group_locked_for(const struct ESBGroup *g);
 static void esb_groups_drop_owner(ULONG client);
 static void esb_groups_clear(void);
 static int esb_group_cell(struct Window *win, const ESRect *cell,
                           const ESRect *usable, ESRect *box, ESRect *area);
+static void esb_member_placed(struct Window *win, const ESRect *live,
+                              const ESRect *box);
 static ULONG g_gen_touch;      /* drags that reached for a locked window */
+
+/* the dividers (2.24) list their windows and move them further down too */
+static int esb_serial_known(ULONG serial);
+static int esb_seam_list(struct ESBGroup *group);
+static LONG esb_seam_move(ESSeam *seam, LONG position, int may_raise,
+                          LONG *applied);
+static void esb_follow_clear(void);
 
 /* Facts sampled from a live window; ESB internal. */
 struct ESBSnap {
@@ -124,6 +136,7 @@ int esb_init(void)
             g_clients[i].id = 0;
         }
         esb_groups_clear();
+        esb_follow_clear();
     }
     g_enabled = 1;
     g_ready = 1;
@@ -146,6 +159,7 @@ void esb_cleanup(void)
         }
     }
     esb_groups_clear();
+    esb_follow_clear();
     ReleaseSemaphore(&g_sem);
     g_ready = 0;
 }
@@ -534,15 +548,21 @@ static struct Window *esb_sample_active(struct ESBSnap *out)
     return win;
 }
 
-static int esb_snappable(const struct ESBSnap *s)
+/* The rule on a window's own flags, for callers that hold no sample. */
+static int esb_flags_snappable(ULONG flags)
 {
-    if ((s->flags & WFLG_SIZEGADGET) == 0) {
+    if ((flags & WFLG_SIZEGADGET) == 0) {
         return 0;
     }
-    if (s->flags & (WFLG_BACKDROP | WFLG_BORDERLESS)) {
+    if (flags & (WFLG_BACKDROP | WFLG_BORDERLESS)) {
         return 0;
     }
     return 1;
+}
+
+static int esb_snappable(const struct ESBSnap *s)
+{
+    return esb_flags_snappable(s->flags);
 }
 
 /* ------------------------------------------------ moving a window */
@@ -927,6 +947,7 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
         rc = es_registry_remember_step(&g_registry, win, &s.box, &r,
                                        (int)zone, step);
         if (rc == ES_OK) {
+            esb_member_placed(win, &s.box, &r);
             esb_glide_box(win, &s.box, &r, 1);
         }
     }
@@ -955,6 +976,7 @@ LONG esb_unsnap_window(struct Window *win)
     } else {
         rc = es_registry_restore(&g_registry, win, &s.box, &out);
         if (rc == ES_OK) {
+            esb_member_placed(win, &s.box, &out);
             esb_glide_box(win, &s.box, &out, 1);
         }
     }
@@ -1189,6 +1211,83 @@ int esb_enabled(void)
 
 /* ------------------------------------------------------ the divider */
 
+/*
+ * 2.24: every divider call works on one list of windows, built under
+ * the semaphore and used up before it is released: the windows of the
+ * front screen for the calls of 2.2 and 2.3, those of one group for the
+ * token calls (esb_seam_list, with the groups). A seam may hold a whole
+ * group on one side and a group may have 64 seams, which is far more
+ * than the caller's stack can carry (the library runs on it); so the
+ * list, its seams and everything a move needs live here, in static
+ * memory that only the holder of g_sem touches, and nothing points
+ * into it once the semaphore is released.
+ */
+
+/* The seams of one list the library looks at: every one a full group
+ * can have, since a window is on side a of at most one seam per axis
+ * (checked next to ESB_GROUP_MEMBERS). The front screen can offer more;
+ * as before 2.24, the ones past the end are not looked at. */
+#define ESB_SEAM_RESULTS ES_DIVTOK_SLOTS
+
+/* The strip of a seam that is moved rather than shown. */
+#define ESB_SEAM_LINE_PX 8
+
+/* A listed window, as the list saw it. */
+struct ESBSeamWin {
+    ULONG serial;              /* 0 when the identity table was full   */
+    struct Layer *layer;       /* checked again before a move          */
+    ESRect live;               /* where it is                          */
+    int min_w, min_h;          /* its own size limits, max 0 for none, */
+    int max_w, max_h;          /* as esb_fill reads them               */
+    int member;                /* its index in its group, or -1        */
+    int moved;                 /* not where EdgeSnap put it, nor on    */
+                               /* its way there (esb_seam_add)         */
+};
+
+static ESSeamBox g_sl_box[ES_SEAM_BOXES_MAX];         /* the list        */
+static struct ESBSeamWin g_sl_win[ES_SEAM_BOXES_MAX];
+static int g_sl_n;
+static ULONG g_sl_now;                                /* its clock (secs) */
+static ESSeam g_sl_seam[ESB_SEAM_RESULTS];            /* its seams       */
+static ESSeam g_sl_one;                               /* one, by windows */
+static void *g_sl_ref[2][ES_SEAM_SIDE_MAX];           /* ...those windows */
+static ESRect g_sl_to[2 * ES_SEAM_SIDE_MAX];          /* a move: targets */
+static long g_sl_delta[2 * ES_SEAM_SIDE_MAX];         /* growth          */
+static int g_sl_order[2 * ES_SEAM_SIDE_MAX];          /* order of moves  */
+static struct Layer *g_sl_layer[2 * ES_SEAM_SIDE_MAX]; /* the cover walk */
+static unsigned char g_sl_kind[2 * ES_SEAM_SIDE_MAX];
+
+/* g_sem held. Where ref stands in the list, or -1. */
+static int esb_sl_index(const void *ref)
+{
+    int k;
+
+    for (k = 0; k < g_sl_n; k++) {
+        if (g_sl_box[k].ref == ref) {
+            return k;
+        }
+    }
+    return -1;
+}
+
+/* g_sem held, the list built: its seams into g_sl_seam[], and how many
+ * there are there. */
+static int esb_seams_found(int thickness)
+{
+    int m = es_seams_find(g_sl_box, g_sl_n, thickness, g_sl_seam,
+                          ESB_SEAM_RESULTS);
+
+    return m < ESB_SEAM_RESULTS ? m : ESB_SEAM_RESULTS;
+}
+
+/* How far apart two coordinates are, with no overflow: a line comes
+ * from a client and may be anything a LONG holds. */
+static unsigned long esb_distance(long p, long q)
+{
+    return p >= q ? (unsigned long)p - (unsigned long)q
+                  : (unsigned long)q - (unsigned long)p;
+}
+
 /* Same slack as the registry restore: apps round sizes to increments,
  * so "where we put it" is a neighbourhood, not a point. */
 static int esb_same_box(const ESRect *a, const ESRect *b)
@@ -1208,8 +1307,11 @@ static int esb_same_box(const ESRect *a, const ESRect *b)
 
 /*
  * A remembered seam is not a real one: any window on it may have been
- * moved, resized or closed since. Check them all against the live
- * geometry and report no seam when they no longer line up.
+ * moved, resized or closed since. The list holds only windows that are
+ * there (its builder forgets the registry entries of windows that are
+ * gone, and a group loses its members that closed) and knows whether
+ * each still lies where EdgeSnap put it; a seam with one that does not
+ * reports no seam.
  *
  * What this must NOT do is forget them on a mismatch. ChangeWindowBox()
  * places a window asynchronously, so a query made immediately after a
@@ -1217,33 +1319,27 @@ static int esb_same_box(const ESRect *a, const ESRect *b)
  * milliseconds. Forgetting on that transient destroyed the pair
  * permanently and the seam then never appeared at all. Only a window
  * that is GONE is forgotten; a geometry mismatch just means "no seam
- * right now".
+ * right now". For the same reason a window of a group may also lie
+ * where EdgeSnap put it the time before, and for ESB_TRANSIT_SECS after
+ * EdgeSnap asked it to move it may lie anywhere at all (esb_seam_add)
+ * (2.24).
  */
 static int esb_seam_alive(const ESSeam *seam)
 {
     const ESSeamSide *side[2];
-    int gone = 0;
-    int mismatch = 0;
-    int k, i;
+    int s, i, k;
 
     side[0] = &seam->a;
     side[1] = &seam->b;
-    for (k = 0; k < 2; k++) {
-        for (i = 0; i < side[k]->n; i++) {
-            struct ESBSnap sn;
-            struct Window *w = (struct Window *)side[k]->ref[i];
-
-            if (!esb_sample(w, &sn)) {
-                ObtainSemaphore(&g_sem);
-                es_registry_forget(&g_registry, (void *)w);
-                ReleaseSemaphore(&g_sem);
-                gone = 1;
-            } else if (!esb_same_box(&sn.box, &side[k]->box[i])) {
-                mismatch = 1;
+    for (s = 0; s < 2; s++) {
+        for (i = 0; i < side[s]->n; i++) {
+            k = esb_sl_index(side[s]->ref[i]);
+            if (k < 0 || g_sl_win[k].moved) {
+                return 0;
             }
         }
     }
-    return !gone && !mismatch;
+    return 1;
 }
 
 static void esb_seam_report(const ESSeam *seam, struct ESnapDivider *out)
@@ -1296,22 +1392,59 @@ static int esb_box_distance(const ESRect *r, int px, int py)
     return dx > dy ? dx : dy;
 }
 
+/*
+ * A seam of a group whose limits cross before any window's own limits
+ * are even read can never be moved (es_seams_find reports it all the
+ * same, for QueryDividers to flag). The calls of 2.2 and 2.3 never
+ * offered one before 2.24, so they look past it: it must not stand in
+ * for "the first seam", nor be the nearest one and hide a seam beside
+ * it that can be dragged.
+ */
+static int esb_seam_room(const ESSeam *seam)
+{
+    return seam->min_pos <= seam->max_pos;
+}
+
+/*
+ * g_sem held, m seams found. "The first seam" of the calls of 2.2: the
+ * first one of the windows the user snapped (key 0), as before 2.24,
+ * and the first seam of a group with room (esb_seam_room) only when
+ * there is none of those, so that a tiler's seams, which come by line
+ * among the vertical ones, do not take the place of the user's.
+ */
+static ESSeam *esb_first_seam(int m)
+{
+    int i;
+
+    for (i = 0; i < m; i++) {
+        if (g_sl_seam[i].key == 0) {
+            return &g_sl_seam[i];
+        }
+    }
+    for (i = 0; i < m; i++) {
+        if (esb_seam_room(&g_sl_seam[i])) {
+            return &g_sl_seam[i];
+        }
+    }
+    return NULL;
+}
+
 LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out)
 {
-    ESSeam seam;
-    int found;
+    ESSeam *seam;
 
     if (out == NULL || thickness < 2 || thickness > 64) {
         return ES_ERR_BAD_ARGS;
     }
     ObtainSemaphore(&g_sem);
-    found = es_gutter_find(&g_registry, (int)thickness, &seam);
-    ReleaseSemaphore(&g_sem);
-    if (found && esb_seam_alive(&seam)) {
-        esb_seam_report(&seam, out);
+    esb_seam_list(NULL);
+    seam = esb_first_seam(esb_seams_found((int)thickness));
+    if (seam != NULL && esb_seam_alive(seam)) {
+        esb_seam_report(seam, out);
     } else {
         esb_no_seam(out);
     }
+    ReleaseSemaphore(&g_sem);
     return ES_OK;
 }
 
@@ -1320,50 +1453,30 @@ LONG esb_query_divider(ULONG thickness, struct ESnapDivider *out)
  * past a MinWidth or a MaxHeight would make Intuition clamp that
  * window to a box other than the one recorded, and a recorded box that
  * does not match the real one reads as "the user moved it", which ends
- * the seam mid-drag with the other side already moved. The samples are
- * live, so a window that changed its minimum since it was snapped is
- * honoured too. A side keeps its far edge, so its size is the distance
- * from that edge to the divider.
+ * the seam mid-drag with the other side already moved. The limits are
+ * the ones the list read live, so a window that changed its minimum
+ * since it was snapped is honoured too. A side keeps its far edge, so
+ * its size is the distance from that edge to the divider, less its
+ * share of the gap a group keeps (2.24).
  */
-static void esb_seam_tighten(ESSeam *seam, const struct ESBSnap *sa,
-                             const struct ESBSnap *sb)
+static void esb_seam_tighten_live(ESSeam *seam)
 {
-    int i;
+    int s, i, k;
 
-    for (i = 0; i < seam->a.n; i++) {
-        const ESRect *b = &seam->a.box[i];
-        int lo, hi;
+    for (s = 0; s < 2; s++) {
+        const ESSeamSide *side = s ? &seam->b : &seam->a;
 
-        if (seam->vertical) {
-            lo = b->x + sa[i].min_w;
-            hi = sa[i].max_w > 0 ? b->x + sa[i].max_w : 0x7FFF;
-        } else {
-            lo = b->y + sa[i].min_h;
-            hi = sa[i].max_h > 0 ? b->y + sa[i].max_h : 0x7FFF;
-        }
-        if (lo > seam->min_pos) {
-            seam->min_pos = lo;
-        }
-        if (hi < seam->max_pos) {
-            seam->max_pos = hi;
-        }
-    }
-    for (i = 0; i < seam->b.n; i++) {
-        const ESRect *b = &seam->b.box[i];
-        int lo, hi;
+        for (i = 0; i < side->n; i++) {
+            const struct ESBSeamWin *w;
 
-        if (seam->vertical) {
-            hi = b->x + b->w - sb[i].min_w;
-            lo = sb[i].max_w > 0 ? b->x + b->w - sb[i].max_w : -0x7FFF;
-        } else {
-            hi = b->y + b->h - sb[i].min_h;
-            lo = sb[i].max_h > 0 ? b->y + b->h - sb[i].max_h : -0x7FFF;
-        }
-        if (lo > seam->min_pos) {
-            seam->min_pos = lo;
-        }
-        if (hi < seam->max_pos) {
-            seam->max_pos = hi;
+            k = esb_sl_index(side->ref[i]);
+            if (k < 0) {
+                continue;
+            }
+            w = &g_sl_win[k];
+            es_seam_tighten_side(seam, s, i,
+                                 seam->vertical ? w->min_w : w->min_h,
+                                 seam->vertical ? w->max_w : w->max_h);
         }
     }
 }
@@ -1371,23 +1484,10 @@ static void esb_seam_tighten(ESSeam *seam, const struct ESBSnap *sa,
 /* Alive, and with the range every window on it can actually accept. */
 static int esb_seam_limits(ESSeam *seam)
 {
-    struct ESBSnap sa[ES_SEAM_SIDE_MAX], sb[ES_SEAM_SIDE_MAX];
-    int i;
-
     if (!esb_seam_alive(seam)) {
         return 0;
     }
-    for (i = 0; i < seam->a.n; i++) {
-        if (!esb_sample((struct Window *)seam->a.ref[i], &sa[i])) {
-            return 0;
-        }
-    }
-    for (i = 0; i < seam->b.n; i++) {
-        if (!esb_sample((struct Window *)seam->b.ref[i], &sb[i])) {
-            return 0;
-        }
-    }
-    esb_seam_tighten(seam, sa, sb);
+    esb_seam_tighten_live(seam);
     return seam->min_pos <= seam->max_pos;
 }
 
@@ -1400,88 +1500,374 @@ static int esb_seam_limits(ESSeam *seam)
  * windows below.
  *
  * The screen's layers are walked front to back, read as the rest of
- * the body reads them, without layers.library: the first layer that
- * holds the point, and belongs to a window, decides. One of the seam's own windows, or a
- * backdrop, since the gap between them can show the desktop: the seam
- * is there. A frontend's own windows (the handle itself is a window on
- * MorphOS) are passed over, as are layers with no window. Anything
- * else covers it.
+ * the body reads them, without layers.library, and es_cover_step
+ * decides (core/divtokens.h). From 2.16 to 2.23 the first layer that
+ * held the point, and belonged to a window, decided: one of the seam's
+ * own windows, or a backdrop, since the gap between them can show the
+ * desktop, and the seam was there; anything else covered it. That is
+ * still the rule for windows of no group, and wherever the point lies
+ * beside the windows of one side only (a hole in the strip). A group
+ * keeps a gap between its windows (2.24), and the point can lie in it,
+ * between windows of both sides: a window over the gap then covers the
+ * seam only if it lies in front of one of the seam's windows beside
+ * the point (facing it), and is passed over once the walk has met them
+ * all. A window of a group's seam faces the point when it reaches to
+ * within the group's gap of it along the seam: where a master meets a
+ * stack, as at every T-junction of a layout with a gap, the point
+ * level with the gap between two windows of the stack has no window of
+ * that side beside it, yet that hole is the gap the layout keeps, and
+ * a window behind the whole group must not cover the seam there. In a
+ * longer hole, a point further than the gap from every window of that
+ * side keeps the rule of 2.23. A frontend's own windows (the handle
+ * itself is a window on MorphOS) are passed over, as are layers with
+ * no window.
  */
 /* How near the strip a point counts as on the seam: where a frontend
  * lights it (three pixels), and one more. */
 #define ESB_SEAM_TOUCH_PX 4
 
+/* Is w one of the seam's windows? 1 on side a, 2 on side b, else 0. */
+static int esb_seam_side_of(const ESSeam *seam, const struct Window *w)
+{
+    int i;
+
+    for (i = 0; i < seam->a.n; i++) {
+        if ((const struct Window *)seam->a.ref[i] == w) {
+            return 1;
+        }
+    }
+    for (i = 0; i < seam->b.n; i++) {
+        if ((const struct Window *)seam->b.ref[i] == w) {
+            return 2;
+        }
+    }
+    return 0;
+}
+
 static int esb_seam_visible_at(const ESSeam *seam, int x, int y)
 {
-    struct Window *w0;
     struct Screen *scr;
+    struct Window *lw;
     struct Layer *l;
+    ESCoverWalk walk;
     ULONG ilock;
-    int visible = 1, i;
+    int nl = 0, facing[2], side, i;
 
-    if (seam->a.n < 1) {
-        return 1;
-    }
-    w0 = (struct Window *)seam->a.ref[0];
     ObtainSemaphore(&g_sem);       /* the ignored list; then IBase, as elsewhere */
     ilock = LockIBase(0);
-    scr = w0->WScreen;
-    for (l = (scr != NULL) ? scr->LayerInfo.top_layer : NULL; l != NULL;
-         l = l->back) {
-        struct Window *lw;
-        int ours = 0;
+    facing[0] = 0;
+    facing[1] = 0;
+    es_cover_begin(&walk, 0, 0);
+    /* the screen the list was built on, if it is still open: never one
+     * read from a window that may have closed since */
+    for (scr = ESB_IBASE->FirstScreen;
+         scr != NULL && (const void *)scr != seam->scope;
+         scr = scr->NextScreen) {
+        ;
+    }
+    if (scr != NULL) {
+        /* the seam's windows here, and which of them face the point:
+         * those that reach to within the group's gap of it along the
+         * seam (the gap is 0 for windows of no group) */
+        for (lw = scr->FirstWindow;
+             lw != NULL && nl < 2 * ES_SEAM_SIDE_MAX; lw = lw->NextWindow) {
+            if ((l = lw->WLayer) == NULL ||
+                (side = esb_seam_side_of(seam, lw)) == 0) {
+                continue;
+            }
+            g_sl_layer[nl] = l;
+            if (seam->vertical ? y >= l->bounds.MinY - seam->gap &&
+                                 y <= l->bounds.MaxY + seam->gap
+                               : x >= l->bounds.MinX - seam->gap &&
+                                 x <= l->bounds.MaxX + seam->gap) {
+                g_sl_kind[nl] = ES_LAYER_FACING;
+                facing[side - 1]++;
+            } else {
+                g_sl_kind[nl] = ES_LAYER_SEAM;
+            }
+            nl++;
+        }
+        /* windows of no group keep no gap: there the first window
+         * holding the point decides, as it always did */
+        if (seam->key == 0) {
+            facing[0] = 0;
+            facing[1] = 0;
+        }
+        es_cover_begin(&walk, facing[0], facing[1]);
+        for (l = scr->LayerInfo.top_layer; l != NULL && !walk.done;
+             l = l->back) {
+            int holds = x >= l->bounds.MinX && x <= l->bounds.MaxX &&
+                        y >= l->bounds.MinY && y <= l->bounds.MaxY;
+            int kind = -1;
 
-        if (x < l->bounds.MinX || x > l->bounds.MaxX ||
-            y < l->bounds.MinY || y > l->bounds.MaxY) {
-            continue;
-        }
-        /* Whose layer? Not l->Window: AmigaOS 4 leaves it empty, and
-         * the walk then passed over every window and found the seam
-         * uncovered. Every window names its own layer in WLayer. */
-        for (lw = scr->FirstWindow; lw != NULL; lw = lw->NextWindow) {
-            if (lw->WLayer == l) {
-                break;
+            for (i = 0; i < nl; i++) {
+                if (g_sl_layer[i] == l) {
+                    kind = g_sl_kind[i];
+                    break;
+                }
             }
-        }
-        if (lw == NULL || esb_is_ignored(lw)) {
-            continue;
-        }
-        for (i = 0; i < seam->a.n; i++) {
-            if ((struct Window *)seam->a.ref[i] == lw) {
-                ours = 1;
+            if (kind < 0) {
+                if (!holds) {
+                    continue;      /* only the seam's own count unseen */
+                }
+                /* Whose layer? Not l->Window: AmigaOS 4 leaves it
+                 * empty, and the walk then passed over every window
+                 * and found the seam uncovered. Every window names its
+                 * own layer in WLayer. */
+                for (lw = scr->FirstWindow; lw != NULL; lw = lw->NextWindow) {
+                    if (lw->WLayer == l) {
+                        break;
+                    }
+                }
+                if (lw == NULL || esb_is_ignored(lw)) {
+                    kind = ES_LAYER_SKIP;
+                } else if ((lw->Flags & WFLG_BACKDROP) != 0) {
+                    kind = ES_LAYER_BACKDROP;
+                } else {
+                    kind = ES_LAYER_FOREIGN;
+                }
             }
+            (void)es_cover_step(&walk, kind, holds);
         }
-        for (i = 0; i < seam->b.n; i++) {
-            if ((struct Window *)seam->b.ref[i] == lw) {
-                ours = 1;
-            }
-        }
-        visible = ours || (lw->Flags & WFLG_BACKDROP) != 0;
-        break;
     }
     UnlockIBase(ilock);
     ReleaseSemaphore(&g_sem);
-    return visible;
+    return walk.visible;
+}
+
+/*
+ * 2.24: the seam a task is dragging. Up to 2.23 a move named its seam
+ * by the line alone and took the nearest one on that axis, so a drag
+ * whose seam stopped being one carried on with a seam nobody grabbed.
+ * QueryDividerAt now remembers, for the task that asked, the windows of
+ * the seam it reported; a move by that task on that line (the one it
+ * was told about, or the one its last move asked for: see
+ * es_divider_follows) moves the seam of those windows, or none. The
+ * windows by serial, so that a window opened at a closed one's address
+ * is never taken for it. Eight tasks: the oldest record gives way, a
+ * record of a task that is gone first.
+ */
+#define ESB_FOLLOW_SLOTS 8
+struct ESBFollow {
+    struct Task *task;         /* NULL = free                          */
+    ULONG stamp;               /* when stored: the oldest gives way    */
+    int vertical;
+    LONG pos;                  /* where the seam is                    */
+    LONG last_arg;             /* where the task last asked to move it */
+    int na, nb;
+    ULONG a[ES_SEAM_SIDE_MAX]; /* the windows of each side, by serial  */
+    ULONG b[ES_SEAM_SIDE_MAX];
+};
+static struct ESBFollow g_follow[ESB_FOLLOW_SLOTS];
+static ULONG g_follow_clock;
+
+static void esb_follow_clear(void)
+{
+    int i;
+
+    for (i = 0; i < ESB_FOLLOW_SLOTS; i++) {
+        g_follow[i].task = NULL;
+    }
+}
+
+/* g_sem held. The record of task t, or NULL. */
+static struct ESBFollow *esb_follow_find(struct Task *t)
+{
+    int i;
+
+    for (i = 0; i < ESB_FOLLOW_SLOTS; i++) {
+        if (g_follow[i].task != NULL && g_follow[i].task == t) {
+            return &g_follow[i];
+        }
+    }
+    return NULL;
+}
+
+/* g_sem held. The calling task's seam is no more. */
+static void esb_follow_drop(void)
+{
+    struct ESBFollow *f = esb_follow_find(FindTask(NULL));
+
+    if (f != NULL) {
+        f->task = NULL;
+    }
+}
+
+/* g_sem held, the list built: the serial of a window of the seam, i
+ * counting side a then side b; 0 for none. */
+static ULONG esb_seam_serial(const ESSeam *seam, int i)
+{
+    int k = esb_sl_index(i < seam->a.n ? seam->a.ref[i]
+                                       : seam->b.ref[i - seam->a.n]);
+
+    return k >= 0 ? g_sl_win[k].serial : 0;
+}
+
+/*
+ * g_sem held, IBase not, the list built: seam is the one the calling
+ * task means now, at pos, last asked for at last_arg. A window with no
+ * serial (the identity table was full) cannot be followed: the task is
+ * then left without a record, and its moves take the nearest seam.
+ */
+static void esb_follow_store(const ESSeam *seam, LONG pos, LONG last_arg)
+{
+    struct Task *me = FindTask(NULL);
+    struct ESBFollow *f;
+    int i, n = seam->a.n + seam->b.n;
+
+    for (i = 0; i < n; i++) {
+        if (esb_seam_serial(seam, i) == 0) {
+            esb_follow_drop();
+            return;
+        }
+    }
+    f = esb_follow_find(me);
+    for (i = 0; f == NULL && i < ESB_FOLLOW_SLOTS; i++) {
+        if (g_follow[i].task == NULL) {
+            f = &g_follow[i];
+        }
+    }
+    /* The table is full: the walk under Disable happens here only. */
+    for (i = 0; f == NULL && i < ESB_FOLLOW_SLOTS; i++) {
+        if (!esb_task_alive(g_follow[i].task)) {
+            f = &g_follow[i];
+        }
+    }
+    if (f == NULL) {
+        f = &g_follow[0];
+        for (i = 1; i < ESB_FOLLOW_SLOTS; i++) {
+            if (g_follow[i].stamp < f->stamp) {
+                f = &g_follow[i];
+            }
+        }
+    }
+    f->task = me;
+    f->stamp = ++g_follow_clock;
+    f->vertical = seam->vertical != 0;
+    f->pos = pos;
+    f->last_arg = last_arg;
+    f->na = seam->a.n;
+    f->nb = seam->b.n;
+    for (i = 0; i < n; i++) {
+        if (i < seam->a.n) {
+            f->a[i] = esb_seam_serial(seam, i);
+        } else {
+            f->b[i - seam->a.n] = esb_seam_serial(seam, i);
+        }
+    }
+}
+
+/* Does side hold every one of refs[0..n-1]? */
+static int esb_side_holds(const ESSeamSide *side, void *const *refs, int n)
+{
+    int i, j;
+
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < side->n && side->ref[j] != refs[i]; j++) {
+            ;
+        }
+        if (j == side->n) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+/*
+ * g_sem held, the list built: the seam of the windows f names, into
+ * *out. ES_ERR_STALE when one of them is gone; ES_ERR_UNSUPPORTED when
+ * they are all there but are not that seam any more, on this screen
+ * and for this caller. Windows of a group are that seam exactly
+ * (es_seam_by_refs); windows of no group keep the rule of the line, so
+ * their seam is the one nearest the record on that axis whose sides
+ * hold them all, windows that joined it included.
+ */
+static LONG esb_follow_seam(const struct ESBFollow *f, ESSeam **out)
+{
+    unsigned long key = 0, best = 0;
+    int plain = 0, keyed = 0, n = f->na + f->nb, i, k, m;
+
+    *out = NULL;
+    for (i = 0; i < n; i++) {
+        if (!esb_serial_known(i < f->na ? f->a[i] : f->b[i - f->na])) {
+            return ES_ERR_STALE;
+        }
+    }
+    for (i = 0; i < n; i++) {
+        ULONG serial = i < f->na ? f->a[i] : f->b[i - f->na];
+
+        for (k = 0; k < g_sl_n && g_sl_win[k].serial != serial; k++) {
+            ;
+        }
+        if (k == g_sl_n) {
+            return ES_ERR_UNSUPPORTED;    /* not on the list */
+        }
+        if (i < f->na) {
+            g_sl_ref[0][i] = g_sl_box[k].ref;
+        } else {
+            g_sl_ref[1][i - f->na] = g_sl_box[k].ref;
+        }
+        if (g_sl_box[k].key == 0) {
+            plain = 1;
+        } else if (!keyed) {
+            keyed = 1;
+            key = g_sl_box[k].key;
+        } else if (g_sl_box[k].key != key) {
+            return ES_ERR_UNSUPPORTED;
+        }
+    }
+    if (plain && keyed) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    if (keyed) {
+        if (es_seam_by_refs(g_sl_box, g_sl_n, ESB_SEAM_LINE_PX, f->vertical,
+                            g_sl_ref[0], f->na, g_sl_ref[1], f->nb,
+                            &g_sl_one) != 1) {
+            return ES_ERR_UNSUPPORTED;
+        }
+        *out = &g_sl_one;
+        return ES_OK;
+    }
+    m = esb_seams_found(ESB_SEAM_LINE_PX);
+    for (i = 0; i < m; i++) {
+        ESSeam *s = &g_sl_seam[i];
+        unsigned long d;
+
+        if (s->key != 0 || (s->vertical != 0) != (f->vertical != 0) ||
+            !esb_side_holds(&s->a, g_sl_ref[0], f->na) ||
+            !esb_side_holds(&s->b, g_sl_ref[1], f->nb)) {
+            continue;
+        }
+        d = esb_distance(s->pos, f->pos);
+        if (*out == NULL || d < best) {
+            *out = s;
+            best = d;
+        }
+    }
+    return *out != NULL ? ES_OK : ES_ERR_UNSUPPORTED;
 }
 
 LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
                           struct ESnapDivider *out)
 {
-    ESSeam seams[ES_SEAM_MAX];
-    int n, i, best = -1, best_d = 0;
+    ESSeam *seam = NULL;
+    int m, i, best_d = 0;
 
     if (out == NULL || thickness < 2 || thickness > 64) {
         return ES_ERR_BAD_ARGS;
     }
     ObtainSemaphore(&g_sem);
-    n = es_gutter_find_all(&g_registry, (int)thickness, seams, ES_SEAM_MAX);
-    ReleaseSemaphore(&g_sem);
+    esb_seam_list(NULL);
+    m = esb_seams_found((int)thickness);
+    for (i = 0; i < m; i++) {
+        int d;
 
-    for (i = 0; i < n; i++) {
-        int d = esb_box_distance(&seams[i].rect, (int)x, (int)y);
-
-        if (best < 0 || d < best_d) {
-            best = i;
+        if (!esb_seam_room(&g_sl_seam[i])) {
+            continue;
+        }
+        d = esb_box_distance(&g_sl_seam[i].rect, (int)x, (int)y);
+        if (seam == NULL || d < best_d) {
+            seam = &g_sl_seam[i];
             best_d = d;
         }
     }
@@ -1493,11 +1879,11 @@ LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
      * question is only which seam is nearest, and a window covering
      * some other part of it changes nothing.
      */
-    if (best >= 0 && esb_seam_limits(&seams[best])) {
+    if (seam != NULL && esb_seam_limits(seam)) {
         int visible = 1;
 
         if (best_d <= ESB_SEAM_TOUCH_PX) {
-            const ESRect *r = &seams[best].rect;
+            const ESRect *r = &seam->rect;
             int cx = (int)x, cy = (int)y;
 
             if (cx < r->x) {
@@ -1510,142 +1896,86 @@ LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
             } else if (cy > r->y + r->h - 1) {
                 cy = r->y + r->h - 1;
             }
-            visible = esb_seam_visible_at(&seams[best], cx, cy);
+            visible = esb_seam_visible_at(seam, cx, cy);
         }
         if (visible) {
-            esb_seam_report(&seams[best], out);
+            esb_seam_report(seam, out);
+            /* 2.24: what this task's next move on that line means; a
+             * "no seam" leaves the record alone, since right after a
+             * move the windows may not have caught up yet */
+            esb_follow_store(seam, seam->pos, seam->pos);
         } else {
             esb_no_seam(out);
         }
     } else {
         esb_no_seam(out);
     }
+    ReleaseSemaphore(&g_sem);
     return ES_OK;
 }
 
 LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
 {
-    ESSeam seams[ES_SEAM_MAX];
-    ESRect ra[ES_SEAM_SIDE_MAX], rb[ES_SEAM_SIDE_MAX];
-    struct ESBSnap snap_a[ES_SEAM_SIDE_MAX], snap_b[ES_SEAM_SIDE_MAX];
-    const ESSeam *seam = NULL;
-    ESSeam chosen;
-    int n, i, d;
+    struct ESBFollow *f;
+    ESSeam *seam = NULL;
+    LONG rc = ES_ERR_UNSUPPORTED, applied = 0;
+    unsigned long best = 0;
+    int m, i;
 
     ObtainSemaphore(&g_sem);
-    n = es_gutter_find_all(&g_registry, 8, seams, ES_SEAM_MAX);
-    ReleaseSemaphore(&g_sem);
+    esb_seam_list(NULL);
+    f = esb_follow_find(FindTask(NULL));
+    if (f != NULL && es_divider_follows(f->vertical, (int)f->pos,
+                                        (int)f->last_arg, vertical != 0,
+                                        (int)line)) {
+        /* 2.24: the seam this task grabbed, or none, whatever other
+         * seam lies on the line by now */
+        rc = esb_follow_seam(f, &seam);
+        if (rc == ES_ERR_STALE) {
+            f->task = NULL;
+        }
+    } else {
+        /*
+         * The seam is named by its line: a layout can hold several, and
+         * moving "the first one" would resize windows nobody grabbed.
+         *
+         * NEAREST on the same axis, not "within a tolerance". A dragged
+         * seam moves away from where it was grabbed, so a fixed window of
+         * a few pixels stops matching as soon as the user has pulled
+         * further than that, which is a drag that works for a moment and
+         * then dies. The caller follows the seam it is moving, so nearest
+         * is both unambiguous and stable, and it still holds when the
+         * position is clamped and the pointer runs on past the limit.
+         */
+        m = esb_seams_found(ESB_SEAM_LINE_PX);
+        for (i = 0; i < m; i++) {
+            unsigned long d;
 
-    /*
-     * The seam is named by its line: a layout can hold several, and
-     * moving "the first one" would resize windows nobody grabbed.
-     *
-     * NEAREST on the same axis, not "within a tolerance". A dragged
-     * seam moves away from where it was grabbed, so a fixed window of
-     * a few pixels stops matching as soon as the user has pulled
-     * further than that - which is a drag that works for a moment and
-     * then dies. The caller follows the seam it is moving, so nearest
-     * is both unambiguous and stable, and it still holds when the
-     * position is clamped and the pointer runs on past the limit.
-     */
-    {
-        int best = -1;
-
-        for (i = 0; i < n; i++) {
-            if (seams[i].vertical != (vertical ? 1 : 0)) {
+            if (g_sl_seam[i].vertical != (vertical ? 1 : 0) ||
+                !esb_seam_room(&g_sl_seam[i])) {
                 continue;
             }
-            d = seams[i].pos - (int)line;
-            if (d < 0) {
-                d = -d;
-            }
-            if (best < 0 || d < best) {
+            d = esb_distance(g_sl_seam[i].pos, line);
+            if (seam == NULL || d < best) {
                 best = d;
-                seam = &seams[i];
+                seam = &g_sl_seam[i];
             }
         }
-    }
-    if (seam == NULL) {
-        return ES_ERR_UNSUPPORTED;
-    }
-
-    /* Every window on it must still be there: a seam with one gone is
-     * not a seam, and dropping the state beats resizing a stranger
-     * that inherited the address. */
-    for (i = 0; i < seam->a.n; i++) {
-        if (!esb_sample((struct Window *)seam->a.ref[i], &snap_a[i])) {
-            return ES_ERR_STALE;
+        if (seam != NULL) {
+            rc = ES_OK;
         }
     }
-    for (i = 0; i < seam->b.n; i++) {
-        if (!esb_sample((struct Window *)seam->b.ref[i], &snap_b[i])) {
-            return ES_ERR_STALE;
+    if (rc == ES_OK) {
+        rc = esb_seam_move(seam, position, 1, &applied);
+        if (rc == ES_OK) {
+            /* the drag goes on with these windows, wherever it leads */
+            esb_follow_store(seam, applied, position);
+        } else if (rc == ES_ERR_STALE) {
+            esb_follow_drop();
         }
-    }
-
-    /* the range the windows can take right now, not the fixed floor */
-    chosen = *seam;
-    esb_seam_tighten(&chosen, snap_a, snap_b);
-    if (chosen.min_pos > chosen.max_pos) {
-        return ES_ERR_UNSUPPORTED;      /* nothing on it can give */
-    }
-    es_gutter_apply(&chosen, (int)position, ra, rb);
-
-    ObtainSemaphore(&g_sem);
-    /* the registry must follow, or the next drag would start from the
-     * geometry the windows had before this one */
-    for (i = 0; i < seam->a.n; i++) {
-        struct Window *w = (struct Window *)seam->a.ref[i];
-
-        es_registry_remember(&g_registry, w, &snap_a[i].box, &ra[i],
-                             es_registry_zone(&g_registry, w));
-    }
-    for (i = 0; i < seam->b.n; i++) {
-        struct Window *w = (struct Window *)seam->b.ref[i];
-
-        es_registry_remember(&g_registry, w, &snap_b[i].box, &rb[i],
-                             es_registry_zone(&g_registry, w));
     }
     ReleaseSemaphore(&g_sem);
-
-    /*
-     * Shrinking first, growing last, as a layout is applied. A window
-     * that grows into space another window still holds gets its new
-     * size while that space is covered, and on a system whose console
-     * or file manager clears a window only when its size changes and
-     * never repaints an area uncovered later (AROS One, 2026-09-05),
-     * the strip stays pen 0 once the other window has moved away. With
-     * the shrinking side moved first, the growing side finds its new
-     * area free at the moment it is told its new size.
-     */
-    {
-        long delta[2 * ES_SEAM_SIDE_MAX];
-        int order[2 * ES_SEAM_SIDE_MAX];
-        int n = 0, k;
-
-        for (i = 0; i < seam->a.n; i++, n++) {
-            delta[n] = (long)ra[i].w * ra[i].h -
-                       (long)snap_a[i].box.w * snap_a[i].box.h;
-        }
-        for (i = 0; i < seam->b.n; i++, n++) {
-            delta[n] = (long)rb[i].w * rb[i].h -
-                       (long)snap_b[i].box.w * snap_b[i].box.h;
-        }
-        es_order_by_growth(delta, n, order);
-        for (k = 0; k < n; k++) {
-            int j = order[k];
-
-            if (j < seam->a.n) {
-                esb_change_box((struct Window *)seam->a.ref[j],
-                               &snap_a[j].box, &ra[j], 1);
-            } else {
-                j -= seam->a.n;
-                esb_change_box((struct Window *)seam->b.ref[j],
-                               &snap_b[j].box, &rb[j], 1);
-            }
-        }
-    }
-    return ES_OK;
+    return rc;
 }
 
 LONG esb_query_screen_area(struct Screen *scr, struct ESnapArea *out)
@@ -2054,20 +2384,23 @@ void esb_input_reset(struct ESnapReport *out)
  * layout walk finds first. A 2.x client compiled against 2.2 must keep
  * working on every later 2.x, so this neither moves nor changes shape;
  * anything that knows which seam it means calls esb_move_divider_at().
+ * From 2.24 that first seam is moved here, not through
+ * esb_move_divider_at(), whose record of the seam the caller last
+ * grabbed could name another one on the same line.
  */
 LONG esb_move_divider(LONG position)
 {
-    ESSeam seam;
-    int found;
+    ESSeam *seam;
+    LONG rc = ES_ERR_UNSUPPORTED;
 
     ObtainSemaphore(&g_sem);
-    found = es_gutter_find(&g_registry, 8, &seam);
-    ReleaseSemaphore(&g_sem);
-    if (!found) {
-        return ES_ERR_UNSUPPORTED;
+    esb_seam_list(NULL);
+    seam = esb_first_seam(esb_seams_found(ESB_SEAM_LINE_PX));
+    if (seam != NULL) {
+        rc = esb_seam_move(seam, position, 1, NULL);
     }
-    return esb_move_divider_at((LONG)seam.vertical, (LONG)seam.pos,
-                               position);
+    ReleaseSemaphore(&g_sem);
+    return rc;
 }
 
 /*
@@ -2451,6 +2784,7 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
             return rc;
         }
     }
+    esb_member_placed(win, &s.box, &r);
     esb_change_box(win, &s.box, &r, (flags & ES_PF_KEEP_ZORDER) == 0);
     return ES_OK;
 }
@@ -2465,10 +2799,30 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
  * closes and another that opens at its address are never confused;
  * a member whose serial no longer finds a window is dropped whenever
  * the group is touched. Sixteen groups of thirty-two, ids never reused.
+ *
+ * 2.24: member k also has the box EdgeSnap last put it in, the one
+ * before (ChangeWindowBox is asynchronous, so for a moment the window
+ * may still show that one) and when EdgeSnap last asked it to move, and
+ * the group's divider tokens name their windows by member index.
+ * member[], placed[], prev[], asked[] and the token masks move
+ * together: a member that leaves is replaced by the last one, with its
+ * boxes and its time, in esb_group_drop_member and nowhere else.
  */
 #define ESB_GROUP_SLOTS   16
 #define ESB_GROUP_NAME    32
 #define ESB_GROUP_MEMBERS 32
+
+/*
+ * 2.24: how long a member EdgeSnap asked to move may show any box at
+ * all and still not count as moved by hand (ES_DIF_MOVED,
+ * ES_ERR_CHANGED). Requests queue up in Intuition, and the window goes
+ * through each box asked for, or on AROS through the box between two
+ * steps of one change (esb_change_box): no box it shows meanwhile says
+ * whether the user took it. Whole seconds of intuition's CurrentTime,
+ * so the window has at least two of them and less than three.
+ */
+#define ESB_TRANSIT_SECS 2
+
 struct ESBGroup {
     ULONG id;                  /* 0 = free */
     ULONG area;                /* a work area id, 0 for wherever */
@@ -2480,9 +2834,25 @@ struct ESBGroup {
     int members;
     int gap;                   /* 2.20: room between two cells     */
     int margin[4];             /* 2.20: left, top, right, bottom   */
+    ESRect placed[ESB_GROUP_MEMBERS];  /* 2.24: where EdgeSnap put it */
+    ESRect prev[ESB_GROUP_MEMBERS];    /* 2.24: the box before that   */
+    ULONG asked[ESB_GROUP_MEMBERS];    /* 2.24: when EdgeSnap last    */
+                                       /* asked it to move (seconds), */
+                                       /* 0 if not since it joined    */
+    ESDivTokens tok;           /* 2.24: its dividers' tokens       */
 };
 static struct ESBGroup g_groups[ESB_GROUP_SLOTS];
 static ULONG g_group_next = 1;
+
+/* A mask names every member, a list holds a whole group, a seam's side
+ * holds a whole group, and a group has no more seams than the result
+ * array takes (two per member: see ESB_SEAM_RESULTS). */
+typedef char esb_tok_bits[(ESB_GROUP_MEMBERS <= ES_DIVTOK_MEMBERS) ? 1 : -1];
+typedef char esb_group_listed[(ESB_GROUP_MEMBERS <= ES_SEAM_BOXES_MAX &&
+                               ESB_GROUP_MEMBERS <= ES_SEAM_SIDE_MAX)
+                              ? 1 : -1];
+typedef char esb_group_seams[(2 * ESB_GROUP_MEMBERS <= ESB_SEAM_RESULTS)
+                             ? 1 : -1];
 
 /* g_sem held. The serial of a window the library has already seen,
  * without observing: 0 for one it never met, which is in no group. */
@@ -2547,6 +2917,84 @@ static struct ESBGroup *esb_group_of_serial(ULONG serial)
     return NULL;
 }
 
+/* g_sem held. Where serial stands in g's member list, or -1. */
+static int esb_member_index(const struct ESBGroup *g, ULONG serial)
+{
+    int k;
+
+    if (g == NULL || serial == 0) {
+        return -1;
+    }
+    for (k = 0; k < g->members; k++) {
+        if (g->member[k] == serial) {
+            return k;
+        }
+    }
+    return -1;
+}
+
+/* IBase not held. Intuition's clock, in seconds: ESB_TRANSIT_SECS. */
+static ULONG esb_now(void)
+{
+    ULONG secs = 0, micros = 0;
+
+    CurrentTime(&secs, &micros);
+    return secs;
+}
+
+/*
+ * g_sem held. 2.24: member k of g, seen at live, was just asked to take
+ * box: that is now where EdgeSnap put it, and the request is the one
+ * esb_member_in_transit counts from. The box before is kept as well,
+ * for a window that has not caught up with ChangeWindowBox once its
+ * transit is over: the one it was last put in, or, when it has not
+ * even left the one before that (asked again before the last request
+ * landed), that one, where it still is.
+ */
+static void esb_member_put(struct ESBGroup *g, int k, const ESRect *live,
+                           const ESRect *box)
+{
+    if (!esb_same_box(live, &g->prev[k]) ||
+        esb_same_box(live, &g->placed[k])) {
+        g->prev[k] = g->placed[k];
+    }
+    g->placed[k] = *box;
+    g->asked[k] = esb_now();
+}
+
+/*
+ * g_sem held, now from esb_now. 2.24: was member k of g asked to move
+ * no more than ESB_TRANSIT_SECS whole seconds ago? Then it may still be
+ * on its way, whatever box it shows, and is never counted as moved. A
+ * clock set back since (by hand, or by an hour in the autumn) would
+ * hold it there until the clock caught up: the request then counts from
+ * the moment the clock is first seen behind it. A member not asked
+ * since it joined (asked 0) is in transit only while the clock reads
+ * under three seconds, which it does only just after a machine with no
+ * clock of its own has started.
+ */
+static int esb_member_in_transit(struct ESBGroup *g, int k, ULONG now)
+{
+    if (now < g->asked[k]) {
+        g->asked[k] = now;
+    }
+    return now - g->asked[k] <= ESB_TRANSIT_SECS;
+}
+
+/* g_sem held. win, seen at live, was just asked to take box: if it is
+ * a member, as esb_member_put says. */
+static void esb_member_placed(struct Window *win, const ESRect *live,
+                              const ESRect *box)
+{
+    ULONG serial = esb_serial_of_ptr(win);
+    struct ESBGroup *g = esb_group_of_serial(serial);
+    int k = esb_member_index(g, serial);
+
+    if (k >= 0) {
+        esb_member_put(g, k, live, box);
+    }
+}
+
 /*
  * g_sem held. 2.20: a cell of a layout made into a window box with the
  * gaps and margins of the window's group, and the area less the
@@ -2564,6 +3012,24 @@ static int esb_group_cell(struct Window *win, const ESRect *cell,
     return 1;
 }
 
+/*
+ * g_sem held. Member k leaves: the last one takes its place, with its
+ * boxes and its time, and every token naming k retires (2.24): a token
+ * names its windows by member index, so it must never come to name
+ * another.
+ */
+static void esb_group_drop_member(struct ESBGroup *g, int k)
+{
+    int last = g->members - 1;
+
+    es_divtok_member_left(&g->tok, k, last);
+    g->member[k] = g->member[last];
+    g->placed[k] = g->placed[last];
+    g->prev[k] = g->prev[last];
+    g->asked[k] = g->asked[last];
+    g->members = last;
+}
+
 /* g_sem held, identities observed: members that closed leave. */
 static void esb_group_sweep_members(struct ESBGroup *g)
 {
@@ -2571,10 +3037,26 @@ static void esb_group_sweep_members(struct ESBGroup *g)
 
     while (k < g->members) {
         if (!esb_serial_known(g->member[k])) {
-            g->member[k] = g->member[--g->members];
+            esb_group_drop_member(g, k);
         } else {
             k++;
         }
+    }
+}
+
+/*
+ * A group goes (deleted, its owner gone, the library cleared): its slot
+ * is free, its tokens retire, and the times of its members (2.24) go
+ * with it. esb_create_group starts a slot afresh as well.
+ */
+static void esb_group_free(struct ESBGroup *g)
+{
+    int k;
+
+    g->id = 0;
+    es_divtok_clear(&g->tok);
+    for (k = 0; k < ESB_GROUP_MEMBERS; k++) {
+        g->asked[k] = 0;
     }
 }
 
@@ -2583,7 +3065,7 @@ static void esb_groups_clear(void)
     int i;
 
     for (i = 0; i < ESB_GROUP_SLOTS; i++) {
-        g_groups[i].id = 0;
+        esb_group_free(&g_groups[i]);
     }
 }
 
@@ -2594,20 +3076,19 @@ static void esb_groups_drop_owner(ULONG client)
 
     for (i = 0; i < ESB_GROUP_SLOTS; i++) {
         if (g_groups[i].id != 0 && g_groups[i].owner == client) {
-            g_groups[i].id = 0;
+            esb_group_free(&g_groups[i]);
         }
     }
 }
 
 /*
- * g_sem held. Is win in a group that keeps everyone else out? The
- * owner's own task passes. An owner that switched its layout off, or
- * one whose registration is gone (the sweep at every press takes its
- * groups with it), keeps nobody out.
+ * g_sem held. Does g keep everyone else out? The owner's own task
+ * passes. An owner that switched its layout off, or one whose
+ * registration is gone (the sweep at every press takes its groups with
+ * it), keeps nobody out.
  */
-static int esb_locked_for(struct Window *win)
+static int esb_group_locked_for(const struct ESBGroup *g)
 {
-    struct ESBGroup *g = esb_group_of_serial(esb_serial_of_ptr(win));
     struct ESBClient *c;
 
     if (g == NULL || (g->flags & ES_GF_LOCKED) == 0) {
@@ -2618,6 +3099,12 @@ static int esb_locked_for(struct Window *win)
     }
     c = esb_client_by_id(g->owner);
     return c != NULL && c->layout_on;
+}
+
+/* g_sem held. Is win in a group that keeps everyone else out? */
+static int esb_locked_for(struct Window *win)
+{
+    return esb_group_locked_for(esb_group_of_serial(esb_serial_of_ptr(win)));
 }
 
 /* g_sem held. Is this an id QueryWorkAreas handed out? */
@@ -2676,6 +3163,13 @@ LONG esb_create_group(ULONG area, const char *name, ULONG flags,
             g->members = 0;
             g->gap = 0;
             g->margin[0] = g->margin[1] = g->margin[2] = g->margin[3] = 0;
+            for (i = 0; i < ESB_GROUP_MEMBERS; i++) {
+                g->placed[i].x = g->placed[i].y = 0;
+                g->placed[i].w = g->placed[i].h = 0;
+                g->prev[i] = g->placed[i];
+                g->asked[i] = 0;
+            }
+            es_divtok_clear(&g->tok);
             for (i = 0; i < ESB_GROUP_NAME - 1 && name != NULL && name[i] != '\0'; i++) {
                 g->name[i] = name[i];
             }
@@ -2715,7 +3209,7 @@ LONG esb_delete_group(ULONG group)
     ObtainSemaphore(&g_sem);
     g = esb_group_mine(group, &rc);
     if (g != NULL) {
-        g->id = 0;
+        esb_group_free(g);
     }
     ReleaseSemaphore(&g_sem);
     return rc;
@@ -2790,8 +3284,9 @@ LONG esb_set_group_options(ULONG group, const struct TagItem *tags)
     return rc;
 }
 
-/* g_sem held. The serial of a live window, observing it, or 0. */
-static ULONG esb_serial_observe(struct Window *win)
+/* g_sem held. The serial of a live window, observing it, or 0; and
+ * where it is, when box is not NULL and it was found. */
+static ULONG esb_serial_observe(struct Window *win, ESRect *box)
 {
     ULONG ilock, serial = 0;
     struct Screen *scr;
@@ -2805,6 +3300,12 @@ static ULONG esb_serial_observe(struct Window *win)
         for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
             if (w == win) {
                 serial = esb_ident_touch(w);
+                if (box != NULL) {
+                    box->x = w->LeftEdge;
+                    box->y = w->TopEdge;
+                    box->w = w->Width;
+                    box->h = w->Height;
+                }
                 found = 1;
                 break;
             }
@@ -2817,6 +3318,7 @@ static ULONG esb_serial_observe(struct Window *win)
 LONG esb_group_add_window(ULONG group, struct Window *win)
 {
     struct ESBGroup *g, *other;
+    ESRect box;
     ULONG serial;
     LONG rc;
     int k;
@@ -2830,7 +3332,7 @@ LONG esb_group_add_window(ULONG group, struct Window *win)
     ObtainSemaphore(&g_sem);
     g = esb_group_mine(group, &rc);
     if (g != NULL) {
-        serial = esb_serial_observe(win);
+        serial = esb_serial_observe(win, &box);
         if (serial == 0) {
             rc = ES_ERR_STALE;
         } else {
@@ -2847,7 +3349,16 @@ LONG esb_group_add_window(ULONG group, struct Window *win)
             } else if (g->members >= ESB_GROUP_MEMBERS) {
                 rc = ES_ERR_NO_MEMORY;
             } else {
-                g->member[g->members++] = serial;
+                /* 2.24: where it stands is where its seams start from:
+                 * the box a snap or placement gave it, if one did, else
+                 * the one it has */
+                k = g->members++;
+                g->member[k] = serial;
+                if (!es_registry_snapped(&g_registry, win, &g->placed[k])) {
+                    g->placed[k] = box;
+                }
+                g->prev[k] = g->placed[k];
+                g->asked[k] = 0;
                 rc = ES_OK;
             }
         }
@@ -2876,7 +3387,7 @@ LONG esb_group_remove_window(ULONG group, struct Window *win)
         serial = esb_serial_of_ptr(win);
         for (k = 0; k < g->members; k++) {
             if (serial != 0 && g->member[k] == serial) {
-                g->member[k] = g->member[--g->members];
+                esb_group_drop_member(g, k);
                 rc = ES_OK;
                 break;
             }
@@ -2901,7 +3412,7 @@ LONG esb_query_group_of(struct Window *win, ULONG *group_out)
     }
     *group_out = 0;
     ObtainSemaphore(&g_sem);
-    serial = esb_serial_observe(win);
+    serial = esb_serial_observe(win, NULL);
     if (serial == 0) {
         rc = ES_ERR_STALE;
     } else {
@@ -2937,11 +3448,15 @@ LONG esb_place_window(struct Window *win, const struct ESnapRect *rect,
     return rc;
 }
 
+/* How each window of a layout grows, and the order of the moves: in
+ * static memory, used only with g_sem held, since the library runs on
+ * the caller's stack and the two would take half a kilobyte of it. */
+static long g_place_delta[ES_PLACE_MAX];
+static int g_place_order[ES_PLACE_MAX];
+
 LONG esb_place_windows(struct ESnapPlacement *list, ULONG count,
                        ULONG flags)
 {
-    long delta[ES_PLACE_MAX];
-    int order[ES_PLACE_MAX];
     ULONG i, k;
 
     if (list == NULL || count == 0 || count > ES_PLACE_MAX ||
@@ -2953,7 +3468,7 @@ LONG esb_place_windows(struct ESnapPlacement *list, ULONG count,
     for (i = 0; i < count; i++) {
         struct ESBSnap s;
 
-        delta[i] = 0;
+        g_place_delta[i] = 0;
         list[i].result = ES_OK;
         if (list[i].window == NULL || list[i].rect.w <= 0 ||
             list[i].rect.h <= 0) {
@@ -2962,16 +3477,16 @@ LONG esb_place_windows(struct ESnapPlacement *list, ULONG count,
             es_registry_forget(&g_registry, list[i].window);
             list[i].result = ES_ERR_STALE;
         } else {
-            delta[i] = (long)list[i].rect.w * (long)list[i].rect.h -
-                       (long)s.box.w * (long)s.box.h;
+            g_place_delta[i] = (long)list[i].rect.w * (long)list[i].rect.h -
+                               (long)s.box.w * (long)s.box.h;
         }
     }
-    es_order_by_growth(delta, (int)count, order);
+    es_order_by_growth(g_place_delta, (int)count, g_place_order);
     /* second pass: shrinking first, growing last */
     for (k = 0; k < count; k++) {
         ESRect want;
 
-        i = (ULONG)order[k];
+        i = (ULONG)g_place_order[k];
         if (list[i].result != ES_OK) {
             continue;
         }
@@ -2983,4 +3498,707 @@ LONG esb_place_windows(struct ESnapPlacement *list, ULONG count,
     }
     ReleaseSemaphore(&g_sem);
     return ES_OK;
+}
+
+/* ------------------------------------------- dividers of the list (2.24) */
+
+/* IBase locked. Is target a window of some screen right now? */
+static int esb_window_open_locked(struct Window *target)
+{
+    struct Screen *scr;
+    struct Window *w;
+
+    for (scr = ESB_IBASE->FirstScreen; scr != NULL; scr = scr->NextScreen) {
+        for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+            if (w == target) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* g_sem and IBase held, identities observed: the window of a serial,
+ * or NULL. Every entry the observation kept is a live window, with
+ * the layer it had when it got its serial. */
+static struct Window *esb_window_of_serial_locked(ULONG serial)
+{
+    int i;
+
+    for (i = 0; i < ESB_IDENT_SLOTS; i++) {
+        if (g_ident[i].win != NULL && g_ident[i].serial == serial) {
+            return g_ident[i].win;
+        }
+    }
+    return NULL;
+}
+
+/* IBase held. What a seam needs of w: where it is, its layer and its
+ * size limits; not the usable area, which no seam uses. */
+static void esb_seam_facts(struct Window *w, struct ESBSeamWin *o)
+{
+    o->layer = w->WLayer;
+    o->live.x = w->LeftEdge;
+    o->live.y = w->TopEdge;
+    o->live.w = w->Width;
+    o->live.h = w->Height;
+    o->min_w = w->MinWidth;
+    o->min_h = w->MinHeight;
+    o->max_w = (int)(UWORD)w->MaxWidth;
+    o->max_h = (int)(UWORD)w->MaxHeight;
+    if (o->max_w >= 0xFFFF) {
+        o->max_w = 0;
+    }
+    if (o->max_h >= 0xFFFF) {
+        o->max_h = 0;
+    }
+}
+
+/*
+ * g_sem and IBase held, identities observed: w goes on the list, with
+ * box (where EdgeSnap put it) and scope, as member k of g, or with g
+ * NULL as a window of no group. A member found where EdgeSnap put it
+ * last has caught up with ChangeWindowBox: the box before stops
+ * counting from then on. A member EdgeSnap asked to move moments ago
+ * (esb_member_in_transit, by the clock the list was built at) is never
+ * moved, whatever it shows; after that it is moved when it is neither
+ * where EdgeSnap put it last nor in the box before.
+ */
+static void esb_seam_add(struct Window *w, const ESRect *box,
+                         struct Screen *scope, struct ESBGroup *g, int k)
+{
+    ESSeamBox *b = &g_sl_box[g_sl_n];
+    struct ESBSeamWin *o = &g_sl_win[g_sl_n];
+
+    b->ref = w;
+    b->box = *box;
+    b->scope = scope;
+    b->key = (g != NULL) ? g->id : 0;
+    b->gap = (g != NULL) ? g->gap : 0;
+    esb_seam_facts(w, o);
+    o->serial = esb_serial_of_ptr(w);
+    o->member = (g != NULL) ? k : -1;
+    if (g == NULL) {
+        o->moved = !esb_same_box(&o->live, box);
+    } else {
+        if (esb_same_box(&o->live, &g->placed[k])) {
+            g->prev[k] = g->placed[k];
+        }
+        o->moved = !esb_member_in_transit(g, k, g_sl_now) &&
+                   !esb_same_box(&o->live, &g->placed[k]) &&
+                   !esb_same_box(&o->live, &g->prev[k]);
+    }
+    g_sl_n++;
+}
+
+/* For the list of the front screen: a registry slot's group (its index
+ * plus one, 0 for none) and member, and the members of one group to
+ * list. */
+static unsigned char g_sl_slot_g[ES_REGISTRY_SLOTS];
+static unsigned char g_sl_slot_k[ES_REGISTRY_SLOTS];
+static unsigned char g_sl_pick[ESB_GROUP_MEMBERS];
+
+/*
+ * g_sem held, IBase not: the list every divider call works on, into
+ * g_sl_box[] and g_sl_win[]; returns how many windows it holds. Takes
+ * LockIBase itself, observes every window's identity and lets members
+ * that closed leave their groups first, so member indices hold for the
+ * rest of the caller's hold.
+ *
+ * group not NULL: its members (QueryDividers, MoveDividerT), in member
+ * order, each in the box EdgeSnap last put it in, on whatever screen it
+ * is (the scope keeps screens apart).
+ *
+ * group NULL: the front screen (the calls of 2.2 and 2.3). First the
+ * windows of the snap registry, in slot order, in the box the snap put
+ * them in, with key 0, as before 2.24; except that an entry whose
+ * window is gone is forgotten here (until 2.23 the check of a seam's
+ * windows did it), and a member of a group goes with its group. Then
+ * the groups, in group order: the members on that screen, those of the
+ * registry first, in the box EdgeSnap last put them in, with the
+ * group's id and gap. A group locked for the caller is left out
+ * altogether, so its seams are never reported, never moved and never
+ * stand in the way of another; and so are members that are excluded
+ * or cannot be snapped. A list holds ES_SEAM_BOXES_MAX windows: the
+ * registry's always fit, and a group is listed whole or not at all, in
+ * group order, so what does not fit is dropped whole.
+ */
+static int esb_seam_list(struct ESBGroup *group)
+{
+    struct Screen *s;
+    struct Window *w;
+    ULONG ilock;
+    int i, k, gi, count;
+
+    g_sl_n = 0;
+    g_sl_now = esb_now();          /* an Intuition call: not under IBase */
+    ilock = LockIBase(0);
+    esb_ident_observe_all();
+    if (group != NULL) {
+        esb_group_sweep_members(group);
+        for (k = 0; k < group->members; k++) {
+            w = esb_window_of_serial_locked(group->member[k]);
+            if (w != NULL && !esb_is_excluded(w) &&
+                esb_flags_snappable(w->Flags)) {
+                esb_seam_add(w, &group->placed[k], w->WScreen, group, k);
+            }
+        }
+        UnlockIBase(ilock);
+        return g_sl_n;
+    }
+    for (gi = 0; gi < ESB_GROUP_SLOTS; gi++) {
+        if (g_groups[gi].id != 0) {
+            esb_group_sweep_members(&g_groups[gi]);
+        }
+    }
+    s = ESB_IBASE->FirstScreen;
+    for (i = 0; i < ES_REGISTRY_SLOTS; i++) {
+        ESRegistryEntry *e = &g_registry.slot[i];
+        struct ESBGroup *g;
+        ULONG serial;
+
+        g_sl_slot_g[i] = 0;
+        if (!e->used) {
+            continue;
+        }
+        w = (struct Window *)e->ref;
+        if (!esb_window_open_locked(w)) {
+            es_registry_forget(&g_registry, w);
+            continue;
+        }
+        if (s == NULL || w->WScreen != s) {
+            continue;
+        }
+        serial = esb_serial_of_ptr(w);
+        g = esb_group_of_serial(serial);
+        k = esb_member_index(g, serial);
+        if (k < 0) {
+            esb_seam_add(w, &e->snapped, s, NULL, 0);
+        } else {
+            g_sl_slot_g[i] = (unsigned char)(g - g_groups + 1);
+            g_sl_slot_k[i] = (unsigned char)k;
+        }
+    }
+    for (gi = 0; s != NULL && gi < ESB_GROUP_SLOTS; gi++) {
+        struct ESBGroup *g = &g_groups[gi];
+        unsigned long picked = 0;
+
+        if (g->id == 0 || esb_group_locked_for(g)) {
+            continue;
+        }
+        count = 0;
+        for (i = 0; i < ES_REGISTRY_SLOTS; i++) {
+            k = g_sl_slot_k[i];
+            if (g_sl_slot_g[i] == gi + 1 &&
+                (picked & ES_DIVTOK_BIT(k)) == 0) {
+                picked |= ES_DIVTOK_BIT(k);
+                g_sl_pick[count++] = (unsigned char)k;
+            }
+        }
+        for (k = 0; k < g->members; k++) {
+            if ((picked & ES_DIVTOK_BIT(k)) == 0) {
+                w = esb_window_of_serial_locked(g->member[k]);
+                if (w != NULL && w->WScreen == s) {
+                    g_sl_pick[count++] = (unsigned char)k;
+                }
+            }
+        }
+        /* what may not be snapped is not divided either */
+        for (i = 0, k = 0; i < count; i++) {
+            w = esb_window_of_serial_locked(g->member[g_sl_pick[i]]);
+            if (w != NULL && !esb_is_excluded(w) &&
+                esb_flags_snappable(w->Flags)) {
+                g_sl_pick[k++] = g_sl_pick[i];
+            }
+        }
+        count = k;
+        if (g_sl_n + count > ES_SEAM_BOXES_MAX) {
+            continue;              /* listed whole or not at all */
+        }
+        for (i = 0; i < count; i++) {
+            k = g_sl_pick[i];
+            esb_seam_add(esb_window_of_serial_locked(g->member[k]),
+                         &g->placed[k], s, g, k);
+        }
+    }
+    UnlockIBase(ilock);
+    return g_sl_n;
+}
+
+/*
+ * g_sem held, IBase not: every window of the seam still there, still
+ * the window the list saw (its layer), and read again, since a move
+ * must not trust what the list saw however recently. ES_ERR_STALE when
+ * one is not: a seam with one gone is not a seam, and dropping the
+ * state beats resizing a stranger that inherited the address.
+ */
+static LONG esb_seam_revalidate(const ESSeam *seam)
+{
+    ULONG ilock;
+    LONG rc = ES_OK;
+    int i, k, n = seam->a.n + seam->b.n;
+
+    ilock = LockIBase(0);
+    for (i = 0; i < n && rc == ES_OK; i++) {
+        struct Window *w = (struct Window *)(i < seam->a.n
+            ? seam->a.ref[i] : seam->b.ref[i - seam->a.n]);
+
+        k = esb_sl_index(w);
+        if (k < 0 || !esb_window_open_locked(w) ||
+            w->WLayer != g_sl_win[k].layer) {
+            rc = ES_ERR_STALE;
+        } else {
+            esb_seam_facts(w, &g_sl_win[k]);
+        }
+    }
+    UnlockIBase(ilock);
+    return rc;
+}
+
+/*
+ * g_sem held, IBase not, and held through the whole move, as
+ * esb_place_windows does: the one way a seam is moved, by MoveDivider,
+ * MoveDividerAt and MoveDividerT (2.24). seam is one of the list's (in
+ * g_sl_seam[] or g_sl_one), and its limits are narrowed here. Only its
+ * windows move: each keeps its far edge, and the seam its gap. On
+ * ES_OK *applied (applied may be NULL) receives the position, clamped
+ * to the limits, that the windows were asked to take.
+ */
+static LONG esb_seam_move(ESSeam *seam, LONG position, int may_raise,
+                          LONG *applied)
+{
+    struct ESBGroup *g = NULL;
+    int na = seam->a.n, n = seam->a.n + seam->b.n;
+    int pos, i, j;
+    LONG rc;
+
+    rc = esb_seam_revalidate(seam);
+    if (rc != ES_OK) {
+        return rc;
+    }
+    /* the range the windows can take right now, not the fixed floor */
+    esb_seam_tighten_live(seam);
+    if (seam->min_pos > seam->max_pos) {
+        return ES_ERR_UNSUPPORTED;      /* nothing on it can give */
+    }
+    if (position < seam->min_pos) {
+        pos = seam->min_pos;
+    } else if (position > seam->max_pos) {
+        pos = seam->max_pos;
+    } else {
+        pos = (int)position;
+    }
+    es_gutter_apply(seam, pos, &g_sl_to[0], &g_sl_to[na]);
+
+    if (seam->key != 0) {
+        g = esb_group_by_id((ULONG)seam->key);
+    }
+    for (i = 0; i < n; i++) {
+        struct Window *w = (struct Window *)(i < na ? seam->a.ref[i]
+                                                    : seam->b.ref[i - na]);
+        const struct ESBSeamWin *sw = &g_sl_win[esb_sl_index(w)];
+        int zone = es_registry_zone(&g_registry, w);
+
+        /* the registry must follow, or the next drag would start from
+         * the geometry the windows had before this one; only where it
+         * already holds the window, as a placement does: a window
+         * placed without a slot of its own gets none here */
+        if (zone != ES_ZONE_NONE) {
+            es_registry_remember(&g_registry, w, &sw->live, &g_sl_to[i],
+                                 zone);
+        }
+        /* and so must the group, which finds its seams from there */
+        if (g != NULL && sw->member >= 0 && sw->member < g->members) {
+            esb_member_put(g, sw->member, &sw->live, &g_sl_to[i]);
+        }
+        g_sl_delta[i] = (long)g_sl_to[i].w * g_sl_to[i].h -
+                        (long)sw->live.w * sw->live.h;
+    }
+
+    /*
+     * Shrinking first, growing last, as a layout is applied. A window
+     * that grows into space another window still holds gets its new
+     * size while that space is covered, and on a system whose console
+     * or file manager clears a window only when its size changes and
+     * never repaints an area uncovered later (AROS One, 2026-09-05),
+     * the strip stays pen 0 once the other window has moved away. With
+     * the shrinking side moved first, the growing side finds its new
+     * area free at the moment it is told its new size.
+     */
+    es_order_by_growth(g_sl_delta, n, g_sl_order);
+    for (j = 0; j < n; j++) {
+        struct Window *w;
+
+        i = g_sl_order[j];
+        w = (struct Window *)(i < na ? seam->a.ref[i] : seam->b.ref[i - na]);
+        esb_change_box(w, &g_sl_win[esb_sl_index(w)].live, &g_sl_to[i],
+                       may_raise);
+    }
+    if (applied != NULL) {
+        *applied = pos;
+    }
+    return ES_OK;
+}
+
+/* ------------------------------------------ dividers of a group (2.24) */
+
+/*
+ * A tiler's own seams, by token (core/divtokens.h): QueryDividers lists
+ * the seams of a group with a token each, MoveDividerT moves the seam a
+ * token names, QueryDividerWindows says which windows those are. A
+ * token names the windows on each side by member index, and the seam
+ * is rebuilt from exactly those windows with es_seam_by_refs, so it is
+ * that seam or none. The table is the group's; the counter is one for
+ * every group, never reset while the library is loaded, so a token
+ * value is never valid twice (the counter turns round after 0xFFFFFFFF
+ * tokens, more than a session hands out, and that is left alone).
+ */
+static unsigned char g_sl_rank[ESB_SEAM_RESULTS];   /* QueryDividers' order */
+static unsigned long g_sl_token[ESB_SEAM_RESULTS];
+static ESDivSet g_sl_set[ESB_SEAM_RESULTS];
+static unsigned char g_sl_claimed[ES_DIVTOK_SLOTS];
+static ESSeamSide g_sl_side;                        /* one side, to order */
+static unsigned char g_sl_side_rank[ES_SEAM_SIDE_MAX];
+static unsigned char g_sl_bits[ES_SEAM_SIDE_MAX];
+static unsigned char g_sl_mem[2][ES_SEAM_SIDE_MAX]; /* a token's members  */
+static int g_sl_mem_n[2];
+static unsigned long g_token_next = 1;
+
+/* g_sem held, the list of a group built: the seam's windows as member
+ * masks; a set no token can name (a window outside the group) when one
+ * of them has no member index. */
+static void esb_seam_set(const ESSeam *seam, ESDivSet *set)
+{
+    int s, i, k;
+
+    set->vertical = seam->vertical != 0;
+    set->a = 0;
+    set->b = 0;
+    for (s = 0; s < 2; s++) {
+        const ESSeamSide *side = s ? &seam->b : &seam->a;
+
+        for (i = 0; i < side->n; i++) {
+            k = esb_sl_index(side->ref[i]);
+            if (k < 0 || g_sl_win[k].member < 0) {
+                set->a = 0;
+                set->b = 0;
+                return;
+            }
+            if (s) {
+                set->b |= ES_DIVTOK_BIT(g_sl_win[k].member);
+            } else {
+                set->a |= ES_DIVTOK_BIT(g_sl_win[k].member);
+            }
+        }
+    }
+}
+
+/* g_sem held, the list built: the serial of the first window of a side
+ * in the order a tiler is told (top-most along a vertical seam,
+ * left-most along a horizontal one); 0 for none. */
+static ULONG esb_side_first(const ESSeamSide *side, int vertical)
+{
+    int k;
+
+    if (side->n < 1) {
+        return 0;
+    }
+    es_divider_side_order(side, vertical, g_sl_side_rank);
+    k = esb_sl_index(side->ref[g_sl_side_rank[0]]);
+    return k >= 0 ? g_sl_win[k].serial : 0;
+}
+
+/*
+ * g_sem held: the members token t of g names, each side in the order a
+ * tiler is told (es_divider_side_order on the boxes EdgeSnap put them
+ * in), into g_sl_mem[][]. 0 when it names a member the group does not
+ * have, or no window on a side: no seam of the group.
+ */
+static int esb_token_members(const struct ESBGroup *g, const ESDivToken *t)
+{
+    int s, k, i;
+
+    for (s = 0; s < 2; s++) {
+        unsigned long mask = s ? t->b : t->a;
+
+        g_sl_side.n = 0;
+        for (k = 0; k < ES_DIVTOK_MEMBERS && mask != 0; k++) {
+            if ((mask & ES_DIVTOK_BIT(k)) == 0) {
+                continue;
+            }
+            mask &= ~ES_DIVTOK_BIT(k);
+            if (k >= g->members) {
+                return 0;
+            }
+            g_sl_bits[g_sl_side.n] = (unsigned char)k;
+            g_sl_side.box[g_sl_side.n] = g->placed[k];
+            g_sl_side.n++;
+        }
+        if (mask != 0 || g_sl_side.n == 0) {
+            return 0;
+        }
+        es_divider_side_order(&g_sl_side, t->vertical, g_sl_side_rank);
+        for (i = 0; i < g_sl_side.n; i++) {
+            g_sl_mem[s][i] = g_sl_bits[g_sl_side_rank[i]];
+        }
+        g_sl_mem_n[s] = g_sl_side.n;
+    }
+    return 1;
+}
+
+/* g_sem held, the list of the group built: the windows of g_sl_mem[][]
+ * as refs, into g_sl_ref[][]. 0 when one is not on the list (excluded
+ * by now, or no longer one that can be snapped). */
+static int esb_token_refs(void)
+{
+    int s, i, k;
+
+    for (s = 0; s < 2; s++) {
+        for (i = 0; i < g_sl_mem_n[s]; i++) {
+            for (k = 0; k < g_sl_n && g_sl_win[k].member != g_sl_mem[s][i];
+                 k++) {
+                ;
+            }
+            if (k == g_sl_n) {
+                return 0;
+            }
+            g_sl_ref[s][i] = g_sl_box[k].ref;
+        }
+    }
+    return 1;
+}
+
+/* g_sem held. The group whose table holds token, and its slot there;
+ * NULL when no group holds it. */
+static struct ESBGroup *esb_group_of_token(ULONG token, int *slot)
+{
+    int i;
+
+    for (i = 0; i < ESB_GROUP_SLOTS; i++) {
+        if (g_groups[i].id != 0 &&
+            (*slot = es_divtok_find(&g_groups[i].tok, token)) >= 0) {
+            return &g_groups[i];
+        }
+    }
+    *slot = -1;
+    return NULL;
+}
+
+/*
+ * g_sem held, the list of g built: are the windows of token t still a
+ * seam of the group? Not when one of them is not on the list (excluded
+ * by now, or no longer one that can be snapped) or es_seam_by_refs says
+ * 0; -1 is a seam with no room, and still is one. Its members are then
+ * in g_sl_mem[][] and their refs in g_sl_ref[][].
+ */
+static int esb_token_holds(const struct ESBGroup *g, const ESDivToken *t)
+{
+    return esb_token_members(g, t) && esb_token_refs() &&
+           es_seam_by_refs(g_sl_box, g_sl_n, ESB_SEAM_LINE_PX, t->vertical,
+                           g_sl_ref[0], g_sl_mem_n[0], g_sl_ref[1],
+                           g_sl_mem_n[1], NULL) != 0;
+}
+
+/*
+ * g_sem held, the list of g built, pass 1 of core/divtokens.h done:
+ * pass 2. A token no seam of the query claimed retires once its windows
+ * are no longer a seam of the group.
+ */
+static void esb_tokens_retire(struct ESBGroup *g)
+{
+    int j;
+
+    for (j = 0; j < ES_DIVTOK_SLOTS; j++) {
+        const ESDivToken *t = &g->tok.slot[j];
+
+        if (t->token != 0 && !g_sl_claimed[j] && !esb_token_holds(g, t)) {
+            es_divtok_retire(&g->tok, j);
+        }
+    }
+}
+
+/* g_sem held, the list of g built: one seam as a tiler is told it. */
+static void esb_divider_info(const struct ESBGroup *g, const ESSeam *seam,
+                             unsigned long token,
+                             struct ESnapDividerInfo *o)
+{
+    o->token = (ULONG)token;
+    o->flags = 0;
+    if (esb_group_locked_for(g)) {
+        o->flags |= ES_DIF_LOCKED;
+    }
+    if (!esb_seam_alive(seam)) {
+        o->flags |= ES_DIF_MOVED;
+    }
+    o->vertical = seam->vertical ? 1 : 0;
+    o->position = seam->pos;
+    if (seam->min_pos > seam->max_pos) {
+        o->flags |= ES_DIF_STUCK;
+        o->minPosition = seam->pos;
+        o->maxPosition = seam->pos;
+    } else {
+        o->minPosition = seam->min_pos;
+        o->maxPosition = seam->max_pos;
+    }
+    o->from = seam->vertical ? seam->rect.y : seam->rect.x;
+    o->to = o->from + (seam->vertical ? seam->rect.h : seam->rect.w);
+    o->gap = seam->gap;
+    o->countA = (ULONG)seam->a.n;
+    o->countB = (ULONG)seam->b.n;
+    o->serialA = esb_side_first(&seam->a, seam->vertical);
+    o->serialB = esb_side_first(&seam->b, seam->vertical);
+    o->reserved[0] = 0;
+    o->reserved[1] = 0;
+    o->reserved[2] = 0;
+}
+
+LONG esb_query_dividers(ULONG group, struct ESnapDividerInfo *buf,
+                        ULONG count, ULONG *needed)
+{
+    struct ESBGroup *g;
+    LONG rc = ES_OK;
+    int m, i;
+
+    if (needed == NULL || (buf == NULL && count != 0)) {
+        return ES_ERR_BAD_ARGS;
+    }
+    *needed = 0;
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    esb_clients_sweep();           /* a tiler that is gone took its groups */
+    g = esb_group_by_id(group);
+    if (g == NULL) {
+        rc = ES_ERR_STALE;
+    } else {
+        esb_seam_list(g);
+        m = esb_seams_found(ESB_SEAM_LINE_PX);
+        for (i = 0; i < m; i++) {
+            esb_seam_tighten_live(&g_sl_seam[i]);
+            esb_seam_set(&g_sl_seam[i], &g_sl_set[i]);
+        }
+        /* reuse every token, then retire, then mint: no seam takes the
+         * slot of a token another one of this query keeps, and stale
+         * tokens leave before a live one is evicted */
+        es_divtok_reuse(&g->tok, g_sl_set, m, g_sl_token, g_sl_claimed);
+        esb_tokens_retire(g);
+        es_divtok_mint(&g->tok, g_sl_set, m, g_sl_token, g_sl_claimed,
+                       &g_token_next);
+        es_divider_order(g_sl_seam, m, g_sl_rank);
+        for (i = 0; i < m && (ULONG)i < count; i++) {
+            esb_divider_info(g, &g_sl_seam[g_sl_rank[i]],
+                             g_sl_token[g_sl_rank[i]], &buf[i]);
+        }
+        *needed = (ULONG)m;
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
+LONG esb_move_divider_t(ULONG token, LONG position, ULONG flags,
+                        LONG *applied)
+{
+    struct ESBGroup *g;
+    LONG rc, pos = 0;
+    int slot, i, k, r;
+
+    if (token == 0 || (flags & ~ES_PF_KEEP_ZORDER) != 0) {
+        return ES_ERR_BAD_ARGS;
+    }
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    esb_clients_sweep();
+    g = esb_group_of_token(token, &slot);
+    if (g == NULL) {
+        rc = ES_ERR_STALE;
+    } else if (esb_group_locked_for(g)) {
+        rc = ES_ERR_REJECTED;      /* before anything that could retire it */
+    } else {
+        esb_seam_list(g);          /* a member that left took its tokens */
+        slot = es_divtok_find(&g->tok, token);
+        if (slot < 0) {
+            rc = ES_ERR_STALE;
+        } else if (!esb_token_members(g, &g->tok.slot[slot]) ||
+                   !esb_token_refs()) {
+            es_divtok_retire(&g->tok, slot);
+            rc = ES_ERR_STALE;
+        } else {
+            rc = ES_OK;
+            for (i = 0; i < g_sl_mem_n[0] + g_sl_mem_n[1]; i++) {
+                k = esb_sl_index(i < g_sl_mem_n[0]
+                                 ? g_sl_ref[0][i]
+                                 : g_sl_ref[1][i - g_sl_mem_n[0]]);
+                if (g_sl_win[k].moved) {
+                    rc = ES_ERR_CHANGED;   /* the token stays */
+                }
+            }
+            if (rc == ES_OK) {
+                r = es_seam_by_refs(g_sl_box, g_sl_n, ESB_SEAM_LINE_PX,
+                                    g->tok.slot[slot].vertical,
+                                    g_sl_ref[0], g_sl_mem_n[0],
+                                    g_sl_ref[1], g_sl_mem_n[1], &g_sl_one);
+                if (r == 0) {
+                    es_divtok_retire(&g->tok, slot);
+                    rc = ES_ERR_STALE;
+                } else if (r < 0) {
+                    rc = ES_ERR_UNSUPPORTED;    /* no room: the token stays */
+                } else {
+                    rc = esb_seam_move(&g_sl_one, position,
+                                       (flags & ES_PF_KEEP_ZORDER) == 0, &pos);
+                    if (rc == ES_ERR_STALE) {
+                        es_divtok_retire(&g->tok, slot);
+                    } else if (rc == ES_OK && applied != NULL) {
+                        *applied = pos;
+                    }
+                }
+            }
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
+LONG esb_query_divider_windows(ULONG token, ULONG *serials, ULONG count,
+                               ULONG *needed)
+{
+    struct ESBGroup *g;
+    LONG rc = ES_OK;
+    int slot, s, i, n = 0;
+
+    if (needed == NULL || (serials == NULL && count != 0) || token == 0) {
+        return ES_ERR_BAD_ARGS;
+    }
+    *needed = 0;
+    if (!g_ready) {
+        return ES_ERR_UNSUPPORTED;
+    }
+    ObtainSemaphore(&g_sem);
+    esb_clients_sweep();
+    g = esb_group_of_token(token, &slot);
+    if (g != NULL) {
+        esb_seam_list(g);          /* a member that left took its tokens */
+        slot = es_divtok_find(&g->tok, token);
+    }
+    if (g == NULL || slot < 0) {
+        rc = ES_ERR_STALE;
+    } else if (!esb_token_holds(g, &g->tok.slot[slot])) {
+        /* not that seam any more: retired here too, as MoveDividerT
+         * and QueryDividers retire it */
+        es_divtok_retire(&g->tok, slot);
+        rc = ES_ERR_STALE;
+    } else {
+        for (s = 0; s < 2; s++) {
+            for (i = 0; i < g_sl_mem_n[s]; i++, n++) {
+                if ((ULONG)n < count) {
+                    serials[n] = g->member[g_sl_mem[s][i]];
+                }
+            }
+        }
+        *needed = (ULONG)n;
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
 }

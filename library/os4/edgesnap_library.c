@@ -38,8 +38,8 @@
 
 #define ES_LIB_NAME    "edgesnap.library"
 #define ES_LIB_VERSION 2
-#define ES_LIB_REVISION 23
-#define ES_LIB_IDSTRING "edgesnap.library 2.23 (8.10.2026) Michele Dipace"
+#define ES_LIB_REVISION 24
+#define ES_LIB_IDSTRING "edgesnap.library 2.24 (16.10.2026) Michele Dipace"
 
 /* Bases used by the body through the SDK's inline macros. */
 struct Library *IntuitionBase;
@@ -476,6 +476,30 @@ static LONG _ESnap_SetGroupOptionsA(struct EdgeSnapIFace *Self, ULONG group,
     return esb_set_group_options(group, tags);
 }
 
+/* --- appended for 2.24: divider tokens per group --- */
+static LONG _ESnap_QueryDividers(struct EdgeSnapIFace *Self, ULONG group,
+                                 struct ESnapDividerInfo *buf, ULONG count,
+                                 ULONG *needed)
+{
+    (void)Self;
+    return esb_query_dividers(group, buf, count, needed);
+}
+
+static LONG _ESnap_MoveDividerT(struct EdgeSnapIFace *Self, ULONG token,
+                                LONG position, ULONG flags, LONG *applied)
+{
+    (void)Self;
+    return esb_move_divider_t(token, position, flags, applied);
+}
+
+static LONG _ESnap_QueryDividerWindows(struct EdgeSnapIFace *Self,
+                                       ULONG token, ULONG *serials,
+                                       ULONG count, ULONG *needed)
+{
+    (void)Self;
+    return esb_query_divider_windows(token, serials, count, needed);
+}
+
 /* Order is ABI. Append only, never reorder, never remove. */
 static CONST APTR lib_main_vectors[] = {
     (APTR)ifObtain,
@@ -513,6 +537,9 @@ static CONST APTR lib_main_vectors[] = {
     (APTR)_ESnap_GroupRemoveWindow,
     (APTR)_ESnap_QueryGroupOf,
     (APTR)_ESnap_SetGroupOptionsA,
+    (APTR)_ESnap_QueryDividers,
+    (APTR)_ESnap_MoveDividerT,
+    (APTR)_ESnap_QueryDividerWindows,
     (APTR)-1
 };
 

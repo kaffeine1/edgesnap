@@ -22,7 +22,9 @@
 #include <intuition/intuition.h>
 #include <utility/tagitem.h>
 
-#include "edgesnap.h"
+/* The main header, by its place on the include path: a quoted name
+ * would find this file first, next to itself. */
+#include <edgesnap.h>
 
 struct EdgeSnapIFace
 {
@@ -135,6 +137,18 @@ struct EdgeSnapIFace
     LONG APICALL (*ESnap_SetGroupOptionsA)(struct EdgeSnapIFace *Self,
                                            ULONG group,
                                            const struct TagItem *tags);
+
+    /* --- appended for 2.24: divider tokens per group --- */
+    LONG APICALL (*ESnap_QueryDividers)(struct EdgeSnapIFace *Self,
+                                        ULONG group,
+                                        struct ESnapDividerInfo *buf,
+                                        ULONG count, ULONG *needed);
+    LONG APICALL (*ESnap_MoveDividerT)(struct EdgeSnapIFace *Self,
+                                       ULONG token, LONG position,
+                                       ULONG flags, LONG *applied);
+    LONG APICALL (*ESnap_QueryDividerWindows)(struct EdgeSnapIFace *Self,
+                                              ULONG token, ULONG *serials,
+                                              ULONG count, ULONG *needed);
 };
 
 #endif /* INTERFACES_EDGESNAP_H */

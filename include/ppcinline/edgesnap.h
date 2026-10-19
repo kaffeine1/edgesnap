@@ -186,4 +186,21 @@
         ULONG, __p0, d0, const struct TagItem *, __p1, a0, \
         , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
 
+/* --- appended for 2.24: divider tokens per group --- */
+#define ESnap_QueryDividers(__p0, __p1, __p2, __p3) \
+    LP4(0xd8, LONG, ESnap_QueryDividers, \
+        ULONG, __p0, d0, struct ESnapDividerInfo *, __p1, a0, \
+        ULONG, __p2, d1, ULONG *, __p3, a1, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+#define ESnap_MoveDividerT(__p0, __p1, __p2, __p3) \
+    LP4(0xde, LONG, ESnap_MoveDividerT, \
+        ULONG, __p0, d0, LONG, __p1, d1, \
+        ULONG, __p2, d2, LONG *, __p3, a0, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+#define ESnap_QueryDividerWindows(__p0, __p1, __p2, __p3) \
+    LP4(0xe4, LONG, ESnap_QueryDividerWindows, \
+        ULONG, __p0, d0, ULONG *, __p1, a0, \
+        ULONG, __p2, d1, ULONG *, __p3, a1, \
+        , EDGESNAP_BASE_NAME, 0, 0, 0, 0, 0, 0)
+
 #endif /* PPCINLINE_EDGESNAP_H */

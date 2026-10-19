@@ -71,6 +71,10 @@ int es_registry_zone(const ESRegistry *reg, void *ref);
 /* Step this window last took, 0 when unknown. */
 int es_registry_step(const ESRegistry *reg, void *ref);
 
+/* Where the snap put ref: 1 with *out set (out may be NULL to ask),
+ * 0 when there is no entry for it, *out untouched. */
+int es_registry_snapped(const ESRegistry *reg, void *ref, ESRect *out);
+
 /*
  * Restore lookup: given where the window is NOW, decide.
  *   ES_OK          - *out = geometry to restore; entry consumed.

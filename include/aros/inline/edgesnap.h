@@ -548,4 +548,58 @@ static inline LONG __inline_EdgeSnap_ESnap_SetGroupOptionsA(ULONG __arg1, const 
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+static inline LONG __inline_EdgeSnap_ESnap_QueryDividers(ULONG __arg1, struct ESnapDividerInfo * __arg2, ULONG __arg3, ULONG * __arg4, APTR __EdgeSnapBase)
+{
+    AROS_LIBREQ(EdgeSnapBase, 2)
+    return AROS_LC4(LONG, ESnap_QueryDividers,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(struct ESnapDividerInfo *, (__arg2), A0), \
+         AROS_LCA(ULONG, (__arg3), D1), \
+         AROS_LCA(ULONG *, (__arg4), A1), \
+        struct Library *, (__EdgeSnapBase), 36, EdgeSnap    );
+}
+
+#define ESnap_QueryDividers(arg1, arg2, arg3, arg4) \
+    __inline_EdgeSnap_ESnap_QueryDividers((arg1), (arg2), (arg3), (arg4), __EDGESNAP_LIBBASE)
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+static inline LONG __inline_EdgeSnap_ESnap_MoveDividerT(ULONG __arg1, LONG __arg2, ULONG __arg3, LONG * __arg4, APTR __EdgeSnapBase)
+{
+    AROS_LIBREQ(EdgeSnapBase, 2)
+    return AROS_LC4(LONG, ESnap_MoveDividerT,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(LONG, (__arg2), D1), \
+         AROS_LCA(ULONG, (__arg3), D2), \
+         AROS_LCA(LONG *, (__arg4), A0), \
+        struct Library *, (__EdgeSnapBase), 37, EdgeSnap    );
+}
+
+#define ESnap_MoveDividerT(arg1, arg2, arg3, arg4) \
+    __inline_EdgeSnap_ESnap_MoveDividerT((arg1), (arg2), (arg3), (arg4), __EDGESNAP_LIBBASE)
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+static inline LONG __inline_EdgeSnap_ESnap_QueryDividerWindows(ULONG __arg1, ULONG * __arg2, ULONG __arg3, ULONG * __arg4, APTR __EdgeSnapBase)
+{
+    AROS_LIBREQ(EdgeSnapBase, 2)
+    return AROS_LC4(LONG, ESnap_QueryDividerWindows,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(ULONG *, (__arg2), A0), \
+         AROS_LCA(ULONG, (__arg3), D1), \
+         AROS_LCA(ULONG *, (__arg4), A1), \
+        struct Library *, (__EdgeSnapBase), 38, EdgeSnap    );
+}
+
+#define ESnap_QueryDividerWindows(arg1, arg2, arg3, arg4) \
+    __inline_EdgeSnap_ESnap_QueryDividerWindows((arg1), (arg2), (arg3), (arg4), __EDGESNAP_LIBBASE)
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 #endif /* INLINE_EDGESNAP_H*/

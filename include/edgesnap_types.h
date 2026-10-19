@@ -122,6 +122,17 @@
  *       Ambient panel set to stay at the back reserves its edge. The
  *       desktop's own backdrop window covers the screen and still
  *       reserves nothing. No vector changes.
+ *   2.24 - divider tokens per group: QueryDividers, MoveDividerT and
+ *       QueryDividerWindows appended (item 6 of the tiler's list in
+ *       issue 2). A seam between two windows of a group keeps the
+ *       group's gap, as the header has said since 2.20, and where the
+ *       gap is wider than the thickness asked for, its strip is the
+ *       gap. The divider
+ *       calls of 2.2 and 2.3 look at the front screen only, take in a
+ *       group's windows placed without a registry slot, never report or
+ *       move a seam of a group locked for the caller, and MoveDividerAt
+ *       follows the seam QueryDividerAt last reported to the same task,
+ *       or the one it last moved.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the

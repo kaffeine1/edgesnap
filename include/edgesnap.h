@@ -224,7 +224,10 @@ struct ESnapDivider {
 
 /*
  * Where the divider is, if any. thickness is how wide the handle
- * should be. Fills *divider (with present = 0 when there is no pair).
+ * should be. From 2.24 the strip of a seam between windows of a group
+ * whose gap is wider than that is the gap itself, so a handle put on
+ * it fills the space between the two windows. Fills *divider (with
+ * present = 0 when there is no pair).
  *   ES_OK / ES_ERR_BAD_ARGS.
  */
 LONG ESnap_QueryDivider(ULONG thickness, struct ESnapDivider *divider);
@@ -265,11 +268,39 @@ LONG ESnap_MoveDivider(LONG position);
  * The seam is named by the line it sits on - `vertical` and the
  * coordinate a query reported as `position` - because a layout can
  * hold more than one and "the divider" would be ambiguous. A seam that
- * has stopped existing is not moved. Appended in 2.3.
+ * has stopped existing is not moved. Appended in 2.4.
  *   ES_OK / ES_ERR_STALE (a window on the seam is gone) /
  *   ES_ERR_UNSUPPORTED (no seam on that line).
  */
 LONG ESnap_MoveDividerAt(LONG vertical, LONG line, LONG position);
+
+/*
+ * From 2.24 the four calls above look at the front screen only, and
+ * take in the windows of the layout groups on it (2.12), those placed
+ * without a registry slot included. A seam between two windows of a
+ * group keeps the group's gap when it is moved, and a point in that
+ * gap is not covered by a window that lies behind the windows beside
+ * it. A seam of a group locked for the caller is never reported and
+ * never moved. QueryDivider and MoveDivider still take a seam between
+ * windows of no group first, when there is one. A group's seam can
+ * report a position outside minPosition..maxPosition (see 2.24): a
+ * move clamps, so a frontend should move nothing on a click without a
+ * drag.
+ *
+ * MoveDividerAt follows the seam QueryDividerAt last reported to the
+ * calling task (an answer of no seam leaves it as it was), or the one
+ * the task last moved itself: a line within twelve pixels of where
+ * that seam was, or the line the task last asked it to move to, moves
+ * that seam or none (ES_ERR_STALE when one of its windows is gone,
+ * ES_ERR_UNSUPPORTED when they are no longer that seam on the front
+ * screen), never another seam that has come to lie there. For windows
+ * of a group, that seam is the one of exactly those windows; for
+ * windows of no group, it is the seam on that line whose sides hold
+ * them all, windows that have joined it since included. Any other line
+ * takes the nearest seam on that axis, as before. A frontend that asks
+ * about other points while it shows a seam moves the seam of the last
+ * answer it got, so that is the one it should show.
+ */
 
 /* ------------------------------------------------------- functions */
 
@@ -615,8 +646,11 @@ LONG ESnap_QueryGroupOf(struct Window *win, ULONG *group_out);
  * ES_PF_CELL: a side at or beyond the edge of the usable area gives up
  * the margin of that side, a side shared with another cell half the
  * gap, so that two neighbours leave exactly the gap between them (an
- * odd pixel goes to the right or bottom cell's side). A seam dragged
- * between two of the group's windows keeps the gap they have.
+ * odd pixel goes to the right or bottom cell's side). From 2.24 a seam
+ * dragged between two of the group's windows keeps the gap they have.
+ * This header said so from 2.20, which was a mistake: up to 2.23 a
+ * drag closed a gap of up to twelve pixels, and found no seam across
+ * a wider one.
  *
  *   ES_GO_Gap           LONG, room between two cells, 0..ES_GO_GAP_MAX
  *   ES_GO_Margin        LONG, all four margins at once, applied before
@@ -624,9 +658,10 @@ LONG ESnap_QueryGroupOf(struct Window *win, ULONG *group_out);
  *   ES_GO_MarginLeft, ES_GO_MarginTop, ES_GO_MarginRight,
  *   ES_GO_MarginBottom  LONG, 0..ES_GO_MARGIN_MAX
  *
- * All 0 when the group is made. Unknown tags are ignored; a value out
- * of range changes nothing and answers ES_ERR_BAD_ARGS. The owner's
- * task only:
+ * All 0 when the group is made. A change moves no window: it applies
+ * from the next placement with ES_PF_CELL (see 2.24 for what that
+ * means for the seams). Unknown tags are ignored; a value out of range
+ * changes nothing and answers ES_ERR_BAD_ARGS. The owner's task only:
  *   ES_OK / ES_ERR_BAD_ARGS / ES_ERR_REJECTED (not the owner) /
  *   ES_ERR_STALE (no such group).
  */
@@ -640,5 +675,130 @@ LONG ESnap_QueryGroupOf(struct Window *win, ULONG *group_out);
 #define ES_GO_MARGIN_MAX   2000
 
 LONG ESnap_SetGroupOptionsA(ULONG group, const struct TagItem *tags);
+
+/*
+ * --- 2.24: divider tokens per group ---------------------------------
+ *
+ * A tiler's own seams. ESnap_QueryDividers lists the seams between the
+ * windows of a group, each with a token; ESnap_MoveDividerT moves the
+ * seam a token names; ESnap_QueryDividerWindows says which windows
+ * those are. A token names the windows on each side of a seam, not a
+ * line: it moves them and no other, and stays valid across its own
+ * moves for as long as they are that seam. Once they are not (one of
+ * them closed or left the group, or a window of the group joined them
+ * across the seam) it is retired, and a retired token is never valid
+ * again; the next QueryDividers gives the seam they make now a token
+ * of its own. Tokens are never 0. Any task may ask QueryDividers and
+ * QueryDividerWindows, and either retires a token it finds no longer
+ * valid, whoever asks: a stale token is stale for everyone.
+ * MoveDividerT alone refuses a caller the group is locked for, and
+ * does so before it checks the token's windows.
+ *
+ * The seams are found from the boxes EdgeSnap last put the windows in
+ * (a placement, a snap, UnsnapWindow, a divider move), so a tiler may
+ * ask right after a placement it has not seen land, and a window
+ * EdgeSnap asked to move in the last two seconds is never counted as
+ * moved by hand (ES_DIF_MOVED, ES_ERR_CHANGED), whatever box it shows
+ * on its way. A window not placed since it joined counts where
+ * EdgeSnap last put it, if UnsnapWindow can undo that (a snap, or a
+ * placement or move of a window with a way back), or else where it
+ * stood when it joined: an ES_PF_NO_RESTORE placement of a window with
+ * no way back leaves nothing to remember, so a tiler that places with
+ * it adds its windows to the group first. Members that are excluded or
+ * cannot be snapped are on no seam.
+ *
+ * Windows of the group face each other across a seam when the gap
+ * between them is the group's (ESnap_SetGroupOptionsA), and a move
+ * keeps it. A change of the gap moves no window, and the boxes
+ * EdgeSnap put them in keep the old one: a seam between them may not
+ * be found until the tiler places them again. position is the cell
+ * boundary ES_PF_CELL starts from: the windows left of (above) the
+ * seam end at position less half the gap, rounded up (x plus width,
+ * y plus height), and those right of (below) it start at position
+ * plus half the gap, rounded down. For an odd gap it lies half a pixel
+ * right of (below) the middle of the gap.
+ *
+ * ESnap_QueryDividers: up to count entries are written to buf,
+ * vertical seams first, then horizontal ones, each by position, then
+ * by from; *needed receives how many there are in all, so a short
+ * buffer shows as *needed > count. from and to are where along the
+ * seam its windows face each other, to one past the last pixel (y
+ * plus height along a vertical seam, x plus width along a horizontal
+ * one). The limits honour every window's own size limits. position
+ * can lie outside them, in a layout where a window's own limits kept
+ * it from filling its cell: a move clamps, so moving to position may
+ * then move the windows.
+ *   ES_OK / ES_ERR_BAD_ARGS (needed NULL, or buf NULL with a count) /
+ *   ES_ERR_STALE (no such group) / ES_ERR_UNSUPPORTED.
+ *
+ * ESnap_MoveDividerT: the seam of token to position, clamped to its
+ * limits; *applied (applied may be NULL) receives the position it was
+ * moved to, on ES_OK only. Only the token's windows move. flags:
+ * ES_PF_KEEP_ZORDER, the windows are not raised (see PlaceWindow).
+ * Geometry changes are requested, not applied (ChangeWindowBox
+ * semantics). The token stays valid.
+ *   ES_OK / ES_ERR_BAD_ARGS (token 0, or an unknown flag) /
+ *   ES_ERR_REJECTED (the group is locked for the caller; the token is
+ *   not touched) / ES_ERR_STALE (no such token, or its windows are no
+ *   longer that seam: it is retired) / ES_ERR_CHANGED (a window is not
+ *   where EdgeSnap put it: moved by hand, or still not there two
+ *   seconds after EdgeSnap asked; the token stays) /
+ *   ES_ERR_UNSUPPORTED (no room to move it after every window's
+ *   limits; the token stays).
+ *
+ * ESnap_QueryDividerWindows: the serials of the token's windows, those
+ * left of (above) the seam, then those right of (below) it, each side
+ * top-most (along a vertical seam) or left-most first: serials[0] is
+ * serialA, serials[countA] is serialB. Up to count are written,
+ * *needed receives how many there are.
+ *   ES_OK / ES_ERR_BAD_ARGS (needed NULL, serials NULL with a count, or
+ *   token 0) / ES_ERR_STALE (no such token, or its windows are no
+ *   longer that seam: it is retired) / ES_ERR_UNSUPPORTED.
+ *
+ * MoveDivider and MoveDividerAt keep the contracts of 2.2 and 2.3 and
+ * do not ask whether a window was moved by hand: on the seam of a
+ * group that is not locked for the caller they put such a window back
+ * in its place beside the seam, where MoveDividerT answers
+ * ES_ERR_CHANGED. QueryDivider and QueryDividerAt report no seam
+ * there, so the commodity does not offer it to the user, but any task
+ * may call the two: a tiler that wants its windows left alone locks
+ * its group.
+ *
+ * The struct is 64 bytes on every system, and stays so.
+ */
+struct ESnapDividerInfo {
+    ULONG token;               /* names the seam for MoveDividerT; 0:  */
+                               /* too many seams to give each a token  */
+    ULONG flags;               /* ES_DIF_*                             */
+    LONG vertical;             /* 1: dragged left/right, 0: up/down    */
+    LONG position;             /* the cell boundary, see above         */
+    LONG minPosition;          /* how far it may be dragged, every     */
+    LONG maxPosition;          /* window's own limits honoured         */
+    LONG from, to;             /* where along it its windows face, to  */
+                               /* one past the last pixel              */
+    LONG gap;                  /* what it keeps between its sides      */
+    ULONG countA;              /* windows left of (above) it           */
+    ULONG countB;              /* windows right of (below) it          */
+    ULONG serialA;             /* of each side the first window: the   */
+    ULONG serialB;             /* top-most, or the left-most           */
+    ULONG reserved[3];         /* 0                                    */
+};
+
+#define ES_DIF_LOCKED  0x0001UL /* locked for the caller: MoveDividerT   */
+                                /* answers ES_ERR_REJECTED               */
+#define ES_DIF_STUCK   0x0002UL /* no room after the windows' limits:    */
+                                /* minPosition = maxPosition = position  */
+#define ES_DIF_MOVED   0x0004UL /* a window is not where EdgeSnap put    */
+                                /* it: MoveDividerT answers CHANGED      */
+
+typedef char es_dif_size_check[(sizeof(struct ESnapDividerInfo) == 64)
+                               ? 1 : -1];
+
+LONG ESnap_QueryDividers(ULONG group, struct ESnapDividerInfo *buf,
+                         ULONG count, ULONG *needed);
+LONG ESnap_MoveDividerT(ULONG token, LONG position, ULONG flags,
+                        LONG *applied);
+LONG ESnap_QueryDividerWindows(ULONG token, ULONG *serials, ULONG count,
+                               ULONG *needed);
 
 #endif /* EDGESNAP_H */

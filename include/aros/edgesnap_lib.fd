@@ -36,4 +36,7 @@ ESnap_GroupAddWindow(group,win)(d0,a0)
 ESnap_GroupRemoveWindow(group,win)(d0,a0)
 ESnap_QueryGroupOf(win,group_out)(a0,a1)
 ESnap_SetGroupOptionsA(group,tags)(d0,a0)
+ESnap_QueryDividers(group,buf,count,needed)(d0,a0,d1,a1)
+ESnap_MoveDividerT(token,position,flags,applied)(d0,d1,d2,a0)
+ESnap_QueryDividerWindows(token,serials,count,needed)(d0,a0,d1,a1)
 ##end

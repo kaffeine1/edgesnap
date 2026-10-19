@@ -140,4 +140,12 @@ LONG esb_query_group_of(struct Window *win, ULONG *group_out);
 /* 2.20: gaps and margins per group */
 LONG esb_set_group_options(ULONG group, const struct TagItem *tags);
 
+/* 2.24: divider tokens per group */
+LONG esb_query_dividers(ULONG group, struct ESnapDividerInfo *buf,
+                        ULONG count, ULONG *needed);
+LONG esb_move_divider_t(ULONG token, LONG position, ULONG flags,
+                        LONG *applied);
+LONG esb_query_divider_windows(ULONG token, ULONG *serials, ULONG count,
+                               ULONG *needed);
+
 #endif /* EDGESNAP_BODY_H */

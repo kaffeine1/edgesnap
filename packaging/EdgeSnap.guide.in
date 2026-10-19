@@ -269,7 +269,7 @@ things:
   ESnap_PlaceWindow          put a window in a rectangle
   ESnap_PlaceWindowsA        put several at once, a whole layout
 
-  @{b}Clients and groups (2.10, 2.12)@{ub}
+  @{b}Clients and groups (2.10, 2.12, 2.20)@{ub}
   ESnap_RegisterClient       one client owns the interactive engine,
   ESnap_UnregisterClient     any number may own layouts
   ESnap_CreateGroup          windows a layout client looks after,
@@ -277,6 +277,15 @@ things:
   ESnap_GroupRemoveWindow    else, the commodity's drag included
   ESnap_QueryGroupOf
   ESnap_DeleteGroup
+  ESnap_SetGroupOptionsA     a group's gap between its windows and
+                             margins around them
+
+  @{b}The seams of a group (2.24)@{ub}
+  ESnap_QueryDividers        the seams between a group's windows,
+                             each with a token
+  ESnap_MoveDividerT         move the seam a token names; the gap
+                             stays as it is
+  ESnap_QueryDividerWindows  the windows on each side of it
 
   @{b}Running it@{ub}
   ESnap_Enable               switch snapping, or a layout, on or off

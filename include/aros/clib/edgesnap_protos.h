@@ -299,6 +299,39 @@ AROS_LP2(LONG, ESnap_SetGroupOptionsA,
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP4(LONG, ESnap_QueryDividers,
+         AROS_LPA(ULONG, group, D0),
+         AROS_LPA(struct ESnapDividerInfo *, buf, A0),
+         AROS_LPA(ULONG, count, D1),
+         AROS_LPA(ULONG *, needed, A1),
+         LIBBASETYPEPTR, EdgeSnapBase, 36, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP4(LONG, ESnap_MoveDividerT,
+         AROS_LPA(ULONG, token, D0),
+         AROS_LPA(LONG, position, D1),
+         AROS_LPA(ULONG, flags, D2),
+         AROS_LPA(LONG *, applied, A0),
+         LIBBASETYPEPTR, EdgeSnapBase, 37, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+AROS_LP4(LONG, ESnap_QueryDividerWindows,
+         AROS_LPA(ULONG, token, D0),
+         AROS_LPA(ULONG *, serials, A0),
+         AROS_LPA(ULONG, count, D1),
+         AROS_LPA(ULONG *, needed, A1),
+         LIBBASETYPEPTR, EdgeSnapBase, 38, EdgeSnap
+);
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* CLIB_EDGESNAP_PROTOS_H */

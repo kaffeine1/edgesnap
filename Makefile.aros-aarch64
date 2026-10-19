@@ -30,7 +30,7 @@ GENMODULE ?= genmodule
 
 LIB_SRC := library/aros/edgesnap_library.c library/edgesnap_body.c \
 	core/zones.c core/panels.c core/engine.c core/registry.c \
-	core/config.c core/gutter.c
+	core/config.c core/gutter.c core/divtokens.c
 LIB_GEN := $(GEN)/edgesnap_start.c $(GEN)/edgesnap_end.c
 CX_SRC := commodity/edgesnap_cx.c core/config.c core/panels.c core/zones.c \
 	core/engine.c

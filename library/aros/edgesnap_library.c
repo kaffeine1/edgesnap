@@ -427,3 +427,40 @@ AROS_LH2(LONG, ESnap_SetGroupOptionsA,
     return esb_set_group_options(group, tags);
     AROS_LIBFUNC_EXIT
 }
+
+/* --- appended for 2.24: divider tokens per group --- */
+AROS_LH4(LONG, ESnap_QueryDividers,
+         AROS_LHA(ULONG, group, D0),
+         AROS_LHA(struct ESnapDividerInfo *, buf, A0),
+         AROS_LHA(ULONG, count, D1),
+         AROS_LHA(ULONG *, needed, A1),
+         struct EdgeSnapBase *, EdgeSnapBase, 36, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_query_dividers(group, buf, count, needed);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH4(LONG, ESnap_MoveDividerT,
+         AROS_LHA(ULONG, token, D0),
+         AROS_LHA(LONG, position, D1),
+         AROS_LHA(ULONG, flags, D2),
+         AROS_LHA(LONG *, applied, A0),
+         struct EdgeSnapBase *, EdgeSnapBase, 37, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_move_divider_t(token, position, flags, applied);
+    AROS_LIBFUNC_EXIT
+}
+
+AROS_LH4(LONG, ESnap_QueryDividerWindows,
+         AROS_LHA(ULONG, token, D0),
+         AROS_LHA(ULONG *, serials, A0),
+         AROS_LHA(ULONG, count, D1),
+         AROS_LHA(ULONG *, needed, A1),
+         struct EdgeSnapBase *, EdgeSnapBase, 38, EdgeSnap)
+{
+    AROS_LIBFUNC_INIT
+    return esb_query_divider_windows(token, serials, count, needed);
+    AROS_LIBFUNC_EXIT
+}

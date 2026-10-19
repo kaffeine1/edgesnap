@@ -185,8 +185,11 @@ owns the interactive drag and any number own their layouts, work areas
 keep an identity across a screen mode change, and a layout group can
 keep every other program, the commodity's drag included, off its
 windows. Since 2.20 a group can also keep gaps between its windows and
-margins from the edges of the screen. The included esnaptest client
-exercises the whole API on every system.
+margins from the edges of the screen. Since 2.24 a tiler can list the
+seams between the windows of a group and move each one by a token that
+names its windows, and a seam dragged between them keeps the group's
+gap. The included esnaptest client exercises the whole API on every
+system.
 
 The library says %s while EdgeSnap says %s, and that is not a mistake:
 a library's version is its interface, not its product. While EdgeSnap is

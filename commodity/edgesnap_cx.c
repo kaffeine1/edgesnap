@@ -274,11 +274,16 @@ struct SpikeShared {
     volatile ULONG moves;
     volatile ULONG quals;   /* latest qualifier bits seen with the mouse */
     /* the windowless seam (AROS): the task says when the pointer is on
-     * a lit seam and while a seam drag runs; the handler counts the
-     * presses it swallowed on our behalf */
+     * a lit seam, on which screen, and while a seam drag runs; the
+     * handler counts the presses it swallowed on our behalf, and keeps
+     * where the pointer was on that screen at the latest of them,
+     * written before the count that tells the task */
     volatile ULONG seam_hot;
+    struct Screen * volatile seam_scr;
     volatile ULONG seam_dragging;
     volatile ULONG seam_grabs;
+    volatile WORD seam_press_x;
+    volatile WORD seam_press_y;
     volatile LONG raw_dx;          /* the mouse's own travel, summed  */
     volatile LONG raw_dy;          /* (relative devices only)         */
 };
@@ -335,10 +340,23 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
     g_shared.quals = ie->ie_Qualifier;
     if (ie->ie_Code == IECODE_LBUTTON) {
 #ifdef ES_SEAM_NO_WINDOW
-        if (g_shared.seam_hot) {
+        /* Only while the lit seam's screen is in front: with another
+         * one there, nothing has put the line out if the pointer has
+         * not moved since, and the click belongs to that screen. A
+         * few reads and compares, no call; seam_hot first, as the task
+         * sets seam_scr before it. */
+        struct Screen *scr = g_shared.seam_hot ? g_shared.seam_scr : NULL;
+
+        if (scr != NULL && ES_IBASE->FirstScreen == scr) {
             /* the seam is ours: a NULL event is one Intuition ignores,
              * so the two windows below never see this click */
             ie->ie_Class = IECLASS_NULL;
+            /* where the press was, which the task may come to only
+             * after the pointer has gone on: two reads, no call, and
+             * before the count, so the task never finds a grab whose
+             * place is not there yet */
+            g_shared.seam_press_x = scr->MouseX;
+            g_shared.seam_press_y = scr->MouseY;
             g_shared.seam_grabs++;
         }
 #endif
@@ -1662,12 +1680,51 @@ static struct Screen *g_divider_scr;   /* blind drag: where the pointer is read 
 /* Is the strip painted right now? It opens invisible and lights up when
  * the pointer comes to it. */
 static int g_divider_hot;
+/*
+ * Where the drag starts on the seam, along the axis the seam moves on,
+ * and whether the pointer has left that coordinate since. On AmigaOS 4
+ * and MorphOS that is the press itself, read from its message. On AROS
+ * it is the press too: the input handler, as it swallows the press,
+ * keeps where the pointer stood on the seam's screen, and the task
+ * takes that with the grab, however late it comes to it, so a drag
+ * whose pointer has come to rest by then is still a drag. A press and
+ * release that never leaves it is a click, not a drag, and moves
+ * nothing: from 2.24 a seam's position may lie outside the limits it
+ * can be dragged to (a window whose size limits kept it from filling
+ * its cell), and a move asked for there would be clamped and would
+ * shift the windows under a click.
+ */
+static int g_divider_press;
+static int g_divider_moved;
 
 /* How near the pointer must come for the seam to show itself, and how
  * far it must go for the seam to disappear again. The two differ so a
  * pointer resting on the boundary does not blink. */
 #define ES_SEAM_SHOW_PX  3
 #define ES_SEAM_HIDE_PX 14
+
+/*
+ * Is scr the front screen? From 2.24 the library's divider calls look
+ * at the front screen only, while we read the pointer from the default
+ * public screen. When that one is not in front, a pointer position
+ * would be taken as one on another screen, so we behave as if there
+ * were no seam: no handle, no line, no move. Read under LockIBase like
+ * every other piece of Intuition state here; scr is only compared,
+ * never followed.
+ */
+static int spike_divider_front(const struct Screen *scr)
+{
+    ULONG ilock;
+    int front;
+
+    if (scr == NULL) {
+        return 0;
+    }
+    ilock = LockIBase(0);
+    front = (ES_IBASE->FirstScreen == scr);
+    UnlockIBase(ilock);
+    return front;
+}
 
 static void spike_divider_close(void)
 {
@@ -1683,6 +1740,15 @@ static void spike_divider_close(void)
 }
 
 #ifndef ES_SEAM_NO_WINDOW
+/*
+ * The seam the handle stands on, as the last sync found it (present is
+ * 0 when it found none). Its limits clamp a drag: the position sent and
+ * the one kept as the seam's name stay within them, so a pointer that
+ * runs on past a limit cannot come to name a neighbouring seam. Its
+ * windows take the focus when a drag ends.
+ */
+static struct ESnapDivider g_divider_seam;
+
 /*
  * The seam is visible, and it has to be.
  *
@@ -1729,20 +1795,25 @@ static void spike_divider_paint(void)
  * about the press the answer is already "us", and sampling earlier
  * races the activation of whatever the user clicked last. Handing it
  * to the window under the pointer needs no history and cannot be
- * stale: the library validated both windows a moment ago.
+ * stale: the library validated both windows a moment ago, in the sync
+ * that follows the release. The seam is the one that sync kept, the one
+ * at the pointer, which is the one just dragged; not the first seam of
+ * the layout. And the pointer is compared with the seam's position, not
+ * with the edge of its strip.
  */
-static void spike_divider_pass_focus(const struct ESnapDivider *d)
+static void spike_divider_pass_focus(void)
 {
+    const struct ESnapDivider *d = &g_divider_seam;
     struct Window *win;
 
-    if (d == NULL || !d->present || g_divider == NULL) {
+    if (!d->present || g_divider == NULL) {
         return;
     }
     if (d->vertical) {
-        win = (g_divider->WScreen->MouseX < (LONG)d->strip.x) ?
+        win = ((LONG)g_divider->WScreen->MouseX < d->position) ?
             d->windowA : d->windowB;
     } else {
-        win = (g_divider->WScreen->MouseY < (LONG)d->strip.y) ?
+        win = ((LONG)g_divider->WScreen->MouseY < d->position) ?
             d->windowA : d->windowB;
     }
     if (win != NULL) {
@@ -1818,6 +1889,13 @@ static void spike_divider_hover(void)
     if (g_divider_dragging) {
         return;
     }
+    if (g_divider != NULL && !spike_divider_front(g_divider->WScreen)) {
+        /* Another screen has come to the front: no seam here until the
+         * sync finds ours in front again. */
+        g_divider_seam.present = 0;
+        spike_divider_close();
+        return;
+    }
     if (g_divider == NULL) {
         /*
          * No handle: a seam that was covered where the pointer stood
@@ -1843,14 +1921,37 @@ static void spike_divider_hover(void)
         struct Screen *ps = LockPubScreen(NULL);
         struct ESnapDivider q;
         LONG px = 0, py = 0;
+        int front = 0;
 
         if (ps != NULL) {
             px = (LONG)ps->MouseX;
             py = (LONG)ps->MouseY;
+            front = spike_divider_front(ps);
             UnlockPubScreen(NULL, ps);
         }
-        if (ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, px, py, &q) !=
+        if (!front ||
+            ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, px, py, &q) !=
                 ES_OK || !q.present) {
+            return;
+        }
+        /*
+         * The answer may name another seam, one that lies nearer the
+         * pointer than the handle's own (a corner where two meet). From
+         * 2.24 a move on the handle's line goes to the seam the library
+         * last named to us, so lighting the handle now would let the
+         * drag resize a pair nobody grabbed. The handle goes to that
+         * seam instead, and lights up there on the next move. Two
+         * seams can share a line, never a strip, so the strip is
+         * compared as well.
+         */
+        if (q.vertical != g_divider_seam.vertical ||
+            q.position != g_divider_seam.position ||
+            q.strip.x != g_divider_seam.strip.x ||
+            q.strip.y != g_divider_seam.strip.y ||
+            q.strip.w != g_divider_seam.strip.w ||
+            q.strip.h != g_divider_seam.strip.h) {
+            spike_divider_close();
+            spike_divider_sync();
             return;
         }
         spike_divider_paint();
@@ -1914,19 +2015,25 @@ static void spike_divider_sync(void)
          */
         struct Screen *ps = LockPubScreen(NULL);
         LONG px = 0, py = 0;
-        LONG rc;
+        LONG rc = ES_ERR_UNSUPPORTED;
+        int front = 0;
 
         if (ps != NULL) {
             px = (LONG)ps->MouseX;
             py = (LONG)ps->MouseY;
+            front = spike_divider_front(ps);
             UnlockPubScreen(NULL, ps);
         }
-        rc = ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, px, py, &d);
+        if (front) {
+            rc = ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, px, py, &d);
+        }
         if (rc != ES_OK || !d.present) {
+            g_divider_seam.present = 0;
             spike_divider_close();
             return;
         }
     }
+    g_divider_seam = d;
     if (g_divider != NULL) {
         /*
          * Moving a painted window drags its paint across the screen,
@@ -1944,6 +2051,7 @@ static void spike_divider_sync(void)
     if (g_divider != NULL) {
         spike_divider_depth(&d);
         g_divider_vertical = (int)d.vertical;
+        g_divider_line = (int)d.position;   /* the seam just named to us */
         return;
     }
 
@@ -2035,6 +2143,7 @@ static void spike_divider_events(void)
     while ((im = (struct IntuiMessage *)GetMsg(port)) != NULL) {
         ULONG cls = im->Class;
         UWORD code = im->Code;
+        LONG mx = (LONG)im->MouseX, my = (LONG)im->MouseY;
         ReplyMsg((struct Message *)im);
 
         if (cls == IDCMP_REFRESHWINDOW) {
@@ -2077,6 +2186,16 @@ static void spike_divider_events(void)
                 }
 #else
                 g_divider_dragging = 1;
+                /*
+                 * Where the button went down, from the message itself:
+                 * the handle has not moved yet, so its window-relative
+                 * reading is exact, and a pointer that has gone on since
+                 * then is already a drag.
+                 */
+                g_divider_press = (int)(g_divider_vertical ?
+                                        g_divider->LeftEdge + mx :
+                                        g_divider->TopEdge + my);
+                g_divider_moved = 0;
                 /* active window: otherwise the moves stop at our edge */
                 ActivateWindow(g_divider);
                 spike_divider_pointer();
@@ -2103,17 +2222,11 @@ static void spike_divider_events(void)
                  * returns before the windows have moved, and asking too
                  * early finds a pair whose geometry does not match yet,
                  * which reads as "no seam" and takes the handle away.
+                 * The focus then goes by the seam that sync kept.
                  */
-                {
-                    struct ESnapDivider d;
-
-                    Delay(10L);
-                    spike_divider_sync();
-                    if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) ==
-                            ES_OK && d.present) {
-                        spike_divider_pass_focus(&d);
-                    }
-                }
+                Delay(10L);
+                spike_divider_sync();
+                spike_divider_pass_focus();
                 spike_log_flush();
             }
             if (g_divider == NULL || g_divider->UserPort != port) {
@@ -2132,18 +2245,43 @@ static void spike_divider_events(void)
             LONG pos = g_divider_vertical ?
                 (LONG)g_divider->WScreen->MouseX :
                 (LONG)g_divider->WScreen->MouseY;
-            LONG rc = ES_CALL(ESnap_MoveDividerAt)((LONG)g_divider_vertical,
-                                                   (LONG)g_divider_line,
-                                                   pos);
+            LONG rc = ES_OK;
 
+            if (!spike_divider_front(g_divider->WScreen)) {
+                continue;          /* another screen in front: no seam */
+            }
+            if (pos != (LONG)g_divider_press) {
+                g_divider_moved = 1;
+            }
+            /*
+             * The drag goes from the clamped value: past a limit the
+             * windows stop, and so does the position we send and keep.
+             */
+            if (pos < g_divider_seam.minPosition) {
+                pos = g_divider_seam.minPosition;
+            }
+            if (pos > g_divider_seam.maxPosition) {
+                pos = g_divider_seam.maxPosition;
+            }
+            if (g_divider_moved && pos != (LONG)g_divider_line) {
+                rc = ES_CALL(ESnap_MoveDividerAt)((LONG)g_divider_vertical,
+                                                  (LONG)g_divider_line,
+                                                  pos);
+                if (rc == ES_OK) {
+                    /*
+                     * The seam has moved, so its NAME has changed with
+                     * it: keep the line up to date or the next call
+                     * would be asking for a seam that is no longer
+                     * where it was, and the drag would die a few pixels
+                     * in. The clamped value, never the raw pointer: a
+                     * library before 2.24 takes the seam nearest the
+                     * line, and a pointer that ran on past the limit
+                     * towards the next seam would name that one.
+                     */
+                    g_divider_line = (int)pos;
+                }
+            }
             if (rc == ES_OK) {
-                /*
-                 * The seam has moved, so its NAME has changed with it:
-                 * keep the line up to date or the next call would be
-                 * asking for a seam that is no longer where it was, and
-                 * the drag would die a few pixels in.
-                 */
-                g_divider_line = (int)pos;
                 /*
                  * Follow the POINTER, not the seam. Asking the library
                  * where the seam is now would race the placement it
@@ -2304,6 +2442,7 @@ static struct {
     int track;                 /* during a drag: where the line is   */
     ESRect strip;
     struct Screen *scr;
+    struct Window *wa, *wb;    /* its first windows, for the focus   */
 } g_seam;
 
 /* Is this seam open at (x, y), a point on its strip? */
@@ -2384,6 +2523,7 @@ static void spike_seam_light(int on)
         spike_seam_visible_run(&run);
         spike_sl_show(&run);
         g_seam.hot = 1;
+        g_shared.seam_scr = g_seam.scr;    /* before the handler may look */
         g_shared.seam_hot = 1;
     } else if (!on && g_seam.hot) {
         g_shared.seam_hot = 0;
@@ -2435,6 +2575,15 @@ static void spike_divider_hover(void)
     if (g_divider_dragging) {
         return;
     }
+    if (g_seam.present && !spike_divider_front(g_seam.scr)) {
+        /* Another screen has come to the front: no seam here until a
+         * query finds ours in front again, as the windowed hover does.
+         * A screen that comes forward under a pointer at rest is the
+         * input handler's to notice (spike_cx_action). */
+        spike_seam_light(0);
+        g_seam.present = 0;
+        return;
+    }
     /* Lit, the answer is checked more often: the pointer may slide
      * along the seam onto a part another window covers. */
     if (++moves_since_ask >= (g_seam.hot ? 3u : 6u)) {
@@ -2468,14 +2617,18 @@ static void spike_seam_query(void)
 {
     struct ESnapDivider d;
     struct Screen *ps = LockPubScreen(NULL);
-    LONG px = 0, py = 0, rc;
+    LONG px = 0, py = 0, rc = ES_ERR_UNSUPPORTED;
+    int front = 0;
 
     if (ps != NULL) {
         px = (LONG)ps->MouseX;
         py = (LONG)ps->MouseY;
+        front = spike_divider_front(ps);
         UnlockPubScreen(NULL, ps);
     }
-    rc = ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, px, py, &d);
+    if (front) {
+        rc = ES_CALL(ESnap_QueryDividerAt)(ES_DIVIDER_PX, px, py, &d);
+    }
     if (rc != ES_OK || !d.present) {
         spike_seam_light(0);
         g_seam.present = 0;
@@ -2501,6 +2654,8 @@ static void spike_seam_query(void)
     g_seam.strip.w = (int)d.strip.w;
     g_seam.strip.h = (int)d.strip.h;
     g_seam.scr = g_accent.scr != NULL ? g_accent.scr : ps;
+    g_seam.wa = d.windowA;
+    g_seam.wb = d.windowB;
 }
 
 static void spike_divider_sync(void)
@@ -2509,20 +2664,25 @@ static void spike_divider_sync(void)
     spike_divider_hover();
 }
 
-/* After a seam drag the focus goes to the window under the pointer. */
-static void spike_divider_pass_focus(const struct ESnapDivider *d)
+/*
+ * After a seam drag the focus goes to the window under the pointer: of
+ * the seam the query after the release kept (the one at the pointer,
+ * which is the one just dragged, its windows validated a moment ago),
+ * the window on the pointer's side of its position.
+ */
+static void spike_divider_pass_focus(void)
 {
     struct Window *win;
 
-    if (d == NULL || !d->present || g_seam.scr == NULL) {
+    if (!g_seam.present || g_seam.scr == NULL) {
         return;
     }
-    if (d->vertical) {
-        win = (g_seam.scr->MouseX < (LONG)d->strip.x) ? d->windowA
-                                                       : d->windowB;
+    if (g_seam.vertical) {
+        win = ((int)g_seam.scr->MouseX < g_seam.line) ? g_seam.wa
+                                                       : g_seam.wb;
     } else {
-        win = (g_seam.scr->MouseY < (LONG)d->strip.y) ? d->windowA
-                                                       : d->windowB;
+        win = ((int)g_seam.scr->MouseY < g_seam.line) ? g_seam.wa
+                                                       : g_seam.wb;
     }
     if (win != NULL) {
         ActivateWindow(win);
@@ -2617,15 +2777,23 @@ static void spike_engine_step(void)
         if (g_seam.present && !g_divider_dragging) {
             struct ESnapReport rep;
 
-            /* the handler swallowed a press on the lit seam: from here
-             * the drag runs on the counters, and the lit line becomes
-             * the one that follows the pointer */
+            /* the handler swallowed a press on the lit seam, its screen
+             * in front: from here the drag runs on the counters, and
+             * the lit line becomes the one that follows the pointer.
+             * No front check here: the press is gone already, and a
+             * drag that did not start would let its release through
+             * alone. A screen that came forward since is met by the
+             * checks of the drag and of the release. */
             g_seam.hot = 0;
             g_shared.seam_hot = 0;
             g_seam.track = g_seam.line;
             g_divider_scr = g_seam.scr;
             g_divider_vertical = g_seam.vertical;
             g_divider_line = g_seam.line;
+            g_divider_press = g_divider_vertical ?
+                              (int)g_shared.seam_press_x :
+                              (int)g_shared.seam_press_y;
+            g_divider_moved = 0;
             g_divider_dragging = 1;
             g_shared.seam_dragging = 1;
             ES_CALL(ESnap_ResetInput)(&rep);
@@ -2644,17 +2812,25 @@ static void spike_engine_step(void)
          * pointer, and the two windows change once, when the button
          * comes up: one new strip each, which they paint.
          */
-        if (new_move && g_divider_scr != NULL) {
+        if (new_move && g_divider_scr != NULL &&
+            !spike_divider_front(g_divider_scr)) {
+            /* another screen in front: no line, nothing to move */
+            spike_sl_hide();
+            g_seam.track = g_divider_line;
+        } else if (new_move && g_divider_scr != NULL) {
             LONG pos = g_divider_vertical ? (LONG)g_divider_scr->MouseX
                                           : (LONG)g_divider_scr->MouseY;
 
+            if (pos != (LONG)g_divider_press) {
+                g_divider_moved = 1;
+            }
             if (pos < g_seam.min_pos) {
                 pos = g_seam.min_pos;
             }
             if (pos > g_seam.max_pos) {
                 pos = g_seam.max_pos;
             }
-            if ((int)pos != g_seam.track) {
+            if (g_divider_moved && (int)pos != g_seam.track) {
                 ESRect r = g_seam.strip;
 
                 if (g_divider_vertical) {
@@ -2668,12 +2844,13 @@ static void spike_engine_step(void)
             }
         }
         if (new_release) {
-            struct ESnapDivider d;
-
             spike_sl_hide();
             g_divider_dragging = 0;
             g_shared.seam_dragging = 0;
-            if (g_seam.track != g_divider_line) {
+            /* The line moves only once the pointer has, so a click
+             * leaves track on the line and moves nothing. */
+            if (g_seam.track != g_divider_line &&
+                spike_divider_front(g_divider_scr)) {
                 LONG rc = ES_CALL(ESnap_MoveDividerAt)((LONG)g_divider_vertical,
                                                        (LONG)g_divider_line,
                                                        (LONG)g_seam.track);
@@ -2687,10 +2864,7 @@ static void spike_engine_step(void)
              * resized windows may still be repainting. The next real
              * pointer move calls spike_divider_hover() and may light it. */
             spike_seam_query();
-            if (ES_CALL(ESnap_QueryDivider)(ES_DIVIDER_PX, &d) == ES_OK &&
-                d.present) {
-                spike_divider_pass_focus(&d);
-            }
+            spike_divider_pass_focus();
             spike_log_flush();
         }
         return;   /* the engine sits this one out */

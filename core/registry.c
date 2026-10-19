@@ -84,6 +84,21 @@ int es_registry_step(const ESRegistry *reg, void *ref)
     return 0;
 }
 
+int es_registry_snapped(const ESRegistry *reg, void *ref, ESRect *out)
+{
+    int i;
+
+    for (i = 0; i < ES_REGISTRY_SLOTS; i++) {
+        if (reg->slot[i].used && reg->slot[i].ref == ref) {
+            if (out != 0) {
+                *out = reg->slot[i].snapped;
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int es_registry_zone(const ESRegistry *reg, void *ref)
 {
     int i;

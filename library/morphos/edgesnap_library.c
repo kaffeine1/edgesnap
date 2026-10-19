@@ -35,8 +35,8 @@
 
 #define ES_LIB_NAME     "edgesnap.library"
 #define ES_LIB_VERSION  2
-#define ES_LIB_REVISION 23
-#define ES_LIB_IDSTRING "edgesnap.library 2.23 (8.10.2026) Michele Dipace\r\n"
+#define ES_LIB_REVISION 24
+#define ES_LIB_IDSTRING "edgesnap.library 2.24 (16.10.2026) Michele Dipace\r\n"
 
 struct ExecBase *SysBase;
 struct IntuitionBase *IntuitionBase;
@@ -363,6 +363,26 @@ static LONG G_SetGroupOptionsA(void)
                                  (const struct TagItem *)REG_A0);
 }
 
+/* --- appended for 2.24: divider tokens per group --- */
+static LONG G_QueryDividers(void)
+{
+    return esb_query_dividers((ULONG)REG_D0,
+                              (struct ESnapDividerInfo *)REG_A0,
+                              (ULONG)REG_D1, (ULONG *)REG_A1);
+}
+
+static LONG G_MoveDividerT(void)
+{
+    return esb_move_divider_t((ULONG)REG_D0, (LONG)REG_D1, (ULONG)REG_D2,
+                              (LONG *)REG_A0);
+}
+
+static LONG G_QueryDividerWindows(void)
+{
+    return esb_query_divider_windows((ULONG)REG_D0, (ULONG *)REG_A0,
+                                     (ULONG)REG_D1, (ULONG *)REG_A1);
+}
+
 #define ES_GATE(name, fn) \
     static struct EmulLibEntry name = \
         { TRAP_LIB, 0, (void (*)(void))fn }
@@ -402,6 +422,9 @@ ES_GATE(GATE_GroupAddWindow, G_GroupAddWindow);
 ES_GATE(GATE_GroupRemoveWindow, G_GroupRemoveWindow);
 ES_GATE(GATE_QueryGroupOf, G_QueryGroupOf);
 ES_GATE(GATE_SetGroupOptionsA, G_SetGroupOptionsA);
+ES_GATE(GATE_QueryDividers, G_QueryDividers);
+ES_GATE(GATE_MoveDividerT, G_MoveDividerT);
+ES_GATE(GATE_QueryDividerWindows, G_QueryDividerWindows);
 
 /* Vector order is the ABI. Append only, never reorder, never remove. */
 static const APTR FuncTable[] = {
@@ -440,6 +463,9 @@ static const APTR FuncTable[] = {
     (APTR)&GATE_GroupRemoveWindow,
     (APTR)&GATE_QueryGroupOf,
     (APTR)&GATE_SetGroupOptionsA,
+    (APTR)&GATE_QueryDividers,
+    (APTR)&GATE_MoveDividerT,
+    (APTR)&GATE_QueryDividerWindows,
     (APTR)-1
 };
 

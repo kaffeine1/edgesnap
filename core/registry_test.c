@@ -132,6 +132,67 @@ static void test_forget_and_capacity(void)
                                &snapped, ES_ZONE_LEFT) == ES_OK);
 }
 
+/* The box a group starts from when a snapped window joins it (2.24):
+ * where the snap put it, not where it was before, and nothing for a
+ * window the registry does not hold. */
+static void test_snapped_accessor(void)
+{
+    ESRegistry reg;
+    ESRect pre = rect(100, 100, 200, 150);
+    ESRect left = rect(0, 12, 320, 468);
+    ESRect right = rect(320, 12, 320, 468);
+    ESRect out;
+    char refs[ES_REGISTRY_SLOTS];
+    int w1, w2, i;
+
+    es_registry_init(&reg);
+    out = rect(-1, -2, -3, -4);
+    CHECK(es_registry_snapped(&reg, &w1, &out) == 0);
+    CHECK(out.x == -1 && out.y == -2 && out.w == -3 && out.h == -4);
+    CHECK(es_registry_snapped(&reg, 0, &out) == 0);
+
+    CHECK(es_registry_remember(&reg, &w1, &pre, &left,
+                               ES_ZONE_LEFT) == ES_OK);
+    CHECK(es_registry_snapped(&reg, &w1, &out) == 1);
+    CHECK(out.x == 0 && out.y == 12 && out.w == 320 && out.h == 468);
+    CHECK(es_registry_snapped(&reg, &w1, 0) == 1);
+    CHECK(es_registry_snapped(&reg, &w2, &out) == 0);
+    CHECK(out.x == 0 && out.w == 320);
+
+    /* a re-snap moves it, and the prebox stays the restore box */
+    CHECK(es_registry_remember(&reg, &w1, &left, &right,
+                               ES_ZONE_RIGHT) == ES_OK);
+    CHECK(es_registry_snapped(&reg, &w1, &out) == 1);
+    CHECK(out.x == 320 && out.w == 320);
+
+    /* restore consumes the entry, forget drops it */
+    CHECK(es_registry_restore(&reg, &w1, &right, &out) == ES_OK);
+    CHECK(out.x == 100);
+    CHECK(es_registry_snapped(&reg, &w1, &out) == 0);
+    CHECK(out.x == 100);
+    CHECK(es_registry_remember(&reg, &w2, &pre, &left,
+                               ES_ZONE_LEFT) == ES_OK);
+    es_registry_forget(&reg, &w2);
+    CHECK(es_registry_snapped(&reg, &w2, 0) == 0);
+
+    /* the last slot is found as well as the first */
+    es_registry_init(&reg);
+    for (i = 0; i < ES_REGISTRY_SLOTS; i++) {
+        ESRect s = rect(i, 2 * i, 10 + i, 20 + i);
+
+        CHECK(es_registry_remember(&reg, &refs[i], &pre, &s,
+                                   ES_ZONE_LEFT) == ES_OK);
+    }
+    CHECK(es_registry_snapped(&reg, &refs[ES_REGISTRY_SLOTS - 1],
+                              &out) == 1);
+    CHECK(out.x == ES_REGISTRY_SLOTS - 1 &&
+          out.y == 2 * (ES_REGISTRY_SLOTS - 1) &&
+          out.w == 10 + ES_REGISTRY_SLOTS - 1 &&
+          out.h == 20 + ES_REGISTRY_SLOTS - 1);
+    CHECK(es_registry_snapped(&reg, &refs[0], &out) == 1);
+    CHECK(out.x == 0 && out.y == 0 && out.w == 10 && out.h == 20);
+}
+
 int main(void)
 {
     test_remember_restore_roundtrip();
@@ -139,6 +200,7 @@ int main(void)
     test_independent_change_drops_entry();
     test_slack_tolerates_app_rounding();
     test_forget_and_capacity();
+    test_snapped_accessor();
 
     if (g_failures == 0) {
         printf("registry_test: all tests passed\n");

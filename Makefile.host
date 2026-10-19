@@ -10,7 +10,7 @@ BUILD ?= build/host
 
 TESTS := $(BUILD)/zones_test $(BUILD)/engine_test $(BUILD)/registry_test \
          $(BUILD)/panels_test $(BUILD)/config_test $(BUILD)/gutter_test \
-         $(BUILD)/offscreen_test
+         $(BUILD)/offscreen_test $(BUILD)/divtokens_test
 
 .PHONY: all test clean
 
@@ -36,13 +36,17 @@ $(BUILD)/config_test: core/config.c core/config_test.c core/config.h core/engine
 	mkdir -p "$(BUILD)"
 	$(CC) $(CFLAGS) -o "$@" core/config.c core/engine.c core/zones.c core/config_test.c
 
-$(BUILD)/gutter_test: core/gutter.c core/gutter_test.c core/gutter.h core/registry.h core/zones.h include/edgesnap_types.h
+$(BUILD)/gutter_test: core/gutter.c core/registry.c core/zones.c core/gutter_test.c core/gutter.h core/registry.h core/zones.h include/edgesnap_types.h
 	mkdir -p "$(BUILD)"
-	$(CC) $(CFLAGS) -o "$@" core/gutter.c core/registry.c core/gutter_test.c
+	$(CC) $(CFLAGS) -o "$@" core/gutter.c core/registry.c core/zones.c core/gutter_test.c
 
 $(BUILD)/offscreen_test: core/offscreen.c core/offscreen_test.c core/offscreen.h
 	mkdir -p "$(BUILD)"
 	$(CC) $(CFLAGS) -o "$@" core/offscreen.c core/offscreen_test.c
+
+$(BUILD)/divtokens_test: core/divtokens.c core/divtokens_test.c core/divtokens.h core/gutter.h core/registry.h core/zones.h include/edgesnap_types.h
+	mkdir -p "$(BUILD)"
+	$(CC) $(CFLAGS) -o "$@" core/divtokens.c core/divtokens_test.c
 
 test: $(TESTS)
 	./$(BUILD)/zones_test
@@ -52,6 +56,7 @@ test: $(TESTS)
 	./$(BUILD)/config_test
 	./$(BUILD)/gutter_test
 	./$(BUILD)/offscreen_test
+	./$(BUILD)/divtokens_test
 
 clean:
 	rm -f $(TESTS)

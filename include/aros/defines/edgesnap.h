@@ -519,6 +519,57 @@ __BEGIN_DECLS
 
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_QueryDividers_WB(__EdgeSnapBase, __arg1, __arg2, __arg3, __arg4) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC4(LONG, ESnap_QueryDividers,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(struct ESnapDividerInfo *, (__arg2), A0), \
+         AROS_LCA(ULONG, (__arg3), D1), \
+         AROS_LCA(ULONG *, (__arg4), A1), \
+        struct Library *, (__EdgeSnapBase), 36, EdgeSnap);\
+})
+
+#define ESnap_QueryDividers(arg1, arg2, arg3, arg4) \
+    __ESnap_QueryDividers_WB(__EDGESNAP_LIBBASE, (arg1), (arg2), (arg3), (arg4))
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_MoveDividerT_WB(__EdgeSnapBase, __arg1, __arg2, __arg3, __arg4) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC4(LONG, ESnap_MoveDividerT,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(LONG, (__arg2), D1), \
+         AROS_LCA(ULONG, (__arg3), D2), \
+         AROS_LCA(LONG *, (__arg4), A0), \
+        struct Library *, (__EdgeSnapBase), 37, EdgeSnap);\
+})
+
+#define ESnap_MoveDividerT(arg1, arg2, arg3, arg4) \
+    __ESnap_MoveDividerT_WB(__EDGESNAP_LIBBASE, (arg1), (arg2), (arg3), (arg4))
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
+#if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)
+
+#define __ESnap_QueryDividerWindows_WB(__EdgeSnapBase, __arg1, __arg2, __arg3, __arg4) ({\
+        AROS_LIBREQ(EdgeSnapBase,2)\
+        AROS_LC4(LONG, ESnap_QueryDividerWindows,\
+         AROS_LCA(ULONG, (__arg1), D0), \
+         AROS_LCA(ULONG *, (__arg2), A0), \
+         AROS_LCA(ULONG, (__arg3), D1), \
+         AROS_LCA(ULONG *, (__arg4), A1), \
+        struct Library *, (__EdgeSnapBase), 38, EdgeSnap);\
+})
+
+#define ESnap_QueryDividerWindows(arg1, arg2, arg3, arg4) \
+    __ESnap_QueryDividerWindows_WB(__EDGESNAP_LIBBASE, (arg1), (arg2), (arg3), (arg4))
+
+#endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
+
 __END_DECLS
 
 #endif /* DEFINES_EDGESNAP_H*/
