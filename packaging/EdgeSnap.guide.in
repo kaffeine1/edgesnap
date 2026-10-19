@@ -1,11 +1,11 @@
 @database EdgeSnap
 @$VER: EdgeSnap.guide %%VER%%
 @author "Michele Dipace <michele.dipace@kaffeine.net>"
-@(c) "Copyright (c) 2026 Michele Dipace - MIT licence"
+@(c) "Copyright (c) 2026 Michele Dipace, MIT licence"
 @wordwrap
 
-@node MAIN "EdgeSnap 0.42 beta"
-@{b}EdgeSnap 0.42 beta@{ub}
+@node MAIN "EdgeSnap 0.43 beta"
+@{b}EdgeSnap 0.43 beta@{ub}
 Window snapping for AmigaOS 4.x, MorphOS and AROS (x86_64, aarch64, i386)
 by Michele Dipace <michele.dipace@kaffeine.net>
 
@@ -24,7 +24,7 @@ by Michele Dipace <michele.dipace@kaffeine.net>
 
 Drag a window by its title bar until the @{b}pointer@{ub} touches a
 screen edge or a corner. A frame shows where the window will land;
-let go and it fills that half or that quarter of the screen - the
+let go and it fills that half or that quarter of the screen. It is the
 behaviour Windows and macOS users take for granted, on systems that
 never had it.
 
@@ -75,8 +75,8 @@ there is none; and no settings file is written, since the preferences
 window writes one when you press Save.
 
 @{b}Updating@{ub} is installing again. The running copy is stopped,
-the old library is let go of, and the new one takes over - no reboot,
-and nothing for you to type. On the Raspberry Pi the old library cannot
+the old library is let go of, and the new one takes over, with no
+reboot and nothing for you to type. On the Raspberry Pi the old library cannot
 be let go of yet, so a new one takes over at the next boot. Your
 settings are left alone: the commented template is only offered when
 ENVARC:EdgeSnap.prefs does not exist yet, and a file already there is
@@ -108,7 +108,7 @@ it to 0 for the corner itself.
 
 If a window is already snapped to one side, snapping another to the
 other side gives it the space that is actually left, not a rigid
-half - so a sixty/forty split stays sixty/forty.
+half, so a sixty/forty split stays sixty/forty.
 
 @{b}Dragging a snapped window away@{ub}
 Drag a snapped window by its title bar and let go away from the edges,
@@ -156,7 +156,7 @@ together; on AmigaOS 4 and MorphOS the pointer becomes a double arrow
 and the windows follow as you drag, on AROS only the line follows and
 the windows change when you let go, the way AROS moves its own
 windows. Dragging far towards one side stops where a window would
-become smaller than it allows - that is a limit, not a fault. Three or
+become smaller than it allows: that is a limit, not a fault. Three or
 four windows that share one line share one seam.
 
 @{b}Hotkeys@{ub}
@@ -183,7 +183,7 @@ four windows that share one line share one seam.
   @{b}ctrl alt d@{ub}              print a window dump, to diagnose dock detection
 
 @{b}Changing the settings@{ub}
-Open @{b}SYS:Prefs/EdgeSnap@{ub} - the installer puts it there, with
+Open @{b}SYS:Prefs/EdgeSnap@{ub}: the installer puts it there, with
 the rest of the system's preferences. Change what you like and press
 Save; EdgeSnap follows immediately, without being restarted. Use
 applies the change for this session only, Cancel changes nothing.
@@ -228,12 +228,12 @@ the edges.
       they can and 5 when they cannot.
 
 Run from a Shell rather than with @{b}Run >NIL:@{ub} (on AROS
-@{b}Run >NIL: <NIL:@{ub}) and it prints what it decides, drag by drag -
-useful when something does not behave as expected.
+@{b}Run >NIL: <NIL:@{ub}) and it prints what it decides, drag by drag,
+which helps when something does not behave as expected.
 
 Settings are re-read while it runs: whatever writes
-@{b}ENV:EdgeSnap.prefs@{ub} - the preferences window, an editor, a
-script - is noticed at once.
+@{b}ENV:EdgeSnap.prefs@{ub} (the preferences window, an editor, a
+script) is noticed at once.
 
 @endnode
 
@@ -241,9 +241,10 @@ script - is noticed at once.
 @{b}For programmers@{ub}
 
 @{b}Two version numbers, and why@{ub}
-EdgeSnap is 0.42: a beta, complete in what it does and tested on real
-MorphOS hardware, on a Raspberry Pi 400 with AROS, and on AmigaOS 4,
-AROS x86_64 and AROS i386 under emulation.
+EdgeSnap is 0.43: a beta, complete in what it does. This version was
+tested on real MorphOS hardware and on AmigaOS 4, MorphOS and AROS
+x86_64 under emulation; earlier ones also on a Raspberry Pi 400 with
+AROS and on AROS i386.
 @{b}edgesnap.library@{ub} says %%LIBVER%%, and that is not a mistake: a
 library's version is its interface, not its product. It reached 2 when
 the seam was added to the API, and the revision climbs with every build

@@ -125,7 +125,7 @@ Short:        Tile windows by dragging them to an edge
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/cdity
-Version:      0.42 (beta)
+Version:      0.43 (beta)
 Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros; aarch64-aros; i386-aros
 License:      MIT
 
@@ -144,7 +144,7 @@ will land, and letting go fills that half or quarter of the screen.
     disables or removes it like any other.
 
 The behaviour lives in edgesnap.library, not in the commodity, so any
-program can ask for the same things - the commodity is a client like
+program can ask for the same things: the commodity is a client like
 any other. esnaptest, in the package, is a worked example.
 
 AmigaOS 4 and MorphOS share one archive; AROS has one for each
@@ -154,7 +154,7 @@ on a Pi 400; the i386 build is for the 32-bit AROS with ABI v0, and I
 tried it on AROS One x86.
 
 TO INSTALL: double-click the Install icon. It recognises the system,
-proposes the matching build, and puts everything where it belongs -
+proposes the matching build, and puts everything where it belongs,
 including one line in S:User-Startup (on AROS the commodity goes into
 SYS:WBStartup instead), so snapping is simply there from the next boot.
 On the Raspberry Pi and on 32-bit AROS, and on any AROS whose own
@@ -162,9 +162,14 @@ Installer cannot copy files, Install does the work itself after one
 question. Updating is installing again: no reboot needed, except that
 on the Raspberry Pi a new library takes over at the next boot.
 
-Docks are now recognised in two more shapes: a short one standing
-along a side of the screen, and a panel kept behind the windows, as
-Ambient allows. Snapped windows used to cover both.
+A snapped window that you drag away by its title bar, and let go away
+from the edges, now gets back the size it had before it was snapped,
+under the pointer, as on Windows. "Old size when dragged away" in the
+preferences turns that off.
+
+A seam between windows kept apart by a gap, as a tiling window manager
+lays them out, keeps the gap when dragged, and the whole gap can be
+grabbed, not only a thin strip in its middle.
 
 A corner is now the corner itself. If you saved EdgeSnap's preferences
 with an earlier version, they keep the corner size they had, 4, a band

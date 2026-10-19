@@ -98,22 +98,22 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-EdgeSnap now runs on AROS for the Raspberry Pi as well: an aarch64
-build, with an archive of its own, tried on a Raspberry Pi 400. And on
-the 32-bit AROS: an i386 build for ABI v0, as on AROS One x86, added to
-0.42 with an archive of its own.
+A snapped window that you drag away by its title bar, and let go away
+from the edges, now gets back the size it had before it was snapped. It
+comes back under the pointer, which keeps its place along the title bar,
+as on Windows, and this works for every zone: a half, a quarter, the
+whole screen. If you would rather keep the snapped size, untick "Old
+size when dragged away" in the preferences.
 
-Docks are recognised in two more shapes. A short dock standing along a
-side of the screen was taken for a small widget, and a panel kept
-behind the windows, as Ambient allows, was never looked at: windows
-snapped over both. Now they keep their edge clear, so margins set by
-hand to keep a dock uncovered can go back to 0.
+For tiling window managers, edgesnap.library 2.24 lists the seams
+between the windows of a layout group, each with a token that names its
+windows, and moves a seam by its token alone. A seam between windows
+kept apart by a gap keeps that gap when you drag it, and the whole gap
+lights up and can be grabbed, not only a thin strip in its middle.
 
-Install recognises which AROS it runs on, x86_64, aarch64 or i386, and
-stops with an explanation when the archive is the one for another
-processor. On the Raspberry Pi and on 32-bit AROS it installs EdgeSnap
-by itself, with no Installer, as it does on any AROS whose own Installer
-cannot copy files.
+The four archives now come out together: one for AmigaOS 4 and MorphOS,
+and one each for AROS x86_64, AROS on the Raspberry Pi (aarch64) and
+32-bit AROS (i386).
 """),
     ("WHAT IT IS", """
 EdgeSnap gives AmigaOS 4.x, MorphOS and AROS (x86_64, aarch64 and i386)
@@ -129,10 +129,11 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. I checked it on real MorphOS hardware, on a
-Raspberry Pi 400 with AROS aarch64, and under emulation on AmigaOS 4.1,
-AROS One 1.3 x86_64 and AROS One x86, each time by installing the
-package. On one AROS installation
+Version %s is still a beta. I checked it on real MorphOS hardware and
+under emulation on AmigaOS 4.1, MorphOS and AROS One 1.3 x86_64; the
+builds for AROS on the Raspberry Pi and for 32-bit AROS come from the
+same sources, and I tried them on those systems with 0.42. On one AROS
+installation
 Wanderer's drawers can show black areas after a snap; another program
 that moves windows does the same there, and the AROS developers are
 looking into how Wanderer redraws a drawer. All of it remains worth
@@ -161,8 +162,10 @@ a new library takes over at the next boot.
     ("USING IT", """
   - Drag a window's title bar until the POINTER touches an edge or a
     corner, then release.
-  - Grab the seam between two tiled windows - the pointer becomes a
-    double arrow - and drag it to re-balance them.
+  - Grab the seam between two tiled windows (the pointer becomes a
+    double arrow) and drag it to re-balance them.
+  - Drag a snapped window away from the edges and it gets back the
+    size it had before.
   - ctrl alt cursor left/right/up snap the active window,
     ctrl alt cursor down puts it back where it was, ctrl alt c puts
     it in the middle at the size it has, and ctrl alt z opens a
@@ -193,7 +196,7 @@ system.
 
 The library says %s while EdgeSnap says %s, and that is not a mistake:
 a library's version is its interface, not its product. While EdgeSnap is
-below 1.0 treat that interface as not frozen - methods are only ever
+below 1.0 treat that interface as not frozen: methods are only ever
 appended, never moved or removed, but names and arguments may still
 change.
 """ % (LIBRARY_VERSION, VERSION)),
@@ -202,7 +205,9 @@ The icons are by Carlo Spadoni, who drew them for EdgeSnap and let me
 ship them with it. The testers on the AROSWorld forum found the black
 areas in Wanderer's drawers, the colour left along the seam and the
 traces of the preview frame on one graphics driver, each with a video
-or a log that made the cause findable.
+or a log that made the cause findable. A MorphOS user asked for the old
+size back when a snapped window is dragged away, and the author of a
+tiling window manager for the seams of a group.
 """),
     ("LICENCE AND SOURCE", """
 MIT. The full text is in the LICENSE file inside the archive.

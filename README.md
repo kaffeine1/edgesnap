@@ -69,6 +69,16 @@ first gesture is the drag.
 
 *The MorphOS preferences window (MUI), version 0.2. The AmigaOS 4 window is the same sections in ReAction: both are generated from one settings table.*
 
+- **0.43 (2026-10-19):** a snapped window dragged away by its title bar
+  and let go away from the edges gets back the size it had before the
+  snap, under the pointer, as on Windows; a box in the preferences,
+  "Old size when dragged away", turns it off. For tiling window
+  managers, `edgesnap.library` 2.24 lists the seams between the windows
+  of a layout group, each with a token that moves it, and a seam
+  between windows kept apart by a gap keeps the gap when dragged, with
+  all of the gap to grab it by. The four archives, AROS i386 included,
+  come out together. Checked on real MorphOS hardware and under
+  emulation on AmigaOS 4.1, MorphOS and AROS One 1.3.
 - **0.42 (2026-10-10):** an AROS build for the Raspberry Pi (aarch64),
   in an archive of its own, tried on a Raspberry Pi 400; docks are
   recognised in two more shapes, a short one standing along a side of
@@ -97,7 +107,7 @@ first gesture is the drag.
   roles, work areas and layout groups for tiling clients. Checked on
   real MorphOS hardware and under emulation on AmigaOS 4.1 and AROS One
   1.3, each time by installing the package over an earlier version.
-- **Phase 0 (spike): validated on BOTH targets** - AmigaOS 4 (QEMU,
+- **Phase 0 (spike): validated on BOTH targets**: AmigaOS 4 (QEMU,
   2026-08-11) and real MorphOS hardware (2026-08-26): drag detection,
   snapping and the outline preview all work, including the
   MorphOS-specific CxCustom gate.
@@ -162,29 +172,29 @@ first gesture is the drag.
   `include/edgesnap_types.h` (zones, errors, capabilities). The draft
   public contract is `include/edgesnap.h`.
 - **Phase 2 (reference commodity): ported.** `commodity/edgesnap_cx.c`
-  now runs entirely on the core - the frontend feeds window facts and
+  now runs entirely on the core: the frontend feeds window facts and
   executes emitted actions, with zero snap logic of its own (one snap
   path shared by drag and hotkeys, the road ESnap_SnapWindow() will
   pave). Verified in-VM on OS4; the MorphOS binary builds from the same
   source. **Preferences** are in: `ENV(ARC):EdgeSnap.prefs` plus Shell
   arguments, parsed by the portable `core/config.c` (zones, edge/corner
   sensitivity, preview, dock detection and margin, own margins, bypass
-  qualifier), and the native preferences windows - ReAction and MUI -
+  qualifier), and the native preferences windows (ReAction and MUI)
   are built from the same table.
 - **Phase 4 (native integration): in progress.** The API surface now
-  lives in `library/edgesnap_body.c` behind a semaphore - snap, unsnap,
+  lives in `library/edgesnap_body.c` behind a semaphore: snap, unsnap,
   query, exclude, options, capabilities, plus the interactive path that
   samples windows, runs the engine and performs the snap. The commodity
   contributes only raw input facts and the drawing of the preview
   frame, and gets a report back to log (a library never prints).
   **The AmigaOS 4 library is real**: `library/os4/` builds
   `edgesnap.library` (ELF, manager + "main" interfaces, no C runtime),
-  and `tools/esnaptest.c` - a client that knows nothing of EdgeSnap's
-  internals - opens it from LIBS: and drives the whole API, including
+  and `tools/esnaptest.c`, a client that knows nothing of EdgeSnap's
+  internals, opens it from LIBS: and drives the whole API, including
   the error contract (a stale window answers ES_ERR_STALE, it does not
   crash). The **MorphOS skeleton** (`library/morphos/`) is written and
-  builds - classic jump table, EmulLibEntry gates, `.fd` and
-  `ppcinline/` stubs - and is **runtime-validated on the MorphOS QEMU
+  builds (classic jump table, EmulLibEntry gates, `.fd` and
+  `ppcinline/` stubs) and is **runtime-validated on the MorphOS QEMU
   VM**: the same third-party client opens it, runs the full sequence
   and gets the documented errors for misuse. Both skeletons are proven
   on their own system. **The commodity is now a client**: it opens
@@ -208,10 +218,10 @@ What the spike does today:
 
 - drag a window's title bar so the **pointer** touches a screen edge or
   corner: an outline frame previews where the window will land (four thin
-  borderless windows - no compositing needed); release: the window snaps
+  borderless windows, no compositing needed); release: the window snaps
   to half / quarter / usable-maximum;
 - the divider: when two windows end up side by side, a thin handle
-  appears on the seam - drag it and both resize, so half/half becomes
+  appears on the seam: drag it and both resize, so half/half becomes
   60/40 without touching either window's size gadget (library side
   host-tested and proven in-VM; the drag itself awaits a hand on the
   mouse);
@@ -233,7 +243,7 @@ What the spike does today:
   `ctrl alt c` = the window's own size in the middle of the screen area,
   `ctrl alt z` = a selector under the pointer, nine cells that are
   the map of the screen, by mouse or cursor keys;
-- `EdgeSnap QUIT` stops a running instance from a Shell or a script -
+- `EdgeSnap QUIT` stops a running instance from a Shell or a script,
   which is how an update replaces itself without a reboot; launching it
   twice by accident is simply refused, and the running one carries on;
 - prints every decision to stdout: run it from a Shell, watch it think.
@@ -242,13 +252,13 @@ What the spike does today:
 
 Suggested order for studying the code:
 
-1. [docs/DESIGN.md](docs/DESIGN.md) - the whole architecture, why a
+1. [docs/DESIGN.md](docs/DESIGN.md): the whole architecture, why a
    commodity + library, the input-handler rule, the roadmap, and the
    spike findings so far.
-2. [core/zones.h](core/zones.h) / [core/zones.c](core/zones.c) - the pure
+2. [core/zones.h](core/zones.h) / [core/zones.c](core/zones.c): the pure
    C89 zone geometry, with [core/zones_test.c](core/zones_test.c) as its
    executable specification.
-3. [commodity/edgesnap_cx.c](commodity/edgesnap_cx.c) top to bottom -
+3. [commodity/edgesnap_cx.c](commodity/edgesnap_cx.c) top to bottom:
    the sections mirror the architecture: library bases and the
    OS4/MorphOS type differences; the shared handler/task state and the
    CxCustom action (with the MorphOS 68k-ABI gate); the non-blocking
@@ -266,25 +276,25 @@ struct Window * is never used without re-validation via the screen lists.
 
 ## Layout
 
-- `core/` - pure C89, zero Amiga dependencies, unit-tested on the host:
+- `core/`: pure C89, zero Amiga dependencies, unit-tested on the host:
   zone geometry, the drag/snap engine, the snap registry
-- `include/` - public headers: portable constants (edgesnap_types.h) and
+- `include/`: public headers: portable constants (edgesnap_types.h) and
   the draft platform API contract (edgesnap.h)
-- `library/` - edgesnap.library's body: the one implementation behind
+- `library/`: edgesnap.library's body: the one implementation behind
   the public API (state, validation, snapping, the interactive path),
   wrapped by the platform skeletons and linked by the commodity
-- `commodity/` - the reference commodity (OS4 + MorphOS from one
+- `commodity/`: the reference commodity (OS4 + MorphOS from one
   source): raw input facts in, preview frame drawn, nothing decided
-- `tools/` - `esnaptest`, a third-party client used to exercise the ABI
-- `Makefile.host` / `Makefile.os4` / `Makefile.morphos` - commodity and
+- `tools/`: `esnaptest`, a third-party client used to exercise the ABI
+- `Makefile.host` / `Makefile.os4` / `Makefile.morphos`: commodity and
   host lanes; `Makefile.os4lib` builds edgesnap.library and
   `Makefile.os4tool` the test client
-- `scripts/` - container build wrappers
+- `scripts/`: container build wrappers
 
 ## Installing it so it is simply always there
 
 EdgeSnap is a commodity: a program that stays resident. The user never
-starts it by hand - it is installed once and comes up with the system,
+starts it by hand: it is installed once and comes up with the system,
 like every other commodity. From the release volume:
 
 ```text
@@ -298,7 +308,7 @@ is enabled, disabled or removed.
 
 `S:User-Startup` rather than `SYS:WBStartup` is a deliberate choice:
 it needs no icon and works on installations that have no WBStartup
-drawer at all - which the OS4 test machine turned out to be. Users who
+drawer at all, which the OS4 test machine turned out to be. Users who
 prefer the Workbench route can drop `EdgeSnap` and `EdgeSnap.info`
 into `SYS:WBStartup` instead; the icon carries the settings as
 tooltypes, and the commodity reads them (and stays silent, since a
