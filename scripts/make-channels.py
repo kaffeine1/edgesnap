@@ -71,14 +71,15 @@ AROS_REPLACES_AMINET = "util/cdity/edgesnap.x86_64-aros.lha"  # 0.41, checked 20
 AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 # The AROS Archives give a replaced file a NEW id: the 0.4 upload replaced
 # 3393 and became 3441, the 0.41 one replaced 3441 and became 3464, the
-# 0.42 one replaced 3464 and became 3497. Before each release, read both
-# off the entries' pages (the fileid= in their links) and set them here.
-AROS_ARCHIVES_FILEID = 3497  # x86_64, 0.42, checked 2026-10-12
+# 0.42 one replaced 3464 and became 3497, the 0.43 one replaced 3497 and
+# became 3532. Before each release, read them off the entries' pages (the
+# fileid= in their links) and set them here.
+AROS_ARCHIVES_FILEID = 3532  # x86_64, 0.43, checked 2026-10-20
 # The aarch64 entry, new in 0.42, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_ARM = 3498  # aarch64, 0.42, checked 2026-10-12
+AROS_ARCHIVES_FILEID_ARM = 3533  # aarch64, 0.43, checked 2026-10-20
 AROS_REPLACES_ARCHIVES_ARM = "utility/workbench/edgesnap.aarch64-aros.lha"
 # The i386 entry, added to 0.42 on 2026-10-15, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_I386 = 3516  # i386, 0.42, checked 2026-10-16
+AROS_ARCHIVES_FILEID_I386 = 3534  # i386, 0.43, checked 2026-10-20
 AROS_REPLACES_ARCHIVES_I386 = "utility/workbench/edgesnap.i386-aros.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
