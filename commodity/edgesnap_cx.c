@@ -44,6 +44,8 @@
 #include <exec/tasks.h>
 #include <dos/dos.h>       /* RETURN_*, SIGBREAKF_CTRL_C                */
 #include <dos/notify.h>    /* StartNotify: prefs that change while we run */
+#include <dos/dostags.h>   /* SystemTags: the preferences window        */
+#include <dos/rdargs.h>    /* ReadArgs on an ARexx command line         */
 #include <devices/inputevent.h>
 #include <libraries/commodities.h>
 #include <intuition/intuition.h>
@@ -58,12 +60,20 @@
 #include <workbench/startup.h>
 #include <workbench/workbench.h>
 
+#include <rexx/storage.h>  /* the ARexx port: struct RexxMsg, RXCOMM    */
+#include <rexx/errors.h>   /* RC_OK, RC_WARN, RC_ERROR                  */
+
 #include <proto/dos.h>
 #include <proto/exec.h>
 #include <proto/icon.h>
 #include <proto/intuition.h>
 #include <proto/graphics.h>
 #include <proto/commodities.h>
+#ifdef __AROS__
+/* The base as a plain struct Library, as the other two systems have it. */
+#define __REXXSYSLIB_STDLIBBASE__ 1
+#endif
+#include <proto/rexxsyslib.h>
 
 #ifdef __MORPHOS__
 #include <emul/emulregs.h>
@@ -226,11 +236,15 @@ struct GfxBase *GfxBase;
 #endif
 
 struct Library *CxBase;
+/* For the ARexx port only, and not required: without it there is no
+ * port, and everything else works as before. */
+struct Library *RexxSysBase;
 
 #ifdef __amigaos4__
 struct IntuitionIFace *IIntuition;
 struct GraphicsIFace *IGraphics;
 struct CommoditiesIFace *ICommodities;
+struct RexxSysIFace *IRexxSys;
 #endif
 
 #ifdef __MORPHOS__
@@ -3873,6 +3887,472 @@ static int spike_open_libs(void)
     return 1;
 }
 
+/* ------------------------------------------------- Exchange's switch */
+
+static CxObj *g_broker;
+
+/*
+ * Exchange's Disable and Enable, and the ARexx port's: the broker stops
+ * or starts taking input, and the library's engine with it. A drag in
+ * flight when it stops is finished off, so nothing is left drawn.
+ */
+static void spike_set_enabled(int on)
+{
+    if (g_broker == NULL) {
+        return;
+    }
+    if (on) {
+        ActivateCxObj(g_broker, 1L);
+        ES_CALL(ESnap_Enable)(TRUE);
+    } else {
+        struct ESnapReport r;
+
+        ActivateCxObj(g_broker, 0L);
+        ES_CALL(ESnap_Enable)(FALSE);
+        ES_CALL(ESnap_ResetInput)(&r);
+        spike_apply_report(&r);
+        spike_log_flush();
+    }
+}
+
+/* ------------------------------------------------ the preferences */
+
+/*
+ * The preferences window is a program of its own, where the installers
+ * put it on every system. It is started and left to run: nothing here
+ * waits for it, and it reaches us the way any editor of the file does.
+ */
+static void spike_open_prefs(void)
+{
+    BPTR in = Open((STRPTR)"NIL:", MODE_OLDFILE);
+    BPTR out = Open((STRPTR)"NIL:", MODE_NEWFILE);
+    LONG rc = -1;
+
+    if (in != 0 && out != 0) {
+        rc = SystemTags((STRPTR)"SYS:Prefs/EdgeSnap",
+                        SYS_Input, in,
+                        SYS_Output, out,
+                        SYS_Asynch, TRUE,
+                        NP_StackSize, 65536,
+                        TAG_DONE);
+    }
+    if (rc == -1) {
+        /* not started: the two handles are still ours */
+        if (in != 0) {
+            Close(in);
+        }
+        if (out != 0) {
+            Close(out);
+        }
+        spike_out("edgesnap: could not start SYS:Prefs/EdgeSnap\n");
+    }
+}
+
+/* ------------------------------------------------------- ARexx port */
+
+/*
+ * The port is called EDGESNAP. A script, a button in a dock or a file
+ * manager, or a Shell line with rx can ask for what the hotkeys do:
+ *
+ *   SNAP ZONE/A,TITLE/K   LEFT RIGHT MAXIMIZE TOPLEFT TOPRIGHT
+ *                         BOTTOMLEFT BOTTOMRIGHT CENTRE
+ *   RESTORE TITLE/K       put the window back where it was
+ *   QUERY TITLE/K         RESULT: where it is snapped, NONE if nowhere
+ *   SELECT                the selector, under the pointer
+ *   PREFS                 the preferences window
+ *   ENABLE, DISABLE       what Exchange's buttons do
+ *   VERSION, HELP         RESULT: what runs, and what it understands
+ *   QUIT                  stop EdgeSnap
+ *
+ * Without TITLE a command acts on the active window, which is the
+ * Shell's own when the line comes from a Shell: TITLE is an AmigaDOS
+ * pattern matched against the window titles without regard to case,
+ * screens from the front, and the first window that matches is taken.
+ * Nothing new happens here: every command goes through the calls the
+ * hotkeys use, and the library checks the window as it does for them.
+ *
+ * Return codes as ARexx has them: 0 done, 5 refused (by the library,
+ * whose own code is the secondary result, or no window to act on), 10
+ * a command or an argument this port does not know.
+ */
+#define ES_REXX_PORT "EDGESNAP"
+#define ES_REXX_LINE 256
+
+#ifdef __AROS__
+typedef SIPTR ESRexxArg;                 /* what ReadArgs fills there */
+#define ES_RX_RESULT2(v) ((IPTR)(v))
+#else
+typedef LONG ESRexxArg;
+#define ES_RX_RESULT2(v) ((LONG)(v))
+#endif
+
+static struct MsgPort *g_rexx_port;
+
+static void spike_rexx_libs_close(void)
+{
+#ifdef __amigaos4__
+    if (IRexxSys != NULL) {
+        DropInterface((struct Interface *)IRexxSys);
+        IRexxSys = NULL;
+    }
+#endif
+    if (RexxSysBase != NULL) {
+        CloseLibrary(RexxSysBase);
+        RexxSysBase = NULL;
+    }
+}
+
+/* 1 when the port is up. Without rexxsyslib.library there is no port,
+ * and nothing else changes. */
+static int spike_rexx_open(void)
+{
+    struct MsgPort *port;
+    int added = 0;
+
+    RexxSysBase = OpenLibrary("rexxsyslib.library", 36);
+    if (RexxSysBase == NULL) {
+        return 0;
+    }
+#ifdef __amigaos4__
+    IRexxSys = (struct RexxSysIFace *)GetInterface(RexxSysBase, "main", 1,
+                                                   NULL);
+    if (IRexxSys == NULL) {
+        spike_rexx_libs_close();
+        return 0;
+    }
+#endif
+    port = CreateMsgPort();
+    if (port == NULL) {
+        spike_rexx_libs_close();
+        return 0;
+    }
+    port->mp_Node.ln_Name = (void *)ES_REXX_PORT;
+    port->mp_Node.ln_Pri = 0;
+    /* Looked for and added under one Forbid, or two could both add it. */
+    Forbid();
+    if (FindPort((STRPTR)ES_REXX_PORT) == NULL) {
+        AddPort(port);
+        added = 1;
+    }
+    Permit();
+    if (!added) {
+        DeleteMsgPort(port);
+        spike_rexx_libs_close();
+        spike_out("edgesnap: the ARexx port " ES_REXX_PORT " is taken\n");
+        return 0;
+    }
+    g_rexx_port = port;
+    return 1;
+}
+
+static void spike_rexx_close(void)
+{
+    struct Message *msg;
+
+    if (g_rexx_port != NULL) {
+        RemPort(g_rexx_port);
+        /* Whatever came in before the port went is answered, not lost:
+         * a script waits for its reply. */
+        while ((msg = GetMsg(g_rexx_port)) != NULL) {
+            if (IsRexxMsg((struct RexxMsg *)msg)) {
+                ((struct RexxMsg *)msg)->rm_Result1 = RC_FATAL;
+                ((struct RexxMsg *)msg)->rm_Result2 = 0;
+            }
+            ReplyMsg(msg);
+        }
+        DeleteMsgPort(g_rexx_port);
+        g_rexx_port = NULL;
+    }
+    spike_rexx_libs_close();
+}
+
+static const struct {
+    const char *word;
+    ULONG zone;
+} rexx_zones[] = {
+    { "LEFT", ES_ZONE_LEFT },
+    { "RIGHT", ES_ZONE_RIGHT },
+    { "MAXIMIZE", ES_ZONE_MAX },
+    { "MAXIMISE", ES_ZONE_MAX },
+    { "MAX", ES_ZONE_MAX },
+    { "TOPLEFT", ES_ZONE_TOP_LEFT },
+    { "TOPRIGHT", ES_ZONE_TOP_RIGHT },
+    { "BOTTOMLEFT", ES_ZONE_BOTTOM_LEFT },
+    { "BOTTOMRIGHT", ES_ZONE_BOTTOM_RIGHT },
+    { "CENTRE", ES_ZONE_CENTRE },
+    { "CENTER", ES_ZONE_CENTRE }
+};
+
+#define REXX_ZONE_WORDS ((int)(sizeof(rexx_zones) / sizeof(rexx_zones[0])))
+
+/* What QUERY answers: the first word of each zone above, NONE for no
+ * zone, and PLACED for a rectangle a client chose (ES_ZONE_RECT). */
+static const char *spike_rexx_zone_word(ULONG zone)
+{
+    int i;
+
+    if (zone == ES_ZONE_RECT) {
+        return "PLACED";
+    }
+    for (i = 0; i < REXX_ZONE_WORDS; i++) {
+        if (rexx_zones[i].zone == zone) {
+            return rexx_zones[i].word;
+        }
+    }
+    return "NONE";
+}
+
+/*
+ * The window a command names: the active one, or with a TITLE pattern
+ * the first window that matches, screens from the front and on each
+ * screen the most recently opened first. It is found under LockIBase
+ * and used after it, as the active window is for a hotkey: the library
+ * checks it on every call and answers ES_ERR_STALE for one that went.
+ */
+static struct Window *spike_rexx_window(const char *pattern, int *bad)
+{
+    char tok[2 * ES_REXX_LINE + 2];
+    struct Screen *scr;
+    struct Window *w;
+    struct Window *found = NULL;
+    ULONG ilock;
+
+    *bad = 0;
+    if (pattern == NULL) {
+        return spike_active_window();
+    }
+    if (ParsePatternNoCase((STRPTR)pattern, (void *)tok,
+                           (LONG)sizeof(tok)) < 0) {
+        *bad = 1;
+        return NULL;
+    }
+    ilock = LockIBase(0);
+    for (scr = ES_IBASE->FirstScreen; scr != NULL && found == NULL;
+         scr = scr->NextScreen) {
+        for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+            if (w->Title != NULL &&
+                MatchPatternNoCase((STRPTR)tok, (STRPTR)w->Title)) {
+                found = w;
+                break;
+            }
+        }
+    }
+    UnlockIBase(ilock);
+    return found;
+}
+
+/*
+ * The arguments after the command word, read with the command's
+ * template exactly as a Shell command reads its own: ReadArgs wants
+ * the line to end in a newline. NULL for arguments that do not fit.
+ */
+static struct RDArgs *spike_rexx_args(const char *rest, const char *tmpl,
+                                      ESRexxArg *array, char *buf, int size)
+{
+    struct RDArgs *rda;
+    int n = 0;
+
+    while (rest[n] != '\0' && n < size - 2) {
+        buf[n] = rest[n];
+        n++;
+    }
+    if (rest[n] != '\0') {
+        return NULL;
+    }
+    buf[n++] = '\n';
+    buf[n] = '\0';
+    rda = (struct RDArgs *)AllocDosObject(DOS_RDARGS, NULL);
+    if (rda == NULL) {
+        return NULL;
+    }
+    rda->RDA_Source.CS_Buffer = (void *)buf;
+    rda->RDA_Source.CS_Length = n;
+    rda->RDA_Source.CS_CurChr = 0;
+    rda->RDA_Flags |= RDAF_NOPROMPT;
+    if (ReadArgs((STRPTR)tmpl, array, rda) == NULL) {
+        FreeDosObject(DOS_RDARGS, rda);
+        return NULL;
+    }
+    return rda;
+}
+
+static void spike_rexx_args_free(struct RDArgs *rda)
+{
+    FreeArgs(rda);
+    FreeDosObject(DOS_RDARGS, rda);
+}
+
+/* Nothing but blanks left after the command word? */
+static int spike_rexx_no_args(const char *rest)
+{
+    while (*rest == ' ' || *rest == '\t') {
+        rest++;
+    }
+    return *rest == '\0';
+}
+
+/*
+ * One command. Returns its RC; `result` gets the text of a RESULT,
+ * `secondary` the library's code on a refusal, and `quit` is set by
+ * QUIT.
+ */
+static LONG spike_rexx_command(const char *line, char *result, int size,
+                               LONG *secondary, int *quit)
+{
+    char word[16];
+    char buf[ES_REXX_LINE + 2];
+    ESRexxArg args[2];
+    struct RDArgs *rda;
+    struct Window *win;
+    int bad;
+    int n = 0;
+    LONG rc;
+
+    while (*line == ' ' || *line == '\t') {
+        line++;
+    }
+    while (*line != '\0' && *line != ' ' && *line != '\t' &&
+           n < (int)sizeof(word) - 1) {
+        word[n++] = *line++;
+    }
+    word[n] = '\0';
+    if (*line != '\0' && *line != ' ' && *line != '\t') {
+        return RC_ERROR;                 /* no command is that long */
+    }
+
+    if (spike_arg_is(word, "SNAP") || spike_arg_is(word, "RESTORE") ||
+        spike_arg_is(word, "QUERY")) {
+        int snap = spike_arg_is(word, "SNAP");
+        ULONG zone = ES_ZONE_NONE;
+
+        args[0] = 0;
+        args[1] = 0;
+        rda = spike_rexx_args(line, snap ? "ZONE/A,TITLE/K" : "TITLE/K",
+                              args, buf, (int)sizeof(buf));
+        if (rda == NULL) {
+            return RC_ERROR;
+        }
+        if (snap) {
+            int i;
+
+            for (i = 0; i < REXX_ZONE_WORDS; i++) {
+                if (spike_arg_is((const char *)args[0], rexx_zones[i].word)) {
+                    zone = rexx_zones[i].zone;
+                    break;
+                }
+            }
+            if (i == REXX_ZONE_WORDS) {
+                spike_rexx_args_free(rda);
+                return RC_ERROR;
+            }
+        }
+        win = spike_rexx_window((const char *)(snap ? args[1] : args[0]),
+                                &bad);
+        spike_rexx_args_free(rda);
+        if (bad) {
+            return RC_ERROR;
+        }
+        if (win == NULL) {
+            return RC_WARN;
+        }
+        if (snap) {
+            rc = ES_CALL(ESnap_SnapWindow)(win, zone);
+        } else if (spike_arg_is(word, "RESTORE")) {
+            rc = ES_CALL(ESnap_UnsnapWindow)(win);
+        } else {
+            rc = ES_CALL(ESnap_QueryWindow)(win, &zone);
+            if (rc == ES_OK) {
+                strncpy(result, spike_rexx_zone_word(zone),
+                        (size_t)(size - 1));
+                result[size - 1] = '\0';
+                return RC_OK;           /* a question moves nothing */
+            }
+        }
+        if (rc != ES_OK) {
+            *secondary = rc;
+            return RC_WARN;
+        }
+        spike_after_snap(rc);
+        return RC_OK;
+    }
+    if (!spike_rexx_no_args(line)) {
+        return RC_ERROR;                 /* the rest take no arguments */
+    }
+    if (spike_arg_is(word, "SELECT")) {
+        if (g_selector == NULL) {
+            spike_sel_open();
+        }
+        return RC_OK;
+    }
+    if (spike_arg_is(word, "PREFS")) {
+        spike_open_prefs();
+        return RC_OK;
+    }
+    if (spike_arg_is(word, "ENABLE") || spike_arg_is(word, "DISABLE")) {
+        spike_set_enabled(spike_arg_is(word, "ENABLE"));
+        return RC_OK;
+    }
+    if (spike_arg_is(word, "VERSION")) {
+        char text[64];
+
+        sprintf(text, "EdgeSnap %s library %ld.%ld", ES_VERSION,
+                (long)EdgeSnapBase->lib_Version,
+                (long)EdgeSnapBase->lib_Revision);
+        strncpy(result, text, (size_t)(size - 1));
+        result[size - 1] = '\0';
+        return RC_OK;
+    }
+    if (spike_arg_is(word, "HELP")) {
+        strncpy(result, "SNAP RESTORE QUERY SELECT PREFS ENABLE DISABLE "
+                        "VERSION HELP QUIT", (size_t)(size - 1));
+        result[size - 1] = '\0';
+        return RC_OK;
+    }
+    if (spike_arg_is(word, "QUIT")) {
+        *quit = 1;
+        return RC_OK;
+    }
+    return RC_ERROR;
+}
+
+/* Everything waiting at the port. Returns 1 when QUIT came. */
+static int spike_rexx_events(void)
+{
+    struct RexxMsg *rm;
+    int quit = 0;
+
+    while ((rm = (struct RexxMsg *)GetMsg(g_rexx_port)) != NULL) {
+        char result[ES_REXX_LINE];
+        LONG secondary = 0;
+        LONG rc = RC_ERROR;
+
+        result[0] = '\0';
+        if (!IsRexxMsg(rm)) {
+            ReplyMsg((struct Message *)rm);   /* not ours to answer */
+            continue;
+        }
+        if ((rm->rm_Action & RXCODEMASK) == RXCOMM && rm->rm_Args[0] != 0) {
+            rc = spike_rexx_command((const char *)rm->rm_Args[0], result,
+                                    (int)sizeof(result), &secondary, &quit);
+        }
+        rm->rm_Result1 = rc;
+        rm->rm_Result2 = 0;
+        if (rc == RC_OK) {
+            /* A RESULT only for a script that asked (OPTIONS RESULTS),
+             * as an argstring it then owns. */
+            if (result[0] != '\0' && (rm->rm_Action & RXFF_RESULT) != 0) {
+                rm->rm_Result2 = ES_RX_RESULT2(
+                    CreateArgstring((STRPTR)result, (ULONG)strlen(result)));
+            }
+        } else {
+            rm->rm_Result2 = ES_RX_RESULT2(secondary);
+        }
+        ReplyMsg((struct Message *)rm);
+        spike_log_flush();
+    }
+    return quit;
+}
+
 int main(int argc, char **argv)
 {
     struct MsgPort *port = NULL;
@@ -3884,7 +4364,7 @@ int main(int argc, char **argv)
     BYTE prefs_sig = -1;
     struct NotifyRequest prefs_notify;
     int prefs_watched = 0;
-    ULONG port_mask, engine_mask, prefs_mask = 0UL;
+    ULONG port_mask, engine_mask, prefs_mask = 0UL, rexx_mask = 0UL;
     int running = 1;
     int rc = RETURN_FAIL;
 
@@ -3977,6 +4457,7 @@ int main(int argc, char **argv)
         goto out;
     }
 
+    g_broker = broker;
     custom = CxCustom(ES_CX_ACTION, 0);
     AttachCxObj(broker, custom);
     if (!spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_left",
@@ -4060,6 +4541,12 @@ int main(int argc, char **argv)
     spike_out("edgesnap:        drag restore %s\n",
            g_cfg.drag_restore ? "on" : "off");
     spike_out("edgesnap:        (file: " ES_PREFS_ENV ")\n");
+    if (spike_rexx_open()) {
+        rexx_mask = 1UL << g_rexx_port->mp_SigBit;
+        spike_out("edgesnap: ARexx port " ES_REXX_PORT "\n");
+    } else {
+        spike_out("edgesnap: no ARexx port (rexxsyslib.library)\n");
+    }
     spike_dump_windows();
 
     port_mask = 1UL << port->mp_SigBit;
@@ -4073,10 +4560,17 @@ int main(int argc, char **argv)
         ULONG sel_mask = (g_selector != NULL) ?
             (1UL << g_selector->UserPort->mp_SigBit) : 0UL;
         ULONG sigs = Wait(port_mask | engine_mask | div_mask | sel_mask |
-                          prefs_mask | SIGBREAKF_CTRL_C);
+                          prefs_mask | rexx_mask | SIGBREAKF_CTRL_C);
 
         if (sel_mask != 0 && (sigs & sel_mask) != 0) {
             spike_sel_events();
+        }
+
+        if (rexx_mask != 0UL && (sigs & rexx_mask) != 0) {
+            if (spike_rexx_events()) {
+                spike_out("edgesnap: asked to quit by ARexx\n");
+                running = 0;
+            }
         }
 
         if (prefs_mask != 0UL && (sigs & prefs_mask) != 0) {
@@ -4110,19 +4604,10 @@ int main(int argc, char **argv)
                         }
                         break;
                     case CXCMD_DISABLE:
-                        ActivateCxObj(broker, 0L);
-                        {
-                            struct ESnapReport r;
-
-                            ES_CALL(ESnap_Enable)(FALSE);
-                            ES_CALL(ESnap_ResetInput)(&r);
-                            spike_apply_report(&r);
-                        }
-                        spike_log_flush();
+                        spike_set_enabled(0);
                         break;
                     case CXCMD_ENABLE:
-                        ActivateCxObj(broker, 1L);
-                        ES_CALL(ESnap_Enable)(TRUE);
+                        spike_set_enabled(1);
                         break;
                     default:
                         break;
@@ -4160,7 +4645,11 @@ out:
      * classic way to wedge commodities for every later client, which
      * is what the restart hang looked like from the outside.
      * edgesnap.library inherits this protocol.
+     *
+     * The ARexx port goes first of all: what comes after takes away
+     * what its commands use.
      */
+    spike_rexx_close();
     if (broker != NULL) {
         ActivateCxObj(broker, 0L);
     }
@@ -4169,6 +4658,7 @@ out:
     if (broker != NULL) {
         Delay(2L); /* ~40 ms: let any in-flight action return */
         DeleteCxObjAll(broker);
+        g_broker = NULL;
     }
     spike_preview_hide();
 #if defined(ES_PREVIEW_PIXELS) || defined(ES_PREVIEW_XOR)
