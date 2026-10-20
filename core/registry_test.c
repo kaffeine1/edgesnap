@@ -346,6 +346,36 @@ static void test_drag_out_refusals_keep_the_entry(void)
     }
 }
 
+/* A left or top resize moves the box far enough to count as a drag.
+ * Its changed size must keep the drop from consuming the snap entry. */
+static void test_drag_out_refuses_a_moved_edge(void)
+{
+    ESRegistry reg;
+    ESRect pre = rect(100, 100, 200, 150);
+    ESRect left = rect(0, 12, 320, 468);
+    ESRect resized, out;
+    int w1, top;
+
+    es_registry_init(&reg);
+    CHECK(es_registry_remember(&reg, &w1, &pre, &left,
+                               ES_ZONE_LEFT) == ES_OK);
+    for (top = 0; top <= 1; top++) {
+        resized = left;
+        if (top) {
+            resized.y += 40;
+            resized.h -= 40;
+        } else {
+            resized.x += 40;
+            resized.w -= 40;
+        }
+        out = rect(-1, -1, -1, -1);
+        CHECK(es_registry_drag_out(&reg, &w1, &left, &resized, &out) ==
+              ES_ERR_CHANGED);
+        CHECK(out.x == -1 && out.y == -1 && out.w == -1 && out.h == -1);
+        CHECK(es_registry_zone(&reg, &w1) == ES_ZONE_LEFT);
+    }
+}
+
 /* Distances beyond INT_MAX are far away, in either order. Checking all
  * four fields also covers the size checks of a drag restore. */
 static void test_extreme_coordinates_do_not_match(void)
@@ -398,6 +428,7 @@ int main(void)
     test_drag_out_restores_a_moved_window();
     test_drag_out_judges_the_start_by_its_size();
     test_drag_out_refusals_keep_the_entry();
+    test_drag_out_refuses_a_moved_edge();
 
     if (g_failures == 0) {
         printf("registry_test: all tests passed\n");

@@ -812,6 +812,7 @@ static int same_actions(const ESEngineActions *a, const ESEngineActions *b)
            a->snap_zone == b->snap_zone &&
            same_rect(&a->snap_rect, &b->snap_rect) &&
            a->do_drop == b->do_drop && a->drop_ref == b->drop_ref &&
+           same_rect(&a->drop_start, &b->drop_start) &&
            same_rect(&a->drop_from, &b->drop_from) &&
            a->drop_grab_x == b->drop_grab_x &&
            a->drop_grab_y == b->drop_grab_y &&
@@ -856,6 +857,7 @@ static void test_drop_outline_from_the_bar(void)
     CHECK(a.do_drop == 1 && a.drop_ref == (void *)&w1);
     CHECK(a.drop_from.x == 100 && a.drop_from.y == 100 &&
           a.drop_from.w == 200 && a.drop_from.h == 150);
+    CHECK(same_rect(&a.drop_start, &a.drop_from));
     CHECK(a.drop_grab_x == 200 && a.drop_grab_y == 110);
     CHECK(a.drop_x == 300 && a.drop_y == 300);
 
@@ -947,8 +949,8 @@ static void test_drop_on_a_zone_switched_off(void)
     CHECK(a.do_snap == 0 && a.do_drop == 1 && a.drop_x == 3);
 }
 
-/* What is no drop: a press in the body, even when the window moved with
- * the pointer; a window that may not be snapped; a click on the bar
+/* What is no drop: a press in the body that never moves the window;
+ * a window that may not be snapped; a click on the bar
  * that never became a drag; a drag the engine was told to forget. */
 static void test_drop_refusals(void)
 {
@@ -963,12 +965,10 @@ static void test_drop_refusals(void)
     f.mouse_y = 200;                     /* the body */
     es_engine_press(&e, 200, 200, &a);
     es_engine_motion(&e, &f, &a);
-    f.box.x += 30;
-    f.box.y += 5;
     f.mouse_x += 30;
     f.mouse_y += 5;
     es_engine_motion(&e, &f, &a);
-    CHECK(a.drag_started == 1 && e.on_bar == 0);  /* a drag all the same */
+    CHECK(a.drag_started == 0 && e.on_bar == 0);
     f.mouse_x = 300;
     f.mouse_y = 300;
     es_engine_motion(&e, &f, &a);
@@ -1075,6 +1075,194 @@ static void test_drop_point_comes_from_the_live_box(void)
     }
 }
 
+/* The press names the previous window, was handled with the pointer
+ * ahead of the box, or precedes a first box already pulled down. Each
+ * misses the bar. The window then follows the pointer, and the latest
+ * sample has caught up: its grab must replace the unreliable press. */
+static void test_drop_when_the_press_missed_the_bar(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    ESRect old, start, live, want, placed;
+    int w1, w2, late, px, py;
+
+    for (late = 0; late < 3; late++) {
+        es_engine_init(&e, 0);
+        std_facts(&f, &w1);
+        f.bar_h = 20;
+        old = f.box;
+        if (late == 0) {
+            old.y = 400;                /* the previous active window */
+            es_engine_press_on(&e, &w2, &old, 200, 110, &a);
+        } else if (late == 1) {
+            es_engine_press_on(&e, &w1, &old, 200, 150, &a);
+        } else {
+            es_engine_press(&e, 200, 110, &a);
+        }
+        if (late != 1) {
+            f.box.y = 130;              /* ahead of the old press */
+        }
+        f.mouse_y = f.box.y + 50;        /* pointer still ahead of box */
+        es_engine_motion(&e, &f, &a);
+        CHECK(e.on_bar == 0 && a.drag_started == 0);
+        start = e.base_box;
+        f.box.x += 40;
+        f.box.y += 50;
+        f.mouse_x += 40;
+        f.mouse_y += 50;
+        es_engine_motion(&e, &f, &a);
+        CHECK(e.dragging == 1 && a.drag_started == 1);
+
+        f.box.x += 60;
+        f.box.y += 60;
+        f.mouse_x = f.box.x + 100;
+        f.mouse_y = f.box.y + 10;        /* slowing before the release */
+        es_engine_motion(&e, &f, &a);
+        es_engine_release(&e, &a);
+        CHECK(a.do_drop == 1 && a.do_snap == 0 && a.hide_preview == 1);
+        if (a.do_drop) {
+            CHECK(a.drop_ref == (void *)&w1);
+            CHECK(same_rect(&a.drop_start, &start));
+            CHECK(same_rect(&a.drop_from, &f.box));
+            CHECK(!same_rect(&a.drop_start, &a.drop_from));
+            CHECK(a.drop_grab_x == f.mouse_x && a.drop_grab_y == f.mouse_y);
+            live = f.box;
+            live.x += 30;              /* final motion batched with release */
+            live.y += 20;
+            es_engine_drop_point(&a, &live, &px, &py);
+            CHECK(px == live.x + 100 && py == live.y + 10);
+            want = live;
+            want.w = want.h = 100;
+            es_unsnap_rect(&want, &a.drop_from, a.drop_grab_x,
+                           a.drop_grab_y, px, py, &f.usable,
+                           0, 0, 0, 0, &placed);
+            CHECK(placed.x == live.x + 50 && placed.y == live.y);
+            CHECK(px >= placed.x && px < placed.x + placed.w &&
+                  py >= placed.y && py < placed.y + f.bar_h);
+        }
+        es_engine_release(&e, &a);
+        CHECK(a.do_drop == 0 && a.do_snap == 0);
+    }
+}
+
+/* A size gadget at the right or bottom changes no position. Neither
+ * that nor a body drag is evidence that the window followed a drag. */
+static void test_drop_refuses_a_stationary_box(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, edge;
+
+    for (edge = 0; edge < 3; edge++) {
+        es_engine_init(&e, 0);
+        std_facts(&f, &w1);
+        f.bar_h = 20;
+        f.mouse_x = edge == 1 ? 299 : 200;
+        f.mouse_y = edge == 2 ? 249 : 200;
+        es_engine_press(&e, f.mouse_x, f.mouse_y, &a);
+        es_engine_motion(&e, &f, &a);
+        f.mouse_x += 60;
+        f.mouse_y += 60;
+        if (edge == 1) {
+            f.box.w += 60;
+        } else if (edge == 2) {
+            f.box.h += 60;
+        }
+        es_engine_motion(&e, &f, &a);
+        CHECK(e.dragging == 0 && a.drag_started == 0);
+        es_engine_release(&e, &a);
+        CHECK(a.do_drop == 0 && a.do_snap == 0);
+    }
+
+    /* Even if the first box differs from the press box, it must move
+     * during tracking. A pointer moving over a stationary box is not
+     * enough, though the old drag detector can call it a drag. */
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    f.bar_h = 20;
+    es_engine_press_on(&e, &w1, &f.box, 200, 160, &a);
+    f.box.y += 60;
+    f.mouse_y = 200;
+    es_engine_motion(&e, &f, &a);
+    f.mouse_x += 60;
+    es_engine_motion(&e, &f, &a);
+    CHECK(e.dragging == 1 && e.on_bar == 0);
+    es_engine_release(&e, &a);
+    CHECK(a.do_drop == 0 && a.do_snap == 0);
+}
+
+/* Movement belongs to one candidate. Switching windows, or losing the
+ * facts and seeing the window afresh, must not lend that evidence to a
+ * stationary box that the press-based detector still calls a drag. */
+static void test_drop_does_not_reuse_another_candidates_movement(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    ESRect press_box;
+    int w1, w2, lost;
+
+    for (lost = 0; lost <= 1; lost++) {
+        es_engine_init(&e, 0);
+        std_facts(&f, &w1);
+        f.bar_h = 20;
+        press_box = f.box;
+        es_engine_press_on(&e, &w1, &press_box, 200, 160, &a);
+        if (!lost) {
+            f.ref = &w2;
+        }
+        f.mouse_y = 160;
+        es_engine_motion(&e, &f, &a);
+        f.box.y += 40;
+        f.mouse_y += 40;
+        es_engine_motion(&e, &f, &a);
+        CHECK(e.dragging == 1 && e.followed == 1 && e.on_bar == 0);
+        if (lost) {
+            es_engine_motion(&e, 0, &a);
+        }
+        std_facts(&f, &w1);
+        f.bar_h = 20;
+        f.box.y += 60;
+        f.mouse_y = 200;
+        es_engine_motion(&e, &f, &a);
+        f.mouse_x += 60;
+        es_engine_motion(&e, &f, &a);
+        CHECK(e.dragging == 1 && e.on_bar == 0 && e.followed == 0);
+        es_engine_release(&e, &a);
+        CHECK(a.do_drop == 0 && a.do_snap == 0);
+    }
+}
+
+/* Moving the left edge changes x, just as a drag does. The engine
+ * offers the drop; the registry's size check must refuse this resize
+ * (test_drag_out_refuses_a_moved_edge in registry_test.c). */
+static void test_drop_offers_a_moved_left_edge_to_the_registry(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    f.bar_h = 20;
+    f.mouse_x = f.box.x;
+    f.mouse_y = 170;
+    es_engine_press(&e, f.mouse_x, f.mouse_y, &a);
+    es_engine_motion(&e, &f, &a);
+    f.box.x += 40;
+    f.box.w -= 40;
+    f.mouse_x += 40;
+    es_engine_motion(&e, &f, &a);
+    CHECK(e.dragging == 1 && e.on_bar == 0);
+    es_engine_release(&e, &a);
+    CHECK(a.do_drop == 1 && a.do_snap == 0);
+    CHECK(a.drop_start.x == 100 && a.drop_start.w == 200);
+    CHECK(a.drop_from.x == 140 && a.drop_from.w == 160);
+}
+
 /*
  * es_engine_press_on: the active window at the press, and its box then.
  * On AmigaOS 4 and MorphOS the window follows the pointer, and a fast
@@ -1082,9 +1270,9 @@ static void test_drop_point_comes_from_the_live_box(void)
  * the first sample has the window at y 130 and the pointer at 140: from
  * that box, the press at y 110 is above the window, not on its bar
  * (100..119 at the press). With the press box the drag is from the bar,
- * so it can be dropped; with es_engine_press and the same input, on_bar
- * comes out 0, the drag still starts because the window moved, and the
- * release drops nothing. Snapping is the same either way.
+ * so its grab is kept; with es_engine_press and the same input, on_bar
+ * comes out 0, but the window moving with the pointer still permits a
+ * drop, with the latest motion's grab. Snapping is the same either way.
  */
 static void test_press_on_keeps_a_fast_pull_on_the_bar(void)
 {
@@ -1116,11 +1304,14 @@ static void test_press_on_keeps_a_fast_pull_on_the_bar(void)
         f.mouse_y = 290;
         es_engine_motion(&e, &f, &a);
         es_engine_release(&e, &a);
-        CHECK(a.do_snap == 0 && a.do_drop == with);
+        CHECK(a.do_snap == 0 && a.do_drop == 1);
         if (with) {
             CHECK(a.drop_ref == (void *)&w1 && same_rect(&a.drop_from, &b0));
             CHECK(a.drop_grab_x == 200 && a.drop_grab_y == 110);
             CHECK(a.drop_x == 200 && a.drop_y == 290);
+        } else if (a.do_drop) {
+            CHECK(same_rect(&a.drop_from, &f.box));
+            CHECK(a.drop_grab_x == 200 && a.drop_grab_y == 290);
         }
 
         /* the same pull on into the left edge snaps, either way */
@@ -1271,9 +1462,9 @@ static void test_press_on_changes_nothing_when_the_window_waits(void)
                 es_engine_release(&e1, &a1);
                 es_engine_release(&e2, &a2);
                 differ += !same_actions(&a1, &a2);
-                /* an outline drag needs the bar; a drop needs it always */
+                /* An outline drag needs the bar; a live drag does not. */
                 CHECK(a1.do_snap == (t != 0 && (bar > 0 || live)));
-                CHECK(a1.do_drop == (t == 0 && bar > 0));
+                CHECK(a1.do_drop == (t == 0 && (bar > 0 || live)));
             }
         }
     }
@@ -1313,6 +1504,10 @@ int main(void)
     test_drop_refusals();
     test_drop_leaves_bypass_to_the_release();
     test_drop_point_comes_from_the_live_box();
+    test_drop_when_the_press_missed_the_bar();
+    test_drop_refuses_a_stationary_box();
+    test_drop_does_not_reuse_another_candidates_movement();
+    test_drop_offers_a_moved_left_edge_to_the_registry();
     test_press_on_keeps_a_fast_pull_on_the_bar();
     test_press_on_another_window_falls_back();
     test_press_on_changes_nothing_when_the_window_waits();

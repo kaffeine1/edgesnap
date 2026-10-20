@@ -63,6 +63,7 @@ static void es_actions_clear(ESEngineActions *out)
     out->snap_rect = out->preview_rect;
     out->do_drop = 0;
     out->drop_ref = 0;
+    out->drop_start = out->preview_rect;
     out->drop_from = out->preview_rect;
     out->drop_grab_x = out->drop_grab_y = 0;
     out->drop_x = out->drop_y = 0;
@@ -73,6 +74,7 @@ static void es_engine_clear_tracking(ESEngine *e)
     e->button_down = 0;
     e->dragging = 0;
     e->on_bar = 0;
+    e->followed = 0;
     e->press_mx = -1;
     e->press_my = -1;
     e->press_ref = 0;
@@ -237,6 +239,9 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
         e->base_mx = px;
         e->base_my = py;
         e->dragging = 0;
+        e->followed = 0;
+        e->first_x = facts->box.x;
+        e->first_y = facts->box.y;
         /*
          * Did the press land on the drag bar? Remembered now, because
          * on a system that drags windows as an outline the window box
@@ -271,6 +276,14 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
         const ESRect *u = &facts->usable;
         const ESRect *b = &facts->box;
         int z, wall;
+
+        /* Evidence independent of the press: the box moved from its
+         * first sight during a recognised pointer drag. Keep it even
+         * if the box later returns there. A left/top resize can do
+         * this too; es_registry_drag_out refuses its changed size. */
+        if (b->x != e->first_x || b->y != e->first_y) {
+            e->followed = 1;
+        }
 
         /* a pointer held back by a window that may not leave the
          * screen: see es_push_axis() */
@@ -336,21 +349,33 @@ void es_engine_release(ESEngine *e, ESEngineActions *out)
         out->snap_ref = e->candidate;
         out->snap_zone = e->zone;
         out->snap_rect = e->zone_rect;
-    } else if (e->dragging && e->on_bar && e->zone == ES_ZONE_NONE &&
+    } else if (e->dragging && (e->on_bar || e->followed) &&
+               e->zone == ES_ZONE_NONE &&
                e->candidate != 0 &&
                (e->last.flags & ES_WF_SNAPPABLE) != 0) {
         /*
          * 2.24: let go outside every zone, a zone switched off
-         * included. The press and base_box are the pair on_bar was
-         * judged on, so the press less the box's corner is where the
-         * pointer held the bar; the pointer of the last motion is
-         * where it is now.
+         * included. From 2.25 a box that followed the pointer also
+         * qualifies, even if a late press or activation missed its
+         * bar. Keep the start box for the executor's movement checks,
+         * separate from the box and pointer that supply the grab.
          */
         out->do_drop = 1;
         out->drop_ref = e->candidate;
-        out->drop_from = e->base_box;
-        out->drop_grab_x = e->base_mx;
-        out->drop_grab_y = e->base_my;
+        out->drop_start = e->base_box;
+        if (e->on_bar) {
+            out->drop_from = e->base_box;
+            out->drop_grab_x = e->base_mx;
+            out->drop_grab_y = e->base_my;
+        } else {
+            /* The press and base_box failed the bar test. Use the
+             * latest motion's box and pointer, sampled together:
+             * the window lags least as the pointer slows before the
+             * release. The same pair feeds drop_point and unsnap. */
+            out->drop_from = e->last.box;
+            out->drop_grab_x = e->last.mouse_x;
+            out->drop_grab_y = e->last.mouse_y;
+        }
         out->drop_x = e->last.mouse_x;
         out->drop_y = e->last.mouse_y;
     }

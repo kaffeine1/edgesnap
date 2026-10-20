@@ -1203,9 +1203,9 @@ of this verification.
   this from the start and it was never built: up to 2.23 a release
   outside every zone did nothing, and the restore hotkey then refused
   the entry, the window having moved beyond the slack, so the old size
-  was lost. Now a drag that began on the title bar and is let go
-  outside every zone, a zone switched off in `ZONES` included, gives
-  the window the box it had before its first snap, under the pointer:
+  was lost. Now a window drag let go outside every zone, a zone
+  switched off in `ZONES` included, gives the window the box it had
+  before its first snap, under the pointer:
   the pointer keeps its share of the bar's width and its depth into
   the bar, and the box is kept inside the usable area, docks, margins
   and the window's own limits included.
@@ -1215,8 +1215,8 @@ of this verification.
   is up (see "The preview frame on AmigaOS 4"), and AROS drags an
   outline and moves the window only then. The engine reports the
   gesture and nothing more, `do_drop` from `es_engine_release` with the
-  box the drag began from, where the pointer held the bar and where it
-  is now; the registry decides and consumes the entry
+  box the drag began from, a box and pointer locating the grab, and the
+  last motion's pointer; the registry decides and consumes the entry
   (`es_registry_drag_out`); the box is `es_unsnap_rect`, next to
   `es_centre_rect`; the library body does what needs the system.
 
@@ -1244,9 +1244,25 @@ of this verification.
   below it: the drag still started, the window having moved, but not
   as a drag by the bar. Where the pressed window becomes active a beat
   after the press (AROS) the press names the window before it, and the
-  engine judges as it always did. Snapping does not change: the host
-  tests drive the same drags, live and outline, into every kind of zone
-  and into none, through both kinds of press, and compare every action.
+  engine judges as it always did.
+
+  From 2.25 I also accept a drag whose window moved from where it was
+  first seen while the pointer was dragged, even if the press was
+  judged off the bar. The press is sampled when the task handles it,
+  and a pointer ahead of a lagging window, or a window activated late,
+  can make that judgement wrong. For this case I take the grab from
+  the latest motion's box and pointer, sampled together: the lag is
+  smallest as the pointer slows before the release. I keep the start
+  box separate (`drop_start`) for the wait and the registry's movement
+  checks; the latest box would make a settled drop look stationary.
+  AROS's outline drag still uses the bar press and its original grab.
+  A body drag or a right/bottom resize that never moves the box offers
+  no drop. A left/top resize can offer one, but the registry refuses
+  its changed size and keeps the entry.
+
+  Snapping does not change: the host tests drive the same drags, live
+  and outline, into every kind of zone and into none, through both
+  kinds of press, and compare every action.
 
   The decision needs the window where the drop left it, so the library
   waits for it, in the caller's task and holding no lock: it looks at

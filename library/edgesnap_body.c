@@ -2396,8 +2396,10 @@ static void esb_absorb(const ESEngineActions *a, struct ESnapReport *out)
  * Then, under the semaphore, the refusals of a snap and the registry's
  * own: snapped to a zone, still the snapped size, and let go beyond the
  * slack from where the snap put it and from where the drag began. The
- * glide is the restore hotkey's, ANIMATE and all; a drag never changes
- * depth on the Amiga, so nothing is raised.
+ * start stays in drop_start: from 2.25 drop_from may be the latest
+ * motion's box, paired with its pointer for the grab instead.
+ * The glide is the restore hotkey's, ANIMATE and all; a drag never
+ * changes depth on the Amiga, so nothing is raised.
  */
 #define ESB_DROP_TICKS 10
 
@@ -2415,8 +2417,8 @@ static void esb_drag_out(const ESEngineActions *a)
             ReleaseSemaphore(&g_sem);
             return;
         }
-        if (s.box.x != a->drop_from.x || s.box.y != a->drop_from.y ||
-            s.box.w != a->drop_from.w || s.box.h != a->drop_from.h ||
+        if (s.box.x != a->drop_start.x || s.box.y != a->drop_start.y ||
+            s.box.w != a->drop_start.w || s.box.h != a->drop_start.h ||
             t >= ESB_DROP_TICKS) {
             break;
         }
@@ -2427,7 +2429,7 @@ static void esb_drag_out(const ESEngineActions *a)
         es_registry_forget(&g_registry, win);
     } else if (!esb_is_excluded(win) && esb_snappable(&s) &&
                !esb_locked_for(win) && !esb_grouped(win) &&
-               es_registry_drag_out(&g_registry, win, &a->drop_from,
+               es_registry_drag_out(&g_registry, win, &a->drop_start,
                                     &s.box, &pre) == ES_OK) {
         es_engine_drop_point(a, &s.box, &px, &py);
         es_unsnap_rect(&pre, &a->drop_from, a->drop_grab_x,

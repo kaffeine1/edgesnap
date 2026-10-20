@@ -86,11 +86,12 @@ typedef struct ESEngineActions {
     void *snap_ref;     /* MAY BE STALE - executor must re-validate     */
     int snap_zone;
     ESRect snap_rect;
-    int do_drop;        /* 2.24: a drag by the drag bar was let go      */
+    int do_drop;        /* 2.24: a window drag was let go               */
                         /* outside every zone; drop_* are valid         */
     void *drop_ref;     /* MAY BE STALE: the executor re-validates it   */
-    ESRect drop_from;   /* the window's box when the drag began         */
-    int drop_grab_x, drop_grab_y; /* where the pointer held its bar then */
+    ESRect drop_start;  /* start box for the wait and registry checks   */
+    ESRect drop_from;   /* box sampled with the grab, not always start  */
+    int drop_grab_x, drop_grab_y; /* pointer sampled with drop_from      */
     int drop_x, drop_y; /* the pointer at the last motion               */
 } ESEngineActions;
 
@@ -99,6 +100,8 @@ typedef struct ESEngine {
     int button_down;
     int dragging;
     int on_bar;      /* the press landed on the candidate's drag bar   */
+    int followed;    /* its position changed during a recognised drag  */
+    int first_x, first_y; /* position at the candidate's first motion   */
     void *candidate;
     ESRect base_box;
     int base_mx, base_my;
@@ -137,8 +140,11 @@ void es_engine_press_on(ESEngine *e, void *ref, const ESRect *box,
 void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
                       ESEngineActions *out);
 
-/* Primary button released. A drag that began on the drag bar and is let
- * go outside every zone, the window snappable, emits do_drop (2.24).
+/* Primary button released. A drag let go outside every zone, the window
+ * snappable, emits do_drop if the press was on its bar (2.24) or its box
+ * followed the pointer while held (2.25). The bar test remains needed
+ * for outline drags. A left/top resize can move the box too: the
+ * registry's size check refuses it.
  * The executor checks the release's own bypass qualifier. The engine
  * only reports the gesture: whether the window gets its old size back
  * is the registry's to say (es_registry_drag_out), since the engine

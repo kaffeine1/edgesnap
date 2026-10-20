@@ -125,9 +125,11 @@ typedef ULONG ESTagData;
                                                  is never animated
                                                  (2.13)                 */
 #define ES_OPT_DragRestore  (ES_TAGBASE + 15) /* BOOL, default TRUE: a window
-                    snapped to a zone, dragged by its title bar and let go
-                    outside every zone, gets back its size from before the
-                    snap, under the pointer (2.24) */
+                    snapped to a zone, dragged away and let go outside
+                    every zone, gets back its size from before the snap,
+                    under the pointer (2.24). A drag is recognised from
+                    the bar press or from the window following the pointer
+                    (2.25) */
 
 /* Bypass qualifier values for ES_OPT_BypassQual. */
 #define ES_QUAL_NONE  0
@@ -201,8 +203,11 @@ struct ESnapReport {
  * waits; the system calls and scheduling take their own time.
  *
  * From 2.25 the restore uses the drop's live window box and the grab's
- * offset in the starting box, so a last motion batched with the release
- * cannot leave it short of the drop. Only the release's own qualifiers
+ * offset, so a last motion batched with the release cannot leave it
+ * short of the drop. A window that followed the pointer also qualifies
+ * when the sampled press missed its bar; its grab comes from the latest
+ * motion's box and pointer, sampled together. The original bar-press
+ * grab still serves outline drags. Only the release's own qualifiers
  * decide whether the bypass key skips the restore. A snap still uses
  * the zone the preview showed.
  */
