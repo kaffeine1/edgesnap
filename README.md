@@ -254,6 +254,10 @@ What the spike does today:
   key until one is assigned. `CX_POPKEY` (also `POPKEY`) opens the
   preferences, as Exchange's Show does, and has no key by default.
   Asking again brings the open preferences window to the front;
+- an ARexx port, `EDGESNAP`: `SNAP`, `RESTORE`, `QUERY`, `SELECT`,
+  `PREFS`, `ENABLE`, `DISABLE`, `VERSION`, `HELP` and `QUIT`, on the
+  active window or on one named by a `TITLE` pattern, so a script, a
+  dock button or a file manager can do what the hotkeys do;
 - `EdgeSnap QUIT` stops a running instance from a Shell or a script,
   which is how an update replaces itself without a reboot; launching it
   twice by accident is simply refused, and the running one carries on;

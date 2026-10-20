@@ -161,11 +161,12 @@ become smaller than it allows: that is a limit, not a fault. Three or
 four windows that share one line share one seam.
 
 @{b}Hotkeys@{ub}
-I keep these as the defaults. Change them on the @{b}Hotkeys@{ub} page
-of the preferences, with the @{b}HOTKEY...@{ub} settings below, or in
-the icon's tooltypes. I use the same input descriptions as Exchange:
-@{b}HOTKEYLEFT="ctrl alt x"@{ub}, for instance. @{b}none@{ub} or
-@{b}off@{ub} disables a key; an empty string in the window does too.
+These are the keys as EdgeSnap comes. Each one can be changed on the
+@{b}Hotkeys@{ub} page of the preferences, with the @{b}HOTKEY...@{ub}
+settings below, or in the icon's tooltypes, written as Exchange writes
+them: @{b}HOTKEYLEFT="ctrl alt x"@{ub}, for instance. @{b}none@{ub} or
+@{b}off@{ub} leaves an action without a key; so does an empty field in
+the window.
 
   @{b}ctrl alt cursor left@{ub}    snap the active window left
   @{b}ctrl alt cursor right@{ub}   snap it right
@@ -197,10 +198,10 @@ The four quarter actions have no key until you give them one:
 as Exchange's @{b}Show@{ub} does; it has no key by default. Asking
 again brings the window already open to the front.
 
-I check the input descriptions before saving, and refuse two actions
-on the same key even when their descriptions spell the qualifiers in
-a different order. The commodity skips a bad or duplicate key and
-reports it in its output, so the rest of EdgeSnap can still run.
+The preferences window checks every key before it saves, and refuses
+two actions on the same key even when the qualifiers are written in
+another order. The commodity skips a bad or duplicate key and says so
+in its output, so the rest of EdgeSnap still runs.
 
 @{b}Changing the settings@{ub}
 Open @{b}SYS:Prefs/EdgeSnap@{ub}: the installer puts it there, with
@@ -306,7 +307,12 @@ window that cannot be resized), 10 for a command or a word the port
 does not know. RESULT needs @{b}OPTIONS RESULTS@{ub} in the script.
 
 ARexx itself must be installed and running (RexxMast); EdgeSnap only
-needs rexxsyslib.library to open its port, and works without it.
+needs rexxsyslib.library to open its port, and works without it. On
+MorphOS that means the ARexx interpreter installed on top of the
+system's own rexxsyslib, which has none. On AROS One the command is
+@{b}SYS:Rexxc/RX@{ub}, and its RC after a command to a port is not to be
+trusted: the trace shows the real code, and RESULT works as
+everywhere.
 
 @endnode
 

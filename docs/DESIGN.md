@@ -1320,6 +1320,11 @@ of this verification.
   quotes; `ParseIX` judges the system's syntax. The windows refuse a
   bad description or two actions with the same parsed key, and the
   commodity skips and reports either, so one bad key cannot stop it.
+  The judge is not the same everywhere: AmigaOS 4 and MorphOS refuse
+  `ctrl alt nonsense`, while AROS's `ParseIX` takes the first letter
+  of a word it does not know and reads it as `ctrl alt n`
+  (`workbench/libs/commodities/parseix.c`). I leave that to the
+  system: a key it accepts is a key it will deliver.
 
 - **Frontend storage, the same vocabulary.** I keep the thirteen key
   buffers in `ESHotkeys`, outside `ESConfig`. The library copies an
@@ -1372,7 +1377,13 @@ of this verification.
   interpreter: its `CreateRexxMsg()` leaves the message without the
   name `IsRexxMsg()` looks for, so that answered no for every command
   (VM, 2026-10-20). A message as long as a RexxMsg whose action is a
-  command counts as one too.
+  command counts as one too. On AROS One the interpreter is
+  `SYS:Rexxc/RX`, not in the Shell's path; its trace shows the codes
+  (`+++ RC=10 +++`) but the variable RC came back empty, or holding
+  the RESULT text, after every command to the port. Zune's own
+  application ports answer the same way as this one
+  (`workbench/libs/muimaster/classes/application.c`), so I take it as
+  that interpreter's reading of the reply, not as ours to change.
 
 - **Live keys without a gap in mouse input.** On a reload I remove
   and rebuild the key filters, leaving the broker and its CxCustom
