@@ -543,12 +543,14 @@ static Object *es_settings_pages(struct ESPrefsGui *gui)
         DisposeObject(gui->pages);
         return NULL;
     }
-    return VLayoutObject,
-        LAYOUT_SpaceOuter, FALSE,
-        LAYOUT_AddChild, gui->tabs,
-        CHILD_WeightedHeight, 0,
-        LAYOUT_AddChild, gui->pages,
-    End;
+    /*
+     * The page group is the clicktab's own child: CLICKTAB_PageGroup
+     * embeds it, and the clicktab draws the pages inside its frame
+     * (the SDK's Examples/GUI/ClickTab/PageExample.c). Only the
+     * clicktab goes into the window's layout; added there as well, the
+     * pages would have two parents.
+     */
+    return gui->tabs;
 }
 
 static Object *es_build_window(struct ESPrefsGui *gui)

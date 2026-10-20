@@ -43,7 +43,6 @@
 #include <exec/ports.h>
 #include <exec/tasks.h>
 #include <dos/dos.h>       /* RETURN_*, SIGBREAKF_CTRL_C                */
-#include <dos/dostags.h>
 #include <dos/notify.h>    /* StartNotify: prefs that change while we run */
 #include <dos/dostags.h>   /* SystemTags: the preferences window        */
 #include <dos/rdargs.h>    /* ReadArgs on an ARexx command line         */
@@ -571,7 +570,7 @@ static void spike_out(const char *fmt, ...)
 
 static ESConfig g_cfg;
 static ESHotkeys g_keys;
-static CxObj *g_hotkey_broker;
+static CxObj *g_broker;   /* ours, once CxBroker has given it */
 static struct MsgPort *g_hotkey_port;
 static CxObj *g_hotkey_filter[ES_HOTKEY_COUNT];
 
@@ -3428,10 +3427,12 @@ static void spike_hotkeys_rebuild(void)
 
     /* Remove only the filters. The broker and CxCustom keep seeing
      * mouse facts, especially a button release during an open drag.
-     * RemoveCxObj serialises removal with the commodities handler. */
+     * DeleteCxObjAll takes a filter out of the broker's list first,
+     * under the semaphore the commodities input handler holds while it
+     * runs the objects (AROS: removecxobj.c), so it never pulls one out
+     * from under an event in flight. */
     for (i = 0; i < ES_HOTKEY_COUNT; i++) {
         if (g_hotkey_filter[i] != NULL) {
-            RemoveCxObj(g_hotkey_filter[i]);
             DeleteCxObjAll(g_hotkey_filter[i]);
             g_hotkey_filter[i] = NULL;
         }
@@ -3470,7 +3471,7 @@ static void spike_hotkeys_rebuild(void)
             DeleteCxObjAll(filter);
             continue;
         }
-        AttachCxObj(g_hotkey_broker, filter);
+        AttachCxObj(g_broker, filter);
         g_hotkey_filter[i] = filter;
     }
 }
@@ -3487,66 +3488,45 @@ static void spike_hotkeys_print(void)
     }
 }
 
-/* The ARexx frontend calls this too. All of it runs in our task.
- * A loaded segment lets a failed launch be reported before returning;
- * the new process owns the segment and NIL: handles only on success. */
+/*
+ * The preferences window is a program of its own, where the installers
+ * put it on every system: Exchange's Show, the popkey and the ARexx port
+ * all open it here. It is started through the Shell and left to run,
+ * so nothing here waits for it and it reaches us the way any editor of
+ * the file does. A missing program is said, since an asynchronous start
+ * would fail in a Shell nobody sees.
+ */
 static void spike_open_prefs(void)
 {
-    struct TagItem tags[12];
-    struct Process *proc;
-    BPTR segment;
-    BPTR input;
-    BPTR output;
-    int n = 0;
+    BPTR lock = Lock((STRPTR)"SYS:Prefs/EdgeSnap", ACCESS_READ);
+    BPTR in;
+    BPTR out;
+    LONG rc = -1;
 
-    segment = LoadSeg((STRPTR)"SYS:Prefs/EdgeSnap");
-    if (segment == 0) {
-        spike_out("edgesnap: cannot load SYS:Prefs/EdgeSnap (%ld)\n",
-                  (long)IoErr());
+    if (lock == 0) {
+        spike_out("edgesnap: there is no SYS:Prefs/EdgeSnap to open\n");
         return;
     }
-    input = Open((STRPTR)"NIL:", MODE_OLDFILE);
-    output = Open((STRPTR)"NIL:", MODE_NEWFILE);
-    if (input == 0 || output == 0) {
-        spike_out("edgesnap: cannot open NIL: for the preferences\n");
-        if (input != 0) { Close(input); }
-        if (output != 0) { Close(output); }
-        UnLoadSeg(segment);
-        return;
+    UnLock(lock);
+    in = Open((STRPTR)"NIL:", MODE_OLDFILE);
+    out = Open((STRPTR)"NIL:", MODE_NEWFILE);
+    if (in != 0 && out != 0) {
+        rc = SystemTags((STRPTR)"SYS:Prefs/EdgeSnap",
+                        SYS_Input, in,
+                        SYS_Output, out,
+                        SYS_Asynch, TRUE,
+                        NP_StackSize, 65536,
+                        TAG_DONE);
     }
-    tags[n].ti_Tag = NP_Seglist;
-    tags[n++].ti_Data = (ESTagData)segment;
-    tags[n].ti_Tag = NP_FreeSeglist;
-    tags[n++].ti_Data = TRUE;
-    tags[n].ti_Tag = NP_Input;
-    tags[n++].ti_Data = (ESTagData)input;
-    tags[n].ti_Tag = NP_Output;
-    tags[n++].ti_Data = (ESTagData)output;
-    tags[n].ti_Tag = NP_CloseInput;
-    tags[n++].ti_Data = TRUE;
-    tags[n].ti_Tag = NP_CloseOutput;
-    tags[n++].ti_Data = TRUE;
-    tags[n].ti_Tag = NP_Cli;
-    tags[n++].ti_Data = TRUE;
-    tags[n].ti_Tag = NP_Name;
-    tags[n++].ti_Data = (ESTagData)"EdgeSnap Preferences";
-    tags[n].ti_Tag = NP_StackSize;
-    tags[n++].ti_Data = 65536;
-#ifdef __MORPHOS__
-    tags[n].ti_Tag = NP_PPCStackSize;
-    tags[n++].ti_Data = 65536;
-#endif
-    tags[n].ti_Tag = NP_Arguments;
-    tags[n++].ti_Data = (ESTagData)"";
-    tags[n].ti_Tag = TAG_DONE;
-    tags[n].ti_Data = 0;
-    proc = CreateNewProc(tags);
-    if (proc == NULL) {
-        spike_out("edgesnap: cannot start SYS:Prefs/EdgeSnap (%ld)\n",
-                  (long)IoErr());
-        Close(input);
-        Close(output);
-        UnLoadSeg(segment);
+    if (rc == -1) {
+        /* not started: the two handles are still ours */
+        if (in != 0) {
+            Close(in);
+        }
+        if (out != 0) {
+            Close(out);
+        }
+        spike_out("edgesnap: could not start SYS:Prefs/EdgeSnap\n");
     }
 }
 
@@ -4100,8 +4080,6 @@ static int spike_open_libs(void)
 
 /* ------------------------------------------------- Exchange's switch */
 
-static CxObj *g_broker;
-
 /*
  * Exchange's Disable and Enable, and the ARexx port's: the broker stops
  * or starts taking input, and the library's engine with it. A drag in
@@ -4123,39 +4101,6 @@ static void spike_set_enabled(int on)
         ES_CALL(ESnap_ResetInput)(&r);
         spike_apply_report(&r);
         spike_log_flush();
-    }
-}
-
-/* ------------------------------------------------ the preferences */
-
-/*
- * The preferences window is a program of its own, where the installers
- * put it on every system. It is started and left to run: nothing here
- * waits for it, and it reaches us the way any editor of the file does.
- */
-static void spike_open_prefs(void)
-{
-    BPTR in = Open((STRPTR)"NIL:", MODE_OLDFILE);
-    BPTR out = Open((STRPTR)"NIL:", MODE_NEWFILE);
-    LONG rc = -1;
-
-    if (in != 0 && out != 0) {
-        rc = SystemTags((STRPTR)"SYS:Prefs/EdgeSnap",
-                        SYS_Input, in,
-                        SYS_Output, out,
-                        SYS_Asynch, TRUE,
-                        NP_StackSize, 65536,
-                        TAG_DONE);
-    }
-    if (rc == -1) {
-        /* not started: the two handles are still ours */
-        if (in != 0) {
-            Close(in);
-        }
-        if (out != 0) {
-            Close(out);
-        }
-        spike_out("edgesnap: could not start SYS:Prefs/EdgeSnap\n");
     }
 }
 
@@ -4676,7 +4621,6 @@ int main(int argc, char **argv)
         spike_out("edgesnap: could not build the commodity tree\n");
         goto out;
     }
-    g_hotkey_broker = broker;
     g_hotkey_port = port;
     spike_hotkeys_rebuild();
 
