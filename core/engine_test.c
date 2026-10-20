@@ -948,9 +948,8 @@ static void test_drop_on_a_zone_switched_off(void)
 }
 
 /* What is no drop: a press in the body, even when the window moved with
- * the pointer; the bypass key at the last motion; a window that may not
- * be snapped; a click on the bar that never became a drag; a drag the
- * engine was told to forget. */
+ * the pointer; a window that may not be snapped; a click on the bar
+ * that never became a drag; a drag the engine was told to forget. */
 static void test_drop_refusals(void)
 {
     ESEngine e;
@@ -972,14 +971,6 @@ static void test_drop_refusals(void)
     CHECK(a.drag_started == 1 && e.on_bar == 0);  /* a drag all the same */
     f.mouse_x = 300;
     f.mouse_y = 300;
-    es_engine_motion(&e, &f, &a);
-    es_engine_release(&e, &a);
-    CHECK(a.do_drop == 0 && a.do_snap == 0);
-
-    start_bar_drag(&e, &f, &w1);
-    f.mouse_x = 300;
-    f.mouse_y = 300;
-    f.flags |= ES_WF_BYPASS;
     es_engine_motion(&e, &f, &a);
     es_engine_release(&e, &a);
     CHECK(a.do_drop == 0 && a.do_snap == 0);
@@ -1024,6 +1015,64 @@ static void test_drop_refusals(void)
     es_engine_reset(&e, &a);
     es_engine_release(&e, &a);
     CHECK(a.do_drop == 0 && a.do_snap == 0 && a.hide_preview == 0);
+}
+
+/* The key was held at the last motion, then let go before the button,
+ * with the pointer at rest. The executor has the release's qualifiers:
+ * the engine must emit the drop even though its last facts say bypass. */
+static void test_drop_leaves_bypass_to_the_release(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1;
+
+    es_engine_init(&e, 0);
+    start_bar_drag(&e, &f, &w1);
+    f.mouse_x = 300;
+    f.mouse_y = 300;
+    f.flags |= ES_WF_BYPASS;
+    es_engine_motion(&e, &f, &a);
+    CHECK(e.zone == ES_ZONE_NONE && (e.last.flags & ES_WF_BYPASS) != 0);
+    es_engine_release(&e, &a);           /* no further motion */
+    CHECK(a.do_drop == 1 && a.do_snap == 0 && a.drop_ref == (void *)&w1);
+}
+
+/* The last processed motion is short of the drop. Both a live drag and
+ * an outline drag leave the same final box, so the grab's offset must
+ * give the same point, even when motion and release were batched. */
+static void test_drop_point_comes_from_the_live_box(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    ESRect live, want, placed;
+    int w1, moving, px, py;
+
+    for (moving = 0; moving <= 1; moving++) {
+        es_engine_init(&e, 0);
+        start_bar_drag(&e, &f, &w1);
+        f.mouse_x = 300;
+        f.mouse_y = 250;
+        if (moving) {
+            f.box.x = 200;
+            f.box.y = 240;
+        }
+        es_engine_motion(&e, &f, &a);
+        es_engine_release(&e, &a);
+        CHECK(a.do_drop == 1 && a.drop_x == 300 && a.drop_y == 250);
+        live = a.drop_from;
+        live.x = 400;
+        live.y = 300;
+        es_engine_drop_point(&a, &live, &px, &py);
+        CHECK(px == 500 && py == 310);
+        want = live;
+        want.w = 100;
+        want.h = 100;
+        es_unsnap_rect(&want, &a.drop_from, a.drop_grab_x, a.drop_grab_y,
+                       px, py, &f.usable, 0, 0, 0, 0, &placed);
+        CHECK(placed.x == 450 && placed.y == 300);
+    }
 }
 
 /*
@@ -1262,6 +1311,8 @@ int main(void)
     test_drop_only_outside_the_zones();
     test_drop_on_a_zone_switched_off();
     test_drop_refusals();
+    test_drop_leaves_bypass_to_the_release();
+    test_drop_point_comes_from_the_live_box();
     test_press_on_keeps_a_fast_pull_on_the_bar();
     test_press_on_another_window_falls_back();
     test_press_on_changes_nothing_when_the_window_waits();

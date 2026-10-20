@@ -335,14 +335,6 @@ static inline LONG __inline_EdgeSnap_ESnap_PlaceWindowsA(struct ESnapPlacement *
 #define ESnap_PlaceWindowsA(arg1, arg2, arg3) \
     __inline_EdgeSnap_ESnap_PlaceWindowsA((arg1), (arg2), (arg3), __EDGESNAP_LIBBASE)
 
-#if !defined(NO_INLINE_STDARG) && !defined(EDGESNAP_NO_INLINE_STDARG)
-#define ESnap_PlaceWindows(arg1, arg2, ...) \
-({ \
-    const IPTR ESnap_PlaceWindowsA_args[] = { AROS_PP_VARIADIC_CAST2IPTR(__VA_ARGS__) };\
-    ESnap_PlaceWindowsA((arg1), (arg2), (ULONG)(ESnap_PlaceWindowsA_args)); \
-})
-#endif /* !NO_INLINE_STDARG */
-
 #endif /* !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__) */
 
 #if !defined(__EDGESNAP_LIBAPI__) || (2 <= __EDGESNAP_LIBAPI__)

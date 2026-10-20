@@ -7,6 +7,7 @@
  */
 
 #include <stdio.h>
+#include <limits.h>
 
 #include "registry.h"
 
@@ -345,8 +346,49 @@ static void test_drag_out_refusals_keep_the_entry(void)
     }
 }
 
+/* Distances beyond INT_MAX are far away, in either order. Checking all
+ * four fields also covers the size checks of a drag restore. */
+static void test_extreme_coordinates_do_not_match(void)
+{
+    static const int a[] = { INT_MIN, INT_MAX, INT_MIN, 0, INT_MAX, -1 };
+    static const int b[] = { INT_MAX, INT_MIN, 0, INT_MIN, -1, INT_MAX };
+    ESRegistry reg;
+    ESRect pre = rect(100, 100, 200, 150);
+    ESRect snapped, now, out;
+    int w1, i, field;
+
+    for (i = 0; i < 6; i++) {
+        for (field = 0; field < 4; field++) {
+            snapped = rect(0, 12, 320, 468);
+            now = snapped;
+            switch (field) {
+            case 0: snapped.x = a[i]; now.x = b[i]; break;
+            case 1: snapped.y = a[i]; now.y = b[i]; break;
+            case 2: snapped.w = a[i]; now.w = b[i]; break;
+            default: snapped.h = a[i]; now.h = b[i]; break;
+            }
+            es_registry_init(&reg);
+            CHECK(es_registry_remember(&reg, &w1, &pre, &snapped,
+                                       ES_ZONE_LEFT) == ES_OK);
+            CHECK(es_registry_restore(&reg, &w1, &now, &out) == ES_ERR_CHANGED);
+            CHECK(es_registry_zone(&reg, &w1) == ES_ZONE_NONE);
+        }
+    }
+    /* Close coordinates at either extreme still honour the slack. */
+    for (i = 0; i < 2; i++) {
+        snapped = rect(i ? INT_MAX : INT_MIN, 12, 320, 468);
+        now = snapped;
+        now.x += i ? -ES_RESTORE_SLACK_PX : ES_RESTORE_SLACK_PX;
+        es_registry_init(&reg);
+        CHECK(es_registry_remember(&reg, &w1, &pre, &snapped,
+                                   ES_ZONE_LEFT) == ES_OK);
+        CHECK(es_registry_restore(&reg, &w1, &now, &out) == ES_OK);
+    }
+}
+
 int main(void)
 {
+    test_extreme_coordinates_do_not_match();
     test_remember_restore_roundtrip();
     test_resnap_keeps_first_prebox();
     test_independent_change_drops_entry();

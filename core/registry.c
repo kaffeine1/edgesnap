@@ -14,6 +14,7 @@
  */
 
 #include "registry.h"
+#include <limits.h>
 
 void es_registry_init(ESRegistry *reg)
 {
@@ -111,14 +112,18 @@ int es_registry_zone(const ESRegistry *reg, void *ref)
     return ES_ZONE_NONE;
 }
 
+/* Any two int coordinates, saturating when their distance cannot fit. */
+static int es_distance(int a, int b)
+{
+    unsigned int d = a >= b ? (unsigned int)a - (unsigned int)b
+                             : (unsigned int)b - (unsigned int)a;
+
+    return d > (unsigned int)INT_MAX ? INT_MAX : (int)d;
+}
+
 static int es_near(int a, int b)
 {
-    int d = a - b;
-
-    if (d < 0) {
-        d = -d;
-    }
-    return d <= ES_RESTORE_SLACK_PX;
+    return es_distance(a, b) <= ES_RESTORE_SLACK_PX;
 }
 
 int es_registry_restore(ESRegistry *reg, void *ref, const ESRect *current,

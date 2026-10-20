@@ -138,12 +138,19 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
                       ESEngineActions *out);
 
 /* Primary button released. A drag that began on the drag bar and is let
- * go outside every zone, the window snappable and the bypass qualifier
- * not held at the last motion, emits do_drop (2.24). The engine only
- * reports the gesture: whether the window gets its old size back is the
- * registry's to say (es_registry_drag_out), since the engine never sees
- * it. */
+ * go outside every zone, the window snappable, emits do_drop (2.24).
+ * The executor checks the release's own bypass qualifier. The engine
+ * only reports the gesture: whether the window gets its old size back
+ * is the registry's to say (es_registry_drag_out), since the engine
+ * never sees it. */
 void es_engine_release(ESEngine *e, ESEngineActions *out);
+
+/* The pointer after a drop: the live box plus the grab's offset in
+ * drop_from. A last motion batched with the release was not processed,
+ * so drop_x and drop_y need not be where the drag ended. Coordinates
+ * and sizes are sampled from Intuition's signed 16-bit window boxes. */
+void es_engine_drop_point(const ESEngineActions *a, const ESRect *live,
+                           int *px, int *py);
 
 /* Abort any tracking (disable, shutdown): emits hide_preview if one
  * could be showing. */

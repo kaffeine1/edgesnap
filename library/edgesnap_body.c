@@ -480,6 +480,40 @@ void esb_debug_usable(struct Screen *scr, ESRect *usable, ESInsets *ins)
     esb_usable_area_locked(scr, NULL, usable, ins);
 }
 
+/* IBase locked. Is target a window of some screen right now? */
+static int esb_window_open_locked(struct Window *target)
+{
+    struct Screen *scr;
+    struct Window *w;
+
+    for (scr = ESB_IBASE->FirstScreen; scr != NULL; scr = scr->NextScreen) {
+        for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+            if (w == target) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* Revalidate after a wait, reading only the box, when one is wanted. */
+static int esb_live_box(struct Window *win, ESRect *box)
+{
+    ULONG ilock;
+    int found;
+
+    ilock = LockIBase(0);
+    found = esb_window_open_locked(win);
+    if (found && box != NULL) {
+        box->x = win->LeftEdge;
+        box->y = win->TopEdge;
+        box->w = win->Width;
+        box->h = win->Height;
+    }
+    UnlockIBase(ilock);
+    return found;
+}
+
 /* Under LockIBase only. */
 static void esb_fill(struct Window *win, struct Screen *scr,
                      struct ESBSnap *out)
@@ -618,23 +652,35 @@ static int esb_is_wanderer(struct Window *win)
  * to repaint: layers raise LAYERREFRESH when damage arrives, and the
  * window's owner clears it with EndRefresh(), which on AROS comes
  * after the drawing. Capped, generously: a drawer full of icons takes
- * its time under emulation.
+ * its time under emulation. Returns 0 only when the window is gone.
  */
-static void esb_wait_repaint(struct Window *win, int cap_ticks)
+static int esb_wait_repaint(struct Window *win, int cap_ticks)
 {
     int i, quiet = 0;
 
     for (i = 0; i < cap_ticks; i++) {
-        if (win->WLayer == NULL) {
-            return;
+        ULONG ilock;
+        int refresh;
+
+        ilock = LockIBase(0);
+        if (!esb_window_open_locked(win)) {
+            UnlockIBase(ilock);
+            return 0;
         }
-        if ((win->WLayer->Flags & LAYERREFRESH) != 0) {
+        refresh = win->WLayer == NULL ? -1
+                  : (win->WLayer->Flags & LAYERREFRESH) != 0;
+        UnlockIBase(ilock);
+        if (refresh < 0) {
+            return 1;
+        }
+        if (refresh) {
             quiet = 0;
         } else if (++quiet >= 3) {
-            return;
+            return 1;
         }
         Delay(1);
     }
+    return esb_live_box(win, NULL);
 }
 
 /*
@@ -648,8 +694,13 @@ static int esb_wait_box(struct Window *win, const ESRect *box,
     int i, steady = 0;
 
     for (i = 0; i < cap_ticks; i++) {
-        if (win->LeftEdge == box->x && win->TopEdge == box->y &&
-            win->Width == box->w && win->Height == box->h) {
+        ESRect at;
+
+        if (!esb_live_box(win, &at)) {
+            return 0;
+        }
+        if (at.x == box->x && at.y == box->y &&
+            at.w == box->w && at.h == box->h) {
             if (++steady >= 3) {
                 return 1;
             }
@@ -667,27 +718,37 @@ static int esb_wait_box(struct Window *win, const ESRect *box,
  * an unpainted SIMPLE_REFRESH layer. Closing it creates new, resize-free
  * damage, which sends Zune through its full redraw path.
  */
-static void esb_refresh_wanderer(struct Window *win, const ESRect *box)
+static int esb_refresh_wanderer(struct Window *win, const ESRect *box)
 {
-    struct Screen *scr = win->WScreen;
+    struct Screen *scr;
     struct Window *cover;
-    int left, top, right, bottom;
+    ULONG ilock;
+    int left, top, right, bottom, width, height;
 
+    ilock = LockIBase(0);
+    if (!esb_window_open_locked(win)) {
+        UnlockIBase(ilock);
+        return 0;
+    }
+    scr = win->WScreen;
+    width = scr != NULL ? scr->Width : 0;
+    height = scr != NULL ? scr->Height : 0;
+    UnlockIBase(ilock);
     if (scr == NULL) {
-        return;
+        return 1;
     }
     left = box->x < 0 ? 0 : box->x;
     top = box->y < 0 ? 0 : box->y;
     right = box->x + box->w;
     bottom = box->y + box->h;
-    if (right > (int)scr->Width) {
-        right = scr->Width;
+    if (right > width) {
+        right = width;
     }
-    if (bottom > (int)scr->Height) {
-        bottom = scr->Height;
+    if (bottom > height) {
+        bottom = height;
     }
     if (right <= left || bottom <= top) {
-        return;
+        return 1;
     }
 
     cover = OpenWindowTags(NULL,
@@ -704,8 +765,9 @@ static void esb_refresh_wanderer(struct Window *win, const ESRect *box)
                            TAG_DONE);
     if (cover != NULL) {
         CloseWindow(cover);
-        esb_wait_repaint(win, 150);
+        return esb_wait_repaint(win, 150);
     }
+    return esb_live_box(win, NULL);
 }
 #endif
 
@@ -723,11 +785,12 @@ static void esb_refresh_wanderer(struct Window *win, const ESRect *box)
  * window IS, and after a glide that is no longer where it was.
  *
  * Like the repaint waits below, this runs with the library's semaphore
- * held: the whole glide is a fifth of a second at most, and the task
- * doing it is the one that asked for the snap.
+ * held. The first intermediate box may wait ten ticks, each other box
+ * three at most, with two more for a raise. The task doing it asked for
+ * the snap.
  */
-static void esb_change_box(struct Window *win, const ESRect *from,
-                           const ESRect *to, int may_raise);
+static int esb_change_box(struct Window *win, const ESRect *from,
+                          const ESRect *to, int may_raise);
 
 /*
  * One box of a glide. ChangeWindowBox() only asks: Intuition installs
@@ -749,19 +812,26 @@ static void esb_change_box(struct Window *win, const ESRect *from,
  * ten. The loop stops as soon as the box has changed, so a longer
  * patience slows nothing that is quick.
  */
-static void esb_glide_step(struct Window *win, const ESRect *was,
-                           const ESRect *box, int patience)
+static int esb_glide_step(struct Window *win, const ESRect *was,
+                          const ESRect *box, int patience, ESRect *at)
 {
     int i;
 
+    if (!esb_live_box(win, NULL)) {
+        return 0;
+    }
     ChangeWindowBox(win, box->x, box->y, box->w, box->h);
     for (i = 0; i < patience; i++) {
         Delay(1);
-        if (win->LeftEdge != was->x || win->TopEdge != was->y ||
-            win->Width != was->w || win->Height != was->h) {
-            return;
+        if (!esb_live_box(win, at)) {
+            return 0;
+        }
+        if (at->x != was->x || at->y != was->y ||
+            at->w != was->w || at->h != was->h) {
+            return 1;
         }
     }
+    return 1;
 }
 
 static void esb_glide_box(struct Window *win, const ESRect *from,
@@ -769,40 +839,56 @@ static void esb_glide_box(struct Window *win, const ESRect *from,
 {
     ESRect at = *from;
     int steps = g_cfg.animate ? es_glide_steps(from, to) : 0;
-    int i;
+    ULONG ilock;
+    int i, covered;
 
-    if (steps > 0 && may_raise && win->WLayer != NULL &&
-        win->WLayer->front != NULL) {
+    ilock = LockIBase(0);
+    if (!esb_window_open_locked(win)) {
+        UnlockIBase(ilock);
+        return;
+    }
+    covered = win->WLayer != NULL && win->WLayer->front != NULL;
+    UnlockIBase(ilock);
+    if (steps > 0 && may_raise && covered) {
         WindowToFront(win);
         Delay(2);
     }
     for (i = 1; i < steps; i++) {
-        ESRect r;
+        ESRect r, live;
 
         es_glide_rect(from, to, i, steps, &r);
-        esb_glide_step(win, &at, &r, i == 1 ? 10 : 3);
         /* where it is, not where it was asked to be: the next box and
          * the AROS repaint dance both reason from here */
-        at.x = win->LeftEdge;
-        at.y = win->TopEdge;
-        at.w = win->Width;
-        at.h = win->Height;
+        if (!esb_glide_step(win, &at, &r, i == 1 ? 10 : 3, &live)) {
+            return;
+        }
+        at = live;
     }
     esb_change_box(win, &at, to, may_raise);
 }
 
-static void esb_change_box(struct Window *win, const ESRect *from,
-                           const ESRect *to, int may_raise)
+static int esb_change_box(struct Window *win, const ESRect *from,
+                          const ESRect *to, int may_raise)
 {
 #ifdef __AROS__
     int moved = (from->x != to->x || from->y != to->y);
     int sized = (from->w != to->w || from->h != to->h);
-    int covered = win->WLayer != NULL && win->WLayer->front != NULL;
-    int wanderer = esb_is_wanderer(win);
-    struct Screen *scr = win->WScreen;
-    int fits_here = scr != NULL && from->x >= 0 && from->y >= 0 &&
-                    from->x + to->w <= (int)scr->Width &&
-                    from->y + to->h <= (int)scr->Height;
+    int covered, wanderer, fits_here;
+    struct Screen *scr;
+    ULONG ilock;
+
+    ilock = LockIBase(0);
+    if (!esb_window_open_locked(win)) {
+        UnlockIBase(ilock);
+        return 0;
+    }
+    covered = win->WLayer != NULL && win->WLayer->front != NULL;
+    wanderer = esb_is_wanderer(win);
+    scr = win->WScreen;
+    fits_here = scr != NULL && from->x >= 0 && from->y >= 0 &&
+                from->x + to->w <= (int)scr->Width &&
+                from->y + to->h <= (int)scr->Height;
+    UnlockIBase(ilock);
 
     /*
      * Wanderer, in three sentences. When a window's size changes, Zune
@@ -821,18 +907,21 @@ static void esb_change_box(struct Window *win, const ESRect *from,
     if (moved && may_raise && covered) {
         WindowToFront(win);
         Delay(2);                  /* the raise is an action: let it land */
-        if (wanderer) {
-            esb_wait_repaint(win, 150);
+        if (wanderer && !esb_wait_repaint(win, 150)) {
+            return 0;
         }
     }
     if (sized && moved) {
         int grows = (long)to->w * to->h > (long)from->w * from->h;
 
+        if (!esb_live_box(win, NULL)) {
+            return 0;
+        }
         if (grows && !fits_here) {
             ChangeWindowBox(win, to->x, to->y, from->w, from->h);
             Delay(2);
-            if (wanderer) {
-                esb_wait_repaint(win, 150);
+            if (wanderer && !esb_wait_repaint(win, 150)) {
+                return 0;
             }
         } else {
             ChangeWindowBox(win, from->x, from->y, to->w, to->h);
@@ -842,13 +931,19 @@ static void esb_change_box(struct Window *win, const ESRect *from,
     (void)from;
     (void)may_raise;
 #endif
+    if (!esb_live_box(win, NULL)) {
+        return 0;
+    }
     ChangeWindowBox(win, to->x, to->y, to->w, to->h);
 #ifdef __AROS__
     if (wanderer && (moved || sized) && esb_wait_box(win, to, 150)) {
-        esb_wait_repaint(win, 150);
-        esb_refresh_wanderer(win, to);
+        if (!esb_wait_repaint(win, 150)) {
+            return 0;
+        }
+        return esb_refresh_wanderer(win, to);
     }
 #endif
+    return esb_live_box(win, NULL);
 }
 
 /*
@@ -1098,57 +1193,63 @@ LONG esb_set_options(const struct TagItem *tags)
     const struct TagItem *scan = tags;
     const struct TagItem *ti;
     ESConfig cfg;
-    LONG v;
+    LONG v, rc = ES_OK;
 
     if (tags == NULL) {
         return ES_ERR_BAD_ARGS;
     }
     ObtainSemaphore(&g_sem);
     cfg = g_cfg; /* apply to a copy: a bad tag must change nothing */
-    ReleaseSemaphore(&g_sem);
 
-    while ((ti = esb_next_tag(&scan)) != NULL) {
+    while (rc == ES_OK && (ti = esb_next_tag(&scan)) != NULL) {
         v = (LONG)ti->ti_Data;
         switch (ti->ti_Tag) {
         case ES_OPT_EdgePx:
             if (v < ES_EDGE_PX_MIN || v > ES_EDGE_PX_MAX) {
-                return ES_ERR_BAD_ARGS;
+                rc = ES_ERR_BAD_ARGS;
+                break;
             }
             cfg.engine.edge_px = (int)v;
             break;
         case ES_OPT_CornerDiv:
             if (v < ES_CORNER_DIV_MIN || v > ES_CORNER_DIV_MAX) {
-                return ES_ERR_BAD_ARGS;
+                rc = ES_ERR_BAD_ARGS;
+                break;
             }
             cfg.engine.corner_div = (int)v;
             break;
         case ES_OPT_DragMinPx:
             if (v < ES_DRAG_MIN_PX_MIN || v > ES_DRAG_MIN_PX_MAX) {
-                return ES_ERR_BAD_ARGS;
+                rc = ES_ERR_BAD_ARGS;
+                break;
             }
             cfg.engine.drag_min_px = (int)v;
             break;
         case ES_OPT_MarginLeft:
             if (v < ES_MARGIN_MIN || v > ES_MARGIN_MAX) {
-                return ES_ERR_BAD_ARGS;
+                rc = ES_ERR_BAD_ARGS;
+                break;
             }
             cfg.margin.l = (int)v;
             break;
         case ES_OPT_MarginTop:
             if (v < ES_MARGIN_MIN || v > ES_MARGIN_MAX) {
-                return ES_ERR_BAD_ARGS;
+                rc = ES_ERR_BAD_ARGS;
+                break;
             }
             cfg.margin.t = (int)v;
             break;
         case ES_OPT_MarginRight:
             if (v < ES_MARGIN_MIN || v > ES_MARGIN_MAX) {
-                return ES_ERR_BAD_ARGS;
+                rc = ES_ERR_BAD_ARGS;
+                break;
             }
             cfg.margin.r = (int)v;
             break;
         case ES_OPT_MarginBottom:
             if (v < ES_MARGIN_MIN || v > ES_MARGIN_MAX) {
-                return ES_ERR_BAD_ARGS;
+                rc = ES_ERR_BAD_ARGS;
+                break;
             }
             cfg.margin.b = (int)v;
             break;
@@ -1158,7 +1259,8 @@ LONG esb_set_options(const struct TagItem *tags)
         case ES_OPT_PanelMargin:
             if (v < ES_PANEL_MARGIN_MIN ||
                 v > ES_PANEL_MARGIN_MAX) {
-                return ES_ERR_BAD_ARGS;
+                rc = ES_ERR_BAD_ARGS;
+                break;
             }
             cfg.panel_margin = (int)v;
             break;
@@ -1179,7 +1281,8 @@ LONG esb_set_options(const struct TagItem *tags)
             break;
         case ES_OPT_BypassQual:
             if (v < ES_QUAL_NONE || v > ES_QUAL_SHIFT) {
-                return ES_ERR_BAD_ARGS;
+                rc = ES_ERR_BAD_ARGS;
+                break;
             }
             cfg.bypass_qual = (int)v;
             break;
@@ -1187,7 +1290,11 @@ LONG esb_set_options(const struct TagItem *tags)
             break; /* unknown tag: ignored, by contract */
         }
     }
-    return esb_set_config(&cfg);
+    if (rc == ES_OK) {
+        rc = esb_set_config(&cfg);
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
 }
 
 LONG esb_enable(BOOL on)
@@ -1292,21 +1399,23 @@ static unsigned long esb_distance(long p, long q)
                   : (unsigned long)q - (unsigned long)p;
 }
 
+/* Intuition's window coordinates are signed 16-bit values. */
+static LONG esb_clamp_position(LONG position)
+{
+    if (position < -32768L) {
+        return -32768L;
+    }
+    return position > 32767L ? 32767L : position;
+}
+
 /* Same slack as the registry restore: apps round sizes to increments,
  * so "where we put it" is a neighbourhood, not a point. */
 static int esb_same_box(const ESRect *a, const ESRect *b)
 {
-    int dx = a->x - b->x;
-    int dy = a->y - b->y;
-    int dw = a->w - b->w;
-    int dh = a->h - b->h;
-
-    if (dx < 0) { dx = -dx; }
-    if (dy < 0) { dy = -dy; }
-    if (dw < 0) { dw = -dw; }
-    if (dh < 0) { dh = -dh; }
-    return dx <= ES_RESTORE_SLACK_PX && dy <= ES_RESTORE_SLACK_PX &&
-           dw <= ES_RESTORE_SLACK_PX && dh <= ES_RESTORE_SLACK_PX;
+    return esb_distance(a->x, b->x) <= ES_RESTORE_SLACK_PX &&
+           esb_distance(a->y, b->y) <= ES_RESTORE_SLACK_PX &&
+           esb_distance(a->w, b->w) <= ES_RESTORE_SLACK_PX &&
+           esb_distance(a->h, b->h) <= ES_RESTORE_SLACK_PX;
 }
 
 /*
@@ -1658,6 +1767,7 @@ struct ESBFollow {
     int vertical;
     LONG pos;                  /* where the seam is                    */
     LONG last_arg;             /* where the task last asked to move it */
+    int gone;                  /* a stale seam stays stale on its line */
     int na, nb;
     ULONG a[ES_SEAM_SIDE_MAX]; /* the windows of each side, by serial  */
     ULONG b[ES_SEAM_SIDE_MAX];
@@ -1750,6 +1860,7 @@ static void esb_follow_store(const ESSeam *seam, LONG pos, LONG last_arg)
     f->vertical = seam->vertical != 0;
     f->pos = pos;
     f->last_arg = last_arg;
+    f->gone = 0;
     f->na = seam->a.n;
     f->nb = seam->b.n;
     for (i = 0; i < n; i++) {
@@ -1792,6 +1903,9 @@ static LONG esb_follow_seam(const struct ESBFollow *f, ESSeam **out)
     int plain = 0, keyed = 0, n = f->na + f->nb, i, k, m;
 
     *out = NULL;
+    if (f->gone) {
+        return ES_ERR_STALE;
+    }
     for (i = 0; i < n; i++) {
         if (!esb_serial_known(i < f->na ? f->a[i] : f->b[i - f->na])) {
             return ES_ERR_STALE;
@@ -1860,6 +1974,10 @@ LONG esb_query_divider_at(ULONG thickness, LONG x, LONG y,
     if (out == NULL || thickness < 2 || thickness > 64) {
         return ES_ERR_BAD_ARGS;
     }
+    if (x < -32768L || x > 32767L || y < -32768L || y > 32767L) {
+        esb_no_seam(out);
+        return ES_OK;
+    }
     ObtainSemaphore(&g_sem);
     esb_seam_list(NULL);
     m = esb_seams_found((int)thickness);
@@ -1926,6 +2044,7 @@ LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
     unsigned long best = 0;
     int m, i;
 
+    position = esb_clamp_position(position);
     ObtainSemaphore(&g_sem);
     esb_seam_list(NULL);
     f = esb_follow_find(FindTask(NULL));
@@ -1936,9 +2055,10 @@ LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
          * seam lies on the line by now */
         rc = esb_follow_seam(f, &seam);
         if (rc == ES_ERR_STALE) {
-            f->task = NULL;
+            f->gone = 1;
         }
     } else {
+        esb_follow_drop();         /* the task asked about another line */
         /*
          * The seam is named by its line: a layout can hold several, and
          * moving "the first one" would resize windows nobody grabbed.
@@ -1975,7 +2095,14 @@ LONG esb_move_divider_at(LONG vertical, LONG line, LONG position)
             /* the drag goes on with these windows, wherever it leads */
             esb_follow_store(seam, applied, position);
         } else if (rc == ES_ERR_STALE) {
-            esb_follow_drop();
+            f = esb_follow_find(FindTask(NULL));
+            if (f == NULL) {
+                esb_follow_store(seam, seam->pos, position);
+                f = esb_follow_find(FindTask(NULL));
+            }
+            if (f != NULL) {
+                f->gone = 1;
+            }
         }
     }
     ReleaseSemaphore(&g_sem);
@@ -2279,7 +2406,7 @@ static void esb_drag_out(const ESEngineActions *a)
     struct Window *win = (struct Window *)a->drop_ref;
     struct ESBSnap s;
     ESRect pre, r;
-    int t;
+    int t, px, py;
 
     for (t = 0; ; t++) {
         if (!esb_sample(win, &s)) {
@@ -2302,8 +2429,9 @@ static void esb_drag_out(const ESEngineActions *a)
                !esb_locked_for(win) && !esb_grouped(win) &&
                es_registry_drag_out(&g_registry, win, &a->drop_from,
                                     &s.box, &pre) == ES_OK) {
+        es_engine_drop_point(a, &s.box, &px, &py);
         es_unsnap_rect(&pre, &a->drop_from, a->drop_grab_x,
-                       a->drop_grab_y, a->drop_x, a->drop_y, &s.usable,
+                       a->drop_grab_y, px, py, &s.usable,
                        s.min_w, s.min_h, s.max_w, s.max_h, &r);
         if (!esb_same_box(&r, &s.box)) {
             esb_member_placed(win, &s.box, &r);
@@ -2481,6 +2609,7 @@ LONG esb_move_divider(LONG position)
     ESSeam *seam;
     LONG rc = ES_ERR_UNSUPPORTED;
 
+    position = esb_clamp_position(position);
     ObtainSemaphore(&g_sem);
     esb_seam_list(NULL);
     seam = esb_first_seam(esb_seams_found(ESB_SEAM_LINE_PX));
@@ -3453,7 +3582,10 @@ LONG esb_group_add_window(ULONG group, struct Window *win)
                     g->placed[k] = box;
                 }
                 g->prev[k] = g->placed[k];
-                g->asked[k] = 0;
+                g->asked[k] = box.x != g->placed[k].x ||
+                               box.y != g->placed[k].y ||
+                               box.w != g->placed[k].w ||
+                               box.h != g->placed[k].h ? esb_now() : 0;
                 rc = ES_OK;
             }
         }
@@ -3523,13 +3655,23 @@ LONG esb_query_group_of(struct Window *win, ULONG *group_out)
     return rc;
 }
 
+/* Refuse client geometry Intuition cannot represent, before fitting
+ * cells or multiplying sizes to order a batch. */
+static int esb_rect_representable(const struct ESnapRect *rect)
+{
+    return rect->x >= -32768L && rect->x <= 32767L &&
+           rect->y >= -32768L && rect->y <= 32767L &&
+           rect->w >= 1 && rect->w <= 32767L &&
+           rect->h >= 1 && rect->h <= 32767L;
+}
+
 LONG esb_place_window(struct Window *win, const struct ESnapRect *rect,
                       ULONG flags)
 {
     ESRect want;
     LONG rc;
 
-    if (win == NULL || rect == NULL || rect->w <= 0 || rect->h <= 0 ||
+    if (win == NULL || rect == NULL || !esb_rect_representable(rect) ||
         (flags & ~ESB_PF_ALL) != 0) {
         return ES_ERR_BAD_ARGS;
     }
@@ -3565,8 +3707,7 @@ LONG esb_place_windows(struct ESnapPlacement *list, ULONG count,
 
         g_place_delta[i] = 0;
         list[i].result = ES_OK;
-        if (list[i].window == NULL || list[i].rect.w <= 0 ||
-            list[i].rect.h <= 0) {
+        if (list[i].window == NULL || !esb_rect_representable(&list[i].rect)) {
             list[i].result = ES_ERR_BAD_ARGS;
         } else if (!esb_sample(list[i].window, &s)) {
             es_registry_forget(&g_registry, list[i].window);
@@ -3596,22 +3737,6 @@ LONG esb_place_windows(struct ESnapPlacement *list, ULONG count,
 }
 
 /* ------------------------------------------- dividers of the list (2.24) */
-
-/* IBase locked. Is target a window of some screen right now? */
-static int esb_window_open_locked(struct Window *target)
-{
-    struct Screen *scr;
-    struct Window *w;
-
-    for (scr = ESB_IBASE->FirstScreen; scr != NULL; scr = scr->NextScreen) {
-        for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
-            if (w == target) {
-                return 1;
-            }
-        }
-    }
-    return 0;
-}
 
 /* g_sem and IBase held, identities observed: the window of a serial,
  * or NULL. Every entry the observation kept is a live window, with
@@ -3768,7 +3893,9 @@ static int esb_seam_list(struct ESBGroup *group)
         g = esb_group_of_serial(serial);
         k = esb_member_index(g, serial);
         if (k < 0) {
-            esb_seam_add(w, &e->snapped, s, NULL, 0);
+            if (!esb_is_excluded(w) && esb_flags_snappable(w->Flags)) {
+                esb_seam_add(w, &e->snapped, s, NULL, 0);
+            }
         } else {
             g_sl_slot_g[i] = (unsigned char)(g - g_groups + 1);
             g_sl_slot_k[i] = (unsigned char)k;
@@ -3923,11 +4050,23 @@ static LONG esb_seam_move(ESSeam *seam, LONG position, int may_raise,
     es_order_by_growth(g_sl_delta, n, g_sl_order);
     for (j = 0; j < n; j++) {
         struct Window *w;
+        struct ESBSeamWin *sw;
+        ULONG ilock;
+        int alive;
 
         i = g_sl_order[j];
         w = (struct Window *)(i < na ? seam->a.ref[i] : seam->b.ref[i - na]);
-        esb_change_box(w, &g_sl_win[esb_sl_index(w)].live, &g_sl_to[i],
-                       may_raise);
+        sw = &g_sl_win[esb_sl_index(w)];
+        /* A previous window's AROS waits may have let this one close. */
+        ilock = LockIBase(0);
+        alive = esb_window_open_locked(w) && w->WLayer == sw->layer;
+        if (alive) {
+            esb_seam_facts(w, sw);
+        }
+        UnlockIBase(ilock);
+        if (!alive || !esb_change_box(w, &sw->live, &g_sl_to[i], may_raise)) {
+            return ES_ERR_STALE;
+        }
     }
     if (applied != NULL) {
         *applied = pos;
@@ -4198,6 +4337,7 @@ LONG esb_move_divider_t(ULONG token, LONG position, ULONG flags,
     LONG rc, pos = 0;
     int slot, i, k, r;
 
+    position = esb_clamp_position(position);
     if (token == 0 || (flags & ~ES_PF_KEEP_ZORDER) != 0) {
         return ES_ERR_BAD_ARGS;
     }
@@ -4221,6 +4361,15 @@ LONG esb_move_divider_t(ULONG token, LONG position, ULONG flags,
             es_divtok_retire(&g->tok, slot);
             rc = ES_ERR_STALE;
         } else {
+            r = es_seam_by_refs(g_sl_box, g_sl_n, ESB_SEAM_LINE_PX,
+                                g->tok.slot[slot].vertical,
+                                g_sl_ref[0], g_sl_mem_n[0],
+                                g_sl_ref[1], g_sl_mem_n[1], &g_sl_one);
+            if (r == 0) {
+                es_divtok_retire(&g->tok, slot);
+                ReleaseSemaphore(&g_sem);
+                return ES_ERR_STALE;
+            }
             rc = ES_OK;
             for (i = 0; i < g_sl_mem_n[0] + g_sl_mem_n[1]; i++) {
                 k = esb_sl_index(i < g_sl_mem_n[0]
@@ -4231,14 +4380,7 @@ LONG esb_move_divider_t(ULONG token, LONG position, ULONG flags,
                 }
             }
             if (rc == ES_OK) {
-                r = es_seam_by_refs(g_sl_box, g_sl_n, ESB_SEAM_LINE_PX,
-                                    g->tok.slot[slot].vertical,
-                                    g_sl_ref[0], g_sl_mem_n[0],
-                                    g_sl_ref[1], g_sl_mem_n[1], &g_sl_one);
-                if (r == 0) {
-                    es_divtok_retire(&g->tok, slot);
-                    rc = ES_ERR_STALE;
-                } else if (r < 0) {
+                if (r < 0) {
                     rc = ES_ERR_UNSUPPORTED;    /* no room: the token stays */
                 } else {
                     rc = esb_seam_move(&g_sl_one, position,

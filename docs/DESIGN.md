@@ -137,6 +137,18 @@ input.device -> CxCustom handler -> counters + Signal() -> engine task
                 (copy event facts only)                    (all the logic)
 ```
 
+There is one deliberate exception, on AROS (`spike_pf_drop_now` in
+`commodity/edgesnap_cx.c`, described under 0.3 below): on the button
+release the handler takes the XOR preview frame down itself, ahead of
+Intuition, which in AROS's outline drag moves the window on that very
+event. A frame taken down from the task after the move inverts pixels
+the move has just repainted. Under `Forbid` the masked path reads and
+writes the frame's strips on the screen's `RastPort` with
+`ReadPixelArray` and `WritePixelArray`, and the plain fallback fills
+them with `RectFill` in `COMPLEMENT` mode; the buffers stay for the
+task to free. It is the only exception to this rule, and it may go if I
+find a way to take the frame down from the task without the artefact.
+
 ## Drag detection (no patches)
 
 `IDCMP_CHANGEWINDOW` only reaches the owning app, and `SetFunction()` on

@@ -428,6 +428,20 @@ static void print_dividers(const struct ESnapDividerInfo *dv, ULONG need)
     }
 }
 
+/* Empty also when a second rig shares the first one's client. */
+static void rig_init(struct Rig *r)
+{
+    int i;
+
+    r->me = 0;
+    r->grp = 0;
+    r->bg = NULL;
+    for (i = 0; i < 3; i++) {
+        r->w[i] = NULL;
+        r->serial[i] = 0;
+    }
+}
+
 /*
  * A and B in a group of ours (flags), with a gap of TEST_GAP and no
  * margins, in the two halves of the usable area of their screen. Not
@@ -441,13 +455,7 @@ static int rig_up(struct Rig *r, ULONG flags)
     LONG rc;
     int i;
 
-    r->me = 0;
-    r->grp = 0;
-    r->bg = NULL;
-    for (i = 0; i < 3; i++) {
-        r->w[i] = NULL;
-        r->serial[i] = 0;
-    }
+    rig_init(r);
     rc = ES_CALL(ESnap_RegisterClient)("esnaptest", ES_CL_LAYOUT, &r->me);
     printf("esnaptest: ESnap_RegisterClient(layout) -> %s", rcname(rc));
     if (!verdict(rc == ES_OK)) {
@@ -1435,6 +1443,620 @@ static int near_px(LONG a, LONG b)
     return a - b <= TEST_SLACK && b - a <= TEST_SLACK;
 }
 
+/* --------------------------------------------- 2.25: regression checks */
+
+static int near_box(const struct ESnapRect *a, const struct ESnapRect *b)
+{
+    return near_px(a->x, b->x) && near_px(a->y, b->y) &&
+           near_px(a->w, b->w) && near_px(a->h, b->h);
+}
+
+/* One live seam before a check changes its windows. */
+static int dt25_seam(const struct Rig *r, struct ESnapDividerInfo *out)
+{
+    struct ESnapDividerInfo dv[4];
+    ULONG need = 0;
+    LONG rc;
+
+    rc = rig_dividers(r, dv, &need);
+    printf("esnaptest: 2.25 ESnap_QueryDividers -> %s, %lu seam(s) "
+           "(expected ES_OK, 1, a token)", rcname(rc), (unsigned long)need);
+    if (!verdict(rc == ES_OK && need == 1 && dv[0].token != 0 &&
+                 dv[0].vertical && dv[0].position == r->c)) {
+        return 0;
+    }
+    *out = dv[0];
+    return 1;
+}
+
+/* A and B leave their group, then snap as ordinary ungrouped windows.
+ * The query must name ours before a line move is allowed to follow it. */
+static void dt25_excluded(struct Rig *r)
+{
+    struct ESnapDivider d, q;
+    struct ESnapRect before[2], after[2];
+    LONG rc, rc2;
+    int i;
+
+    if (!front_screen(r->w[0])) {
+        printf("esnaptest: the windows' screen is not in front: "
+               "2.25 excluded divider checks skipped\n");
+        return;
+    }
+    rc = ES_CALL(ESnap_DeleteGroup)(r->grp);
+    printf("esnaptest: 2.25 A and B out of their group -> %s", rcname(rc));
+    if (!verdict(rc == ES_OK)) {
+        return;
+    }
+    r->grp = 0;
+    rc = ES_CALL(ESnap_SnapWindow)(r->w[0], ES_ZONE_LEFT);
+    rc2 = ES_CALL(ESnap_SnapWindow)(r->w[1], ES_ZONE_RIGHT);
+    printf("esnaptest: ESnap_SnapWindow(A left, B right) -> %s %s",
+           rcname(rc), rcname(rc2));
+    if (!verdict(rc == ES_OK && rc2 == ES_OK)) {
+        return;
+    }
+    Delay(50L);                     /* the snaps must have landed */
+    for (i = 0; i < 2; i++) {
+        box_of(r->w[i], &before[i]);
+    }
+    d.present = 0;
+    d.windowA = d.windowB = NULL;
+    rc = ES_CALL(ESnap_QueryDividerAt)(10, before[1].x, r->hy, &d);
+    printf("esnaptest: ESnap_QueryDividerAt(A against B) -> %s, present "
+           "%ld (expected ES_OK, our vertical seam)", rcname(rc),
+           (long)d.present);
+    if (!verdict(rc == ES_OK && d.present && d.vertical &&
+                 d.windowA == r->w[0] && d.windowB == r->w[1] &&
+                 d.windowCount == 2)) {
+        printf("esnaptest: the seam is not ours: excluded move skipped\n");
+        return;
+    }
+    rc = ES_CALL(ESnap_ExcludeWindow)(r->w[0], TRUE);
+    printf("esnaptest: ESnap_ExcludeWindow(A, TRUE) -> %s", rcname(rc));
+    if (verdict(rc == ES_OK)) {
+        q.present = 1;
+        rc = ES_CALL(ESnap_QueryDividerAt)(10, d.position, r->hy, &q);
+        printf("esnaptest: ESnap_QueryDividerAt after excluding A -> %s, "
+               "present %ld (expected ES_OK, 0)", rcname(rc),
+               (long)q.present);
+        if (verdict(rc == ES_OK && !q.present)) {
+            for (i = 0; i < 2; i++) {
+                box_of(r->w[i], &before[i]);
+            }
+            rc = ES_CALL(ESnap_MoveDividerAt)(1, d.position,
+                                               d.position + 50);
+            Delay(25L);             /* a wrongly accepted move may land */
+            for (i = 0; i < 2; i++) {
+                box_of(r->w[i], &after[i]);
+            }
+            printf("esnaptest: ESnap_MoveDividerAt with A excluded -> %s "
+                   "(expected ES_ERR_UNSUPPORTED, both boxes untouched)",
+                   rcname(rc));
+            verdict(rc == ES_ERR_UNSUPPORTED &&
+                    near_box(&before[0], &after[0]) &&
+                    near_box(&before[1], &after[1]));
+        } else {
+            printf("esnaptest: a seam was reported: line move skipped\n");
+        }
+    }
+    rc = ES_CALL(ESnap_ExcludeWindow)(r->w[0], FALSE);
+    printf("esnaptest: ESnap_ExcludeWindow(A, FALSE) -> %s", rcname(rc));
+    verdict(rc == ES_OK);
+}
+
+/* No wait or logging between placement and the first group query and
+ * move: a remembered request may still be on its way when they join. */
+static void dt25_join(struct Rig *r)
+{
+    struct ESnapPlacement pl[2];
+    struct ESnapRect cell[2];
+    struct ESnapDividerInfo dv[4];
+    ULONG need = 0;
+    LONG rc, placed, made = 12345, added[2], queried = 12345;
+    LONG moved = 12345, applied = 12345, at = r->c + 40;
+    int i;
+
+    rc = ES_CALL(ESnap_DeleteGroup)(r->grp);
+    printf("esnaptest: 2.25 delete the setup group before placement -> %s",
+           rcname(rc));
+    if (!verdict(rc == ES_OK)) {
+        return;
+    }
+    r->grp = 0;
+    rig_cells(r, at, 0, 2, cell);
+    for (i = 0; i < 2; i++) {
+        pl[i].window = r->w[i];
+        pl[i].rect = cell[i];
+        pl[i].result = added[i] = 12345;
+    }
+    placed = ES_CALL(ESnap_PlaceWindowsA)(pl, 2, ES_PF_KEEP_ZORDER);
+    if (placed == ES_OK && pl[0].result == ES_OK && pl[1].result == ES_OK) {
+        made = ES_CALL(ESnap_CreateGroup)(0, "joining", ES_GF_LOCKED,
+                                           &r->grp);
+        if (made == ES_OK) {
+            added[0] = ES_CALL(ESnap_GroupAddWindow)(r->grp, r->w[0]);
+            added[1] = ES_CALL(ESnap_GroupAddWindow)(r->grp, r->w[1]);
+            if (added[0] == ES_OK && added[1] == ES_OK) {
+                queried = rig_dividers(r, dv, &need);
+                if (queried == ES_OK && need == 1 && dv[0].token != 0) {
+                    moved = ES_CALL(ESnap_MoveDividerT)(dv[0].token,
+                                                         at + 30, 0,
+                                                         &applied);
+                }
+            }
+        }
+    }
+    printf("esnaptest: ESnap_PlaceWindowsA with restore -> %s, entries "
+           "%s %s (expected ES_OK)", rcname(placed), rcname(pl[0].result),
+           rcname(pl[1].result));
+    if (!verdict(placed == ES_OK && pl[0].result == ES_OK &&
+                 pl[1].result == ES_OK)) {
+        return;
+    }
+    printf("esnaptest: immediately create a group and add A and B -> "
+           "%s %s %s (expected ES_OK)", rcname(made), rcname(added[0]),
+           rcname(added[1]));
+    if (!verdict(made == ES_OK && added[0] == ES_OK && added[1] == ES_OK)) {
+        return;
+    }
+    printf("esnaptest: ESnap_QueryDividers before any wait -> %s, %lu "
+           "seam(s) (expected ES_OK, 1, not ES_DIF_MOVED)", rcname(queried),
+           (unsigned long)need);
+    verdict(queried == ES_OK && need == 1 && dv[0].token != 0 &&
+            dv[0].vertical && dv[0].position == at &&
+            (dv[0].flags & ES_DIF_MOVED) == 0);
+    printf("esnaptest: ESnap_MoveDividerT immediately after joining -> %s, "
+           "applied %ld (expected ES_OK, %ld)", rcname(moved),
+           (long)applied, (long)(at + 30));
+    if (verdict(moved == ES_OK && applied == at + 30)) {
+        rig_cells(r, applied, 0, 2, cell);  /* this group has no gap */
+        printf("esnaptest: both boxes after the joining move");
+        verdict(wait_boxes(r->w, cell, 2));
+    }
+}
+
+/* First establish a manual move, then break the remembered topology.
+ * No query after B's placement may retire the token before the move. */
+static void dt25_order(struct Rig *r)
+{
+    struct ESnapDividerInfo one, dv[4];
+    struct ESnapPlacement pl;
+    struct ESnapRect want[2], hand;
+    ULONG need = 0, ser[4];
+    LONG rc, applied = 12345;
+
+    if (!rig_check(r, r->c, 0, 2, "2.25 error order setup") ||
+        !dt25_seam(r, &one)) {
+        return;
+    }
+    rig_boxes(r, r->c, 0, 2, want);
+    hand = want[0];
+    hand.y += 60;
+    hand.h -= 60;
+    ChangeWindowBox(r->w[0], hand.x, hand.y, hand.w, hand.h);
+    Delay(175L);                    /* beyond the two-second transit */
+    printf("esnaptest: A moved by hand, three and a half seconds on");
+    if (!verdict(wait_boxes(&r->w[0], &hand, 1))) {
+        return;
+    }
+    rc = rig_dividers(r, dv, &need);
+    printf("esnaptest: before breaking the seam -> %s, %lu seam(s) "
+           "(expected the same token, ES_DIF_MOVED)", rcname(rc),
+           (unsigned long)need);
+    if (!verdict(rc == ES_OK && need == 1 && dv[0].token == one.token &&
+                 (dv[0].flags & ES_DIF_MOVED) != 0)) {
+        return;
+    }
+    pl.window = r->w[1];
+    pl.rect = r->u;
+    pl.rect.w = r->u.w / 3;
+    pl.rect.y = r->hy;
+    pl.rect.h = r->u.y + r->u.h - r->hy;
+    pl.result = 12345;
+    rc = ES_CALL(ESnap_PlaceWindowsA)(&pl, 1,
+                                       ES_PF_NO_RESTORE | ES_PF_KEEP_ZORDER);
+    printf("esnaptest: B placed away from A's seam -> %s, entry %s",
+           rcname(rc), rcname(pl.result));
+    if (!verdict(rc == ES_OK && pl.result == ES_OK)) {
+        return;
+    }
+    rc = ES_CALL(ESnap_MoveDividerT)(one.token, r->c + 30, 0, &applied);
+    printf("esnaptest: ESnap_MoveDividerT with a changed A and no seam -> "
+           "%s, applied %ld (expected ES_ERR_STALE, untouched)",
+           rcname(rc), (long)applied);
+    verdict(rc == ES_ERR_STALE && applied == 12345);
+    rc = ES_CALL(ESnap_QueryDividerWindows)(one.token, ser, 4, &need);
+    printf("esnaptest: ESnap_QueryDividerWindows after that -> %s "
+           "(expected ES_ERR_STALE: retired)", rcname(rc));
+    verdict(rc == ES_ERR_STALE);
+}
+
+/* rig_check for a rig in one half of the area. The side the two halves
+ * share lies inside the usable area, so ES_PF_CELL takes its part of
+ * the gap off it as well: above it the larger part, below the smaller. */
+static int dt25_half_check(const struct Rig *r, int top, const char *what)
+{
+    struct ESnapRect want[2], got[2];
+    int i, ok;
+
+    rig_boxes(r, r->c, 0, 2, want);
+    for (i = 0; i < 2; i++) {
+        if (top) {
+            want[i].h -= GAP_A;
+        } else {
+            want[i].y += GAP_B;
+            want[i].h -= GAP_B;
+        }
+    }
+    ok = wait_boxes(r->w, want, 2);
+    for (i = 0; i < 2; i++) {
+        box_of(r->w[i], &got[i]);
+        printf("esnaptest:   %c %ld,%ld %ldx%ld (expected %ld,%ld %ldx%ld)\n",
+               'A' + i, (long)got[i].x, (long)got[i].y, (long)got[i].w,
+               (long)got[i].h, (long)want[i].x, (long)want[i].y,
+               (long)want[i].w, (long)want[i].h);
+    }
+    printf("esnaptest: %s", what);
+    return verdict(ok);
+}
+
+/* Two groups on one x, in separate halves of the area. The second rig
+ * shares the first rig's client; rig_down closes both on every path. */
+static void dt25_follow(struct Rig *r, struct Rig *other)
+{
+    struct ESnapDivider d;
+    struct ESnapRect before[2], after[2];
+    LONG rc, rc2, first, second;
+    int i;
+
+    if (!front_screen(r->w[0])) {
+        printf("esnaptest: the windows' screen is not in front: "
+               "2.25 stale line checks skipped\n");
+        return;
+    }
+    other->u = r->u;
+    r->u.h /= 2;
+    other->u.y += r->u.h;
+    other->u.h -= r->u.h;
+    other->c = r->c;
+    other->hy = other->u.y + other->u.h / 2;
+    other->w[0] = open_test_window("esnaptest G2 A");
+    other->w[1] = open_test_window("esnaptest G2 B");
+    printf("esnaptest: 2.25 two more windows for G2 -> %p %p",
+           (void *)other->w[0], (void *)other->w[1]);
+    if (!verdict(other->w[0] != NULL && other->w[1] != NULL)) {
+        return;
+    }
+    if (!front_screen(other->w[0]) || !front_screen(other->w[1])) {
+        printf("esnaptest: G2 is not on the front screen: "
+               "2.25 stale line checks skipped\n");
+        return;
+    }
+    rc = ES_CALL(ESnap_CreateGroup)(0, "second seam", ES_GF_LOCKED,
+                                     &other->grp);
+    if (rc == ES_OK) {
+        rc = set_gap(other->grp);
+    }
+    for (i = 0; i < 2 && rc == ES_OK; i++) {
+        rc = ES_CALL(ESnap_GroupAddWindow)(other->grp, other->w[i]);
+    }
+    printf("esnaptest: G2 with its own two members and gap %d -> %s",
+           TEST_GAP, rcname(rc));
+    if (!verdict(rc == ES_OK)) {
+        return;
+    }
+    rc = rig_place(r, r->c, 0, 2);
+    rc2 = rig_place(other, other->c, 0, 2);
+    printf("esnaptest: G1 above G2, both split at %ld -> %s %s",
+           (long)r->c, rcname(rc), rcname(rc2));
+    if (!verdict(rc == ES_OK && rc2 == ES_OK) ||
+        !dt25_half_check(r, 1, "G1 in the top half") ||
+        !dt25_half_check(other, 0, "G2 in the bottom half")) {
+        return;
+    }
+    for (i = 0; i < 2; i++) {
+        box_of(other->w[i], &before[i]);
+    }
+    d.present = 0;
+    d.windowA = d.windowB = NULL;
+    rc = ES_CALL(ESnap_QueryDividerAt)(10, r->c, r->u.y + r->u.h / 2, &d);
+    printf("esnaptest: ESnap_QueryDividerAt on G1 -> %s, present %ld "
+           "(expected G1's two windows)", rcname(rc), (long)d.present);
+    if (!verdict(rc == ES_OK && d.present && d.vertical &&
+                 d.position == r->c && d.windowA == r->w[0] &&
+                 d.windowB == r->w[1] && d.windowCount == 2)) {
+        printf("esnaptest: the queried seam is not G1: stale moves skipped\n");
+        return;
+    }
+    CloseWindow(r->w[1]);
+    r->w[1] = NULL;
+    first = ES_CALL(ESnap_MoveDividerAt)(1, d.position, d.position + 50);
+    second = ES_CALL(ESnap_MoveDividerAt)(1, d.position, d.position + 50);
+    Delay(25L);                     /* a wrong second move may land */
+    for (i = 0; i < 2; i++) {
+        box_of(other->w[i], &after[i]);
+    }
+    printf("esnaptest: close a G1 window, then two identical "
+           "ESnap_MoveDividerAt calls -> %s %s (expected ES_ERR_STALE "
+           "twice)", rcname(first), rcname(second));
+    verdict(first == ES_ERR_STALE && second == ES_ERR_STALE);
+    printf("esnaptest: G2's boxes after both stale line moves "
+           "(expected untouched, within slack)");
+    verdict(near_box(&before[0], &after[0]) &&
+            near_box(&before[1], &after[1]));
+}
+
+static void dt25_coordinates(struct Rig *r)
+{
+    struct ESnapRect before[2], after[2], bad;
+    struct ESnapPlacement pl[2];
+    struct ESnapDivider d;
+    struct ESnapDividerInfo one;
+    LONG rc, applied = 12345;
+    int i;
+
+    if (!rig_check(r, r->c, 0, 2, "2.25 coordinate setup")) {
+        return;
+    }
+    box_of(r->w[0], &before[0]);
+    for (i = 0; i < 3; i++) {
+        bad = before[0];
+        if (i == 0) {
+            bad.x = 40000L;
+        } else if (i == 1) {
+            bad.y = -40000L;
+        } else {
+            bad.w = 40000L;
+        }
+        rc = ES_CALL(ESnap_PlaceWindow)(r->w[0], &bad, 0);
+        Delay(25L);                 /* a bad request must not move it */
+        box_of(r->w[0], &after[0]);
+        printf("esnaptest: ESnap_PlaceWindow(%s) -> %s "
+               "(expected ES_ERR_BAD_ARGS, A untouched)",
+               i == 0 ? "x 40000" : i == 1 ? "y -40000" : "width 40000",
+               rcname(rc));
+        verdict(rc == ES_ERR_BAD_ARGS && near_box(&before[0], &after[0]));
+    }
+    box_of(r->w[1], &before[1]);
+    pl[0].window = r->w[0];
+    pl[0].rect = before[0];
+    pl[0].rect.x = 40000L;
+    pl[0].result = 12345;
+    pl[1].window = r->w[1];
+    pl[1].rect = before[1];
+    pl[1].rect.y += 60;
+    pl[1].rect.h -= 60;
+    pl[1].result = 12345;
+    rc = ES_CALL(ESnap_PlaceWindowsA)(pl, 2, ES_PF_KEEP_ZORDER);
+    printf("esnaptest: ESnap_PlaceWindowsA(bad A, good B) -> %s, entries "
+           "%s %s (expected ES_OK, ES_ERR_BAD_ARGS, ES_OK)", rcname(rc),
+           rcname(pl[0].result), rcname(pl[1].result));
+    verdict(rc == ES_OK && pl[0].result == ES_ERR_BAD_ARGS &&
+            pl[1].result == ES_OK);
+    printf("esnaptest: the good batch entry lands");
+    verdict(pl[1].result == ES_OK && wait_boxes(&r->w[1], &pl[1].rect, 1));
+    Delay(25L);
+    box_of(r->w[0], &after[0]);
+    box_of(r->w[1], &after[1]);
+    printf("esnaptest: bad entry A untouched, good B in its new box");
+    verdict(near_box(&before[0], &after[0]) &&
+            near_box(&pl[1].rect, &after[1]));
+
+    d.present = 1;
+    rc = ES_CALL(ESnap_QueryDividerAt)(10, 100000L, r->hy, &d);
+    printf("esnaptest: ESnap_QueryDividerAt(x 100000) -> %s, present %ld "
+           "(expected ES_OK, 0)", rcname(rc), (long)d.present);
+    verdict(rc == ES_OK && !d.present);
+
+    rc = rig_place(r, r->c, 0, 2);
+    printf("esnaptest: replace both windows before the far clamp -> %s",
+           rcname(rc));
+    if (!verdict(rc == ES_OK) ||
+        !rig_check(r, r->c, 0, 2, "back on the seam") ||
+        !dt25_seam(r, &one)) {
+        return;
+    }
+    if ((one.flags & ES_DIF_STUCK) != 0 ||
+        one.minPosition >= one.maxPosition) {
+        printf("esnaptest: the seam has no room: far clamp skipped\n");
+        return;
+    }
+    rc = ES_CALL(ESnap_MoveDividerT)(one.token, 0x7FFFFFFFL, 0, &applied);
+    printf("esnaptest: ESnap_MoveDividerT(0x7FFFFFFF) -> %s, applied %ld "
+           "(expected ES_OK, maxPosition %ld)", rcname(rc), (long)applied,
+           (long)one.maxPosition);
+    if (verdict(rc == ES_OK && applied == one.maxPosition)) {
+        rig_check(r, applied, 0, 2, "at the far limit");
+    }
+}
+
+/* A spare slot is a guard, filled and checked byte by byte so padding
+ * as well as fields must be left alone by a short-buffer query. */
+static void fill_pattern(void *buf, ULONG size)
+{
+    UBYTE *p = (UBYTE *)buf;
+    ULONG i;
+
+    for (i = 0; i < size; i++) {
+        p[i] = 0xA5;
+    }
+}
+
+static int pattern_untouched(const void *buf, ULONG size)
+{
+    const UBYTE *p = (const UBYTE *)buf;
+    ULONG i;
+
+    for (i = 0; i < size; i++) {
+        if (p[i] != 0xA5) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int same_bytes(const void *a, const void *b, ULONG size)
+{
+    const UBYTE *p = (const UBYTE *)a, *q = (const UBYTE *)b;
+    ULONG i;
+
+    for (i = 0; i < size; i++) {
+        if (p[i] != q[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void dt25_coverage(struct Rig *r)
+{
+    struct ESnapDividerInfo dv[4], short_dv[2];
+    ULONG need = 0, short_ser[4], gone;
+    ULONG guard_size = (ULONG)(sizeof(short_ser) - sizeof(short_ser[0]));
+    LONG rc, applied = 12345;
+
+    r->w[2] = open_test_window("esnaptest short buffers C");
+    printf("esnaptest: 2.25 a third window for two seams -> %p",
+           (void *)r->w[2]);
+    if (!verdict(r->w[2] != NULL)) {
+        return;
+    }
+    rc = ES_CALL(ESnap_GroupAddWindow)(r->grp, r->w[2]);
+    if (rc == ES_OK) {
+        rc = ES_CALL(ESnap_QueryWindowSerial)(r->w[2], &r->serial[2]);
+    }
+    if (rc == ES_OK) {
+        rc = rig_place(r, r->c, r->hy, 3);
+    }
+    printf("esnaptest: A left of B above C -> %s", rcname(rc));
+    if (!verdict(rc == ES_OK) ||
+        !rig_check(r, r->c, r->hy, 3, "short-buffer setup")) {
+        return;
+    }
+    rc = rig_dividers(r, dv, &need);
+    printf("esnaptest: the full list -> %s, %lu seam(s) "
+           "(expected ES_OK, 2, the first vertical with three windows)",
+           rcname(rc), (unsigned long)need);
+    if (!verdict(rc == ES_OK && need == 2 && dv[0].token != 0 &&
+                 dv[0].vertical && dv[0].countA == 1 && dv[0].countB == 2)) {
+        return;
+    }
+    fill_pattern(short_dv, (ULONG)sizeof(short_dv));
+    need = 0;
+    rc = ES_CALL(ESnap_QueryDividers)(r->grp, short_dv, 1, &need);
+    printf("esnaptest: ESnap_QueryDividers(count 1, two seams) -> %s, "
+           "needed %lu (expected ES_OK, 2, first entry written, "
+           "second untouched)", rcname(rc), (unsigned long)need);
+    verdict(rc == ES_OK && need == 2 &&
+            same_bytes(&short_dv[0], &dv[0], (ULONG)sizeof(dv[0])) &&
+            pattern_untouched(&short_dv[1], (ULONG)sizeof(short_dv[1])));
+    fill_pattern(short_ser, (ULONG)sizeof(short_ser));
+    need = 0;
+    rc = ES_CALL(ESnap_QueryDividerWindows)(dv[0].token, short_ser, 1, &need);
+    printf("esnaptest: ESnap_QueryDividerWindows(count 1, three windows) "
+           "-> %s, needed %lu (expected ES_OK, 3, A's serial first, "
+           "the rest untouched)", rcname(rc), (unsigned long)need);
+    verdict(rc == ES_OK && need == 3 && short_ser[0] == r->serial[0] &&
+            pattern_untouched(&short_ser[1], guard_size));
+
+    rc = ES_CALL(ESnap_GroupRemoveWindow)(r->grp, r->w[1]);
+    printf("esnaptest: ESnap_GroupRemoveWindow(B) -> %s", rcname(rc));
+    if (!verdict(rc == ES_OK)) {
+        return;
+    }
+    rc = ES_CALL(ESnap_MoveDividerT)(dv[0].token, r->c + 30, 0, &applied);
+    printf("esnaptest: ESnap_MoveDividerT after a member left -> %s, "
+           "applied %ld (expected ES_ERR_STALE, sentinel 12345)",
+           rcname(rc), (long)applied);
+    verdict(rc == ES_ERR_STALE && applied == 12345);
+    gone = r->grp;
+    rc = ES_CALL(ESnap_DeleteGroup)(gone);
+    printf("esnaptest: ESnap_DeleteGroup before querying its old id -> %s",
+           rcname(rc));
+    if (!verdict(rc == ES_OK)) {
+        return;
+    }
+    r->grp = 0;
+    rc = ES_CALL(ESnap_QueryDividers)(gone, dv, 4, &need);
+    printf("esnaptest: ESnap_QueryDividers(the deleted group) -> %s "
+           "(expected ES_ERR_STALE)", rcname(rc));
+    verdict(rc == ES_ERR_STALE);
+}
+
+static void dt25_drag_restore(void)
+{
+    struct TagItem opt[3];
+    LONG rc;
+
+    opt[0].ti_Tag = ES_OPT_DragRestore;
+    opt[0].ti_Data = FALSE;
+    opt[1].ti_Tag = TAG_DONE;
+    opt[1].ti_Data = 0;
+    rc = ES_CALL(ESnap_SetOptionsA)(opt);
+    printf("esnaptest: ESnap_SetOptionsA(DragRestore FALSE) -> %s "
+           "(expected ES_OK)", rcname(rc));
+    verdict(rc == ES_OK);
+    opt[0].ti_Data = TRUE;
+    rc = ES_CALL(ESnap_SetOptionsA)(opt);
+    printf("esnaptest: ESnap_SetOptionsA(DragRestore TRUE) -> %s "
+           "(expected ES_OK)", rcname(rc));
+    verdict(rc == ES_OK);
+    opt[0].ti_Data = FALSE;
+    opt[1].ti_Tag = ES_OPT_EdgePx;
+    opt[1].ti_Data = 40000;
+    opt[2].ti_Tag = TAG_DONE;
+    opt[2].ti_Data = 0;
+    rc = ES_CALL(ESnap_SetOptionsA)(opt);
+    printf("esnaptest: ESnap_SetOptionsA(DragRestore FALSE, EdgePx 40000) "
+           "-> %s (expected ES_ERR_BAD_ARGS)", rcname(rc));
+    verdict(rc == ES_ERR_BAD_ARGS);
+    opt[0].ti_Data = TRUE;
+    opt[1].ti_Tag = TAG_DONE;
+    rc = ES_CALL(ESnap_SetOptionsA)(opt);
+    printf("esnaptest: leave DragRestore TRUE -> %s (expected ES_OK)",
+           rcname(rc));
+    verdict(rc == ES_OK);
+}
+
+/* Each part has a fresh rig and is cleaned up even when setup or an
+ * assertion fails; none asks for a drag or other input. */
+static void test_fixes(void)
+{
+    struct Rig r, other;
+
+    g_pass = 0;
+    g_fail = 0;
+    if (rig_up(&r, 0)) {
+        dt25_excluded(&r);
+    }
+    rig_down(&r);
+    if (rig_up(&r, ES_GF_LOCKED)) {
+        dt25_join(&r);
+    }
+    rig_down(&r);
+    if (rig_up(&r, ES_GF_LOCKED)) {
+        dt25_order(&r);
+    }
+    rig_down(&r);
+    rig_init(&other);
+    if (rig_up(&r, ES_GF_LOCKED)) {
+        dt25_follow(&r, &other);
+    }
+    rig_down(&other);
+    rig_down(&r);
+    if (rig_up(&r, ES_GF_LOCKED)) {
+        dt25_coordinates(&r);
+    }
+    rig_down(&r);
+    if (rig_up(&r, ES_GF_LOCKED)) {
+        dt25_coverage(&r);
+    }
+    rig_down(&r);
+    dt25_drag_restore();
+    summary("2.25 fixes");
+}
+
 /* Is the pointer on w's title bar? Read with w's box, under the lock. */
 static int pointer_on_bar(struct Window *w, LONG *px, LONG *py)
 {
@@ -1986,6 +2608,13 @@ int main(int argc, char **argv)
         test_dividers();
     } else {
         printf("esnaptest: library revision %d has no 2.24 calls, skipped\n",
+               (int)EdgeSnapBase->lib_Revision);
+    }
+
+    if (EdgeSnapBase->lib_Revision >= 25) {
+        test_fixes();
+    } else {
+        printf("esnaptest: 2.25 checks need revision 25, this is %d, skipped\n",
                (int)EdgeSnapBase->lib_Revision);
     }
 

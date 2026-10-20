@@ -6,6 +6,7 @@
  */
 
 #include <stdio.h>
+#include <limits.h>
 
 #include "gutter.h"
 
@@ -2801,8 +2802,40 @@ static void test_grouped_seams_rebuild_in_any_order(void)
     CHECK(outside > 0);         /* or with the position outside */
 }
 
+/* Widely separated coordinates must never look like touching edges.
+ * Every edge itself fits: only the distance between them can overflow. */
+static void test_extreme_edges_are_not_near(void)
+{
+    ESRegistry reg;
+    ESSeam seam;
+    ESRect pre = rect(100, 100, 200, 150);
+    ESRect a, b;
+    int wa, wb, vertical, reverse;
+
+    for (vertical = 0; vertical <= 1; vertical++) {
+        for (reverse = 0; reverse <= 1; reverse++) {
+            a = rect(0, 0, 64, 64);
+            b = a;
+            if (vertical) {
+                a.x = reverse ? INT_MAX - 64 : INT_MIN;
+                b.x = reverse ? INT_MIN : INT_MAX - 64;
+            } else {
+                a.y = reverse ? INT_MAX - 64 : INT_MIN;
+                b.y = reverse ? INT_MIN : INT_MAX - 64;
+            }
+            es_registry_init(&reg);
+            CHECK(es_registry_remember(&reg, &wa, &pre, &a,
+                                       ES_ZONE_LEFT) == ES_OK);
+            CHECK(es_registry_remember(&reg, &wb, &pre, &b,
+                                       ES_ZONE_RIGHT) == ES_OK);
+            CHECK(es_gutter_find(&reg, 8, &seam) == 0);
+        }
+    }
+}
+
 int main(void)
 {
+    test_extreme_edges_are_not_near();
     test_finds_the_vertical_seam();
     test_drag_resizes_both();
     test_drag_is_clamped();

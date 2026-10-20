@@ -26,9 +26,12 @@
 #define ESnap_ExcludeWindow     esb_exclude_window
 #define ESnap_SetOptionsA       esb_set_options
 #define ESnap_Enable            esb_enable
-#define ESnap_FeedInput         esb_input
 #define ESnap_ResetInput        esb_input_reset
-#define ESnap_IgnoreWindows     esb_ignore_windows
+/* esb_input takes int counts; esb_ignore_windows returns void and takes int. */
+#define ESnap_FeedInput(p, m, r, q, out) \
+    esb_input((int)(p), (int)(m), (int)(r), (q), (out))
+#define ESnap_IgnoreWindows(w, n) \
+    (esb_ignore_windows((w), (int)(n)), (LONG)ES_OK)
 #define ESnap_QueryScreenArea   esb_query_screen_area
 #define ESnap_QueryDivider      esb_query_divider
 #define ESnap_QueryDividerAt    esb_query_divider_at

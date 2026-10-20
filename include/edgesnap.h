@@ -19,6 +19,9 @@
  *
  *   - the pointer is used as an identity key and validated against the
  *     live window lists (under LockIBase) inside the call;
+ *   - waits are followed by another validation before the window is
+ *     read or used again; Intuition calls use the validated pointer
+ *     just after the lock is released;
  *   - the library NEVER dereferences a caller-supplied window outside
  *     that validated section, and NEVER retains it beyond the call,
  *     except as an opaque key in the snap registry;
@@ -36,10 +39,12 @@
  * ------------------------------------------------------------------
  * All functions must be called from a normal application task context.
  * None of them may be called from interrupts, input handlers, or any
- * code running in input.device context. Calls are non-blocking except
- * for brief internal locking (LockIBase, registry semaphore). Geometry
- * changes are requested asynchronously (ChangeWindowBox semantics): a
- * successful return means "accepted", not "already applied".
+ * code running in input.device context. Snaps and restores can wait for
+ * a glide and, on AROS, for repainting; FeedInput can also wait for a
+ * drop (see below). Internal locking uses LockIBase and the registry
+ * semaphore. Geometry changes are requested asynchronously
+ * (ChangeWindowBox semantics): a successful return means "accepted",
+ * not "already applied".
  *
  * ------------------------------------------------------------------
  * Ownership
@@ -186,9 +191,20 @@ struct ESnapReport {
  * From 2.24 a release outside every zone can give a window EdgeSnap
  * snapped its size back (ES_OPT_DragRestore). The report does not say
  * so, since it does not grow: ESnap_QueryWindow answers ES_ZONE_NONE for
- * that window afterwards. Such a release can keep the call for up to a
- * fifth of a second, waiting for Intuition to put the window where the
- * drag left it.
+ * that window afterwards. Such a release can wait up to ten ticks for
+ * Intuition to put the window where the drag left it, then up to
+ * nineteen ticks for the glide when ES_OPT_Animate is on. At 50 Hz
+ * these are one fifth of a second and 0.38 seconds respectively.
+ * On AROS a move and resize can add two ticks, and a Wanderer window
+ * can also take up to four box or repaint waits, each capped at 150
+ * ticks (three seconds at 50 Hz). These bounds count the explicit
+ * waits; the system calls and scheduling take their own time.
+ *
+ * From 2.25 the restore uses the drop's live window box and the grab's
+ * offset in the starting box, so a last motion batched with the release
+ * cannot leave it short of the drop. Only the release's own qualifiers
+ * decide whether the bypass key skips the restore. A snap still uses
+ * the zone the preview showed.
  */
 void ESnap_FeedInput(ULONG presses, ULONG motions, ULONG releases,
                      ULONG qualifiers, struct ESnapReport *report);
@@ -253,6 +269,7 @@ LONG ESnap_QueryDivider(ULONG thickness, struct ESnapDivider *divider);
  * pixels of its strip, also answers whether the seam can be grabbed
  * there: when another window covers it at that point, present is 0.
  * Asked from further away, the nearest seam is named as before.
+ * From 2.25 a point with x or y outside -32768..32767 reports no seam.
  *   ES_OK / ES_ERR_BAD_ARGS.
  */
 LONG ESnap_QueryDividerAt(ULONG thickness, LONG x, LONG y,
@@ -266,6 +283,8 @@ LONG ESnap_QueryDividerAt(ULONG thickness, LONG x, LONG y,
  * than one seam on screen "the first" is whichever the layout walk
  * finds first, so new code should say which seam it means and call
  * ESnap_MoveDividerAt().
+ * From 2.25 position is clamped to -32768..32767 first, then to the
+ * seam's limits.
  *   ES_OK / ES_ERR_STALE (a window on the seam is gone) /
  *   ES_ERR_UNSUPPORTED (no seam).
  */
@@ -274,6 +293,8 @@ LONG ESnap_MoveDivider(LONG position);
 /*
  * Drag a NAMED divider to a screen coordinate: every window on it is
  * resized, and the value is clamped so none can be squeezed away.
+ * From 2.25 position is clamped to -32768..32767 before the seam's
+ * own limits are applied.
  * Window references are re-validated first, as everywhere else.
  *
  * The seam is named by the line it sits on - `vertical` and the
@@ -311,6 +332,15 @@ LONG ESnap_MoveDividerAt(LONG vertical, LONG line, LONG position);
  * takes the nearest seam on that axis, as before. A frontend that asks
  * about other points while it shows a seam moves the seam of the last
  * answer it got, so that is the one it should show.
+ *
+ * From 2.25 an ES_ERR_STALE answer keeps the record, marked gone:
+ * every later call that follows it answers ES_ERR_STALE and moves
+ * nothing. A QueryDividerAt answer of a seam replaces it; a move on a
+ * line it does not follow drops it and takes the nearest seam as
+ * before. The records of eight tasks are kept at a time. A task that
+ * is gone gives way first; otherwise the record made longest ago is
+ * evicted, and that task's next move takes the nearest seam until it
+ * records one again.
  */
 
 /* ------------------------------------------------------- functions */
@@ -370,6 +400,7 @@ LONG ESnap_ExcludeWindow(struct Window *win, BOOL exclude);
 
 /*
  * Global options; see ES_OPT_*. Applies to future interactions.
+ * All tags are applied together; a bad value changes nothing.
  *   ES_OK / ES_ERR_BAD_ARGS.
  */
 LONG ESnap_SetOptionsA(const struct TagItem *tags);
@@ -440,6 +471,9 @@ ULONG ESnap_QueryGeneration(struct Screen *screen);
  * same (ES_ERR_STALE, ES_ERR_REJECTED, ES_ERR_NO_MEMORY). QueryWindow
  * reports ES_ZONE_RECT for a window placed this way. Geometry changes
  * are requested, not applied (ChangeWindowBox semantics).
+ * From 2.25 rect's x and y must lie in -32768..32767, and its width
+ * and height in 1..32767, as Intuition can represent them; otherwise
+ * ES_ERR_BAD_ARGS, before fitting the window's limits or a cell.
  *
  *   ES_PF_NO_RESTORE   spend no registry slot on a window that was
  *                      never adopted. A window already in the registry
@@ -466,6 +500,9 @@ ULONG ESnap_QueryGeneration(struct Screen *screen);
  * request of its own. ES_OK once every entry has been tried;
  * ES_ERR_BAD_ARGS for a NULL list, an empty one, or more than
  * ES_PLACE_MAX entries.
+ * From 2.25 the same rectangle bounds apply per entry: a bad rectangle
+ * receives ES_ERR_BAD_ARGS in that entry's result and moves nothing,
+ * while the other entries are tried as usual.
  */
 #define ES_PF_NO_RESTORE   0x0001UL
 #define ES_PF_KEEP_ZORDER  0x0002UL
@@ -712,8 +749,13 @@ LONG ESnap_SetGroupOptionsA(ULONG group, const struct TagItem *tags);
  * ask right after a placement it has not seen land, and a window
  * EdgeSnap asked to move in the last two seconds is never counted as
  * moved by hand (ES_DIF_MOVED, ES_ERR_CHANGED), whatever box it shows
- * on its way. A window not placed since it joined counts where
- * EdgeSnap last put it, if UnsnapWindow can undo that (a snap, or a
+ * on its way. A window still in the box it had before EdgeSnap's last
+ * request, or in the box EdgeSnap last put it in, is not counted as
+ * moved by hand, however long after the request. Once it is seen in
+ * the requested box the earlier box stops counting. From 2.25 a window
+ * joining before its remembered placement has landed gets the transit
+ * interval on joining. A window not placed since it joined counts
+ * where EdgeSnap last put it, if UnsnapWindow can undo that (a snap, or a
  * placement or move of a window with a way back), or else where it
  * stood when it joined: an ES_PF_NO_RESTORE placement of a window with
  * no way back leaves nothing to remember, so a tiler that places with
@@ -745,17 +787,20 @@ LONG ESnap_SetGroupOptionsA(ULONG group, const struct TagItem *tags);
  *   ES_ERR_STALE (no such group) / ES_ERR_UNSUPPORTED.
  *
  * ESnap_MoveDividerT: the seam of token to position, clamped to its
- * limits; *applied (applied may be NULL) receives the position it was
- * moved to, on ES_OK only. Only the token's windows move. flags:
+ * limits (from 2.25, to -32768..32767 first); *applied (applied may be
+ * NULL) receives the position it was moved to, on ES_OK only. Only the
+ * token's windows move. flags:
  * ES_PF_KEEP_ZORDER, the windows are not raised (see PlaceWindow).
  * Geometry changes are requested, not applied (ChangeWindowBox
- * semantics). The token stays valid.
+ * semantics). The token stays valid. After the argument and group lock
+ * checks, the order from 2.25 is: still that seam, moved by hand, room
+ * to move, then the move.
  *   ES_OK / ES_ERR_BAD_ARGS (token 0, or an unknown flag) /
  *   ES_ERR_REJECTED (the group is locked for the caller; the token is
  *   not touched) / ES_ERR_STALE (no such token, or its windows are no
- *   longer that seam: it is retired) / ES_ERR_CHANGED (a window is not
- *   where EdgeSnap put it: moved by hand, or still not there two
- *   seconds after EdgeSnap asked; the token stays) /
+ *   longer that seam: it is retired) / ES_ERR_CHANGED (a window moved
+ *   by hand, outside the current and earlier boxes and the transit
+ *   interval described above; the token stays) /
  *   ES_ERR_UNSUPPORTED (no room to move it after every window's
  *   limits; the token stays).
  *

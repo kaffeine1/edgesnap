@@ -338,8 +338,7 @@ void es_engine_release(ESEngine *e, ESEngineActions *out)
         out->snap_rect = e->zone_rect;
     } else if (e->dragging && e->on_bar && e->zone == ES_ZONE_NONE &&
                e->candidate != 0 &&
-               (e->last.flags & (ES_WF_SNAPPABLE | ES_WF_BYPASS)) ==
-                   ES_WF_SNAPPABLE) {
+               (e->last.flags & ES_WF_SNAPPABLE) != 0) {
         /*
          * 2.24: let go outside every zone, a zone switched off
          * included. The press and base_box are the pair on_bar was
@@ -356,6 +355,13 @@ void es_engine_release(ESEngine *e, ESEngineActions *out)
         out->drop_y = e->last.mouse_y;
     }
     es_engine_clear_tracking(e);
+}
+
+void es_engine_drop_point(const ESEngineActions *a, const ESRect *live,
+                           int *px, int *py)
+{
+    *px = live->x + (a->drop_grab_x - a->drop_from.x);
+    *py = live->y + (a->drop_grab_y - a->drop_from.y);
 }
 
 void es_engine_reset(ESEngine *e, ESEngineActions *out)

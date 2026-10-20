@@ -6,6 +6,7 @@
  */
 
 #include "gutter.h"
+#include <limits.h>
 
 /* es_gutter_find_all hands the whole registry to es_seams_find. */
 typedef char es_gutter_slots_fit[(ES_REGISTRY_SLOTS <= ES_SEAM_BOXES_MAX)
@@ -44,14 +45,18 @@ static int es_max(int a, int b)
     return a > b ? a : b;
 }
 
+/* Any two int coordinates, saturating when their distance cannot fit. */
+static int es_distance(int a, int b)
+{
+    unsigned int d = a >= b ? (unsigned int)a - (unsigned int)b
+                             : (unsigned int)b - (unsigned int)a;
+
+    return d > (unsigned int)INT_MAX ? INT_MAX : (int)d;
+}
+
 static int es_near(int a, int b)
 {
-    int d = a - b;
-
-    if (d < 0) {
-        d = -d;
-    }
-    return d <= ES_SEAM_TOUCH_TOL;
+    return es_distance(a, b) <= ES_SEAM_TOUCH_TOL;
 }
 
 /*

@@ -251,6 +251,12 @@ static const char es_version_cookie[] __attribute__((used)) =
 
 /* ----------------------------------------- input handler <-> main task */
 
+/* How near the pointer must come for the seam to show itself, and how
+ * far it must go for the seam to disappear again. The two differ so a
+ * pointer resting on the boundary does not blink. */
+#define ES_SEAM_SHOW_PX  3
+#define ES_SEAM_HIDE_PX 14
+
 /*
  * Written by the CxCustom action in input.device context, read by the main
  * task. Counters (not flags) so fast press+release pairs are not lost.
@@ -280,6 +286,7 @@ struct SpikeShared {
      * written before the count that tells the task */
     volatile ULONG seam_hot;
     struct Screen * volatile seam_scr;
+    volatile LONG seam_left, seam_top, seam_right, seam_bottom;
     volatile ULONG seam_dragging;
     volatile ULONG seam_grabs;
     volatile WORD seam_press_x;
@@ -344,10 +351,15 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
          * one there, nothing has put the line out if the pointer has
          * not moved since, and the click belongs to that screen. A
          * few reads and compares, no call; seam_hot first, as the task
-         * sets seam_scr before it. */
+         * sets seam_scr and the lit strip's bounds before it. A late
+         * task must not let a press far from the strip grab the seam. */
         struct Screen *scr = g_shared.seam_hot ? g_shared.seam_scr : NULL;
 
-        if (scr != NULL && ES_IBASE->FirstScreen == scr) {
+        if (scr != NULL && ES_IBASE->FirstScreen == scr &&
+            scr->MouseX >= g_shared.seam_left - ES_SEAM_HIDE_PX &&
+            scr->MouseX <= g_shared.seam_right + ES_SEAM_HIDE_PX &&
+            scr->MouseY >= g_shared.seam_top - ES_SEAM_HIDE_PX &&
+            scr->MouseY <= g_shared.seam_bottom + ES_SEAM_HIDE_PX) {
             /* the seam is ours: a NULL event is one Intuition ignores,
              * so the two windows below never see this click */
             ie->ie_Class = IECLASS_NULL;
@@ -371,8 +383,11 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
         /*
          * Ahead of Intuition, which sits lower in the chain and moves
          * the window on this very event: a frame taken down after that
-         * inverts pixels the move has just repainted. Nothing here but
-         * the four rectangle fills Intuition does from this context.
+         * inverts pixels the move has just repainted. The masked path
+         * reads and writes the strips with ReadPixelArray and
+         * WritePixelArray; the plain path fills them, both under Forbid.
+         * This is the one exception to the handler rule, recorded in
+         * docs/DESIGN.md.
          */
         spike_pf_drop_now();
 #endif
@@ -1201,7 +1216,10 @@ static void spike_pf_hide(void)
  * release event, which on AROS comes before Intuition moves the
  * window. Forbid keeps the two from interleaving: the handler runs in
  * input.device's task, and a task cannot be switched to while another
- * is forbidden. The flag and the drawing change together.
+ * is forbidden. The flag and the drawing change together. The masked
+ * path reads and writes the strips with ReadPixelArray and WritePixelArray;
+ * the plain path fills them, both under Forbid. This is the one exception
+ * to the input handler rule, recorded in docs/DESIGN.md.
  */
 static void spike_pf_drop_now(void)
 {
@@ -1696,12 +1714,6 @@ static int g_divider_hot;
  */
 static int g_divider_press;
 static int g_divider_moved;
-
-/* How near the pointer must come for the seam to show itself, and how
- * far it must go for the seam to disappear again. The two differ so a
- * pointer resting on the boundary does not blink. */
-#define ES_SEAM_SHOW_PX  3
-#define ES_SEAM_HIDE_PX 14
 
 /*
  * Is scr the front screen? From 2.24 the library's divider calls look
@@ -2524,6 +2536,10 @@ static void spike_seam_light(int on)
         spike_sl_show(&run);
         g_seam.hot = 1;
         g_shared.seam_scr = g_seam.scr;    /* before the handler may look */
+        g_shared.seam_left = run.x;
+        g_shared.seam_top = run.y;
+        g_shared.seam_right = run.x + run.w - 1;
+        g_shared.seam_bottom = run.y + run.h - 1;
         g_shared.seam_hot = 1;
     } else if (!on && g_seam.hot) {
         g_shared.seam_hot = 0;

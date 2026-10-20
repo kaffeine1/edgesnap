@@ -21,6 +21,7 @@
 # The chunk format is AROS's (workbench/libs/icon/diskobjPNGio.c): a
 # sequence of entries, a 32-bit big-endian attribute id followed by a
 # 32-bit value for the numeric ones or a NUL-terminated string.
+import importlib.util
 import os
 import struct
 import zlib
@@ -29,6 +30,18 @@ from PIL import Image, ImageDraw, PngImagePlugin
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "assets", "aros")
 SRC = os.path.join(OUT, "src")
+
+
+def load(name):
+    spec = importlib.util.spec_from_file_location(
+        name.replace("-", "_").replace(".py", ""),
+        os.path.join(ROOT, "scripts", name))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+ICON = load("make-icon.py")
 
 ATTR_STACKSIZE = 0x80001009
 ATTR_DEFAULTTOOL = 0x8000100A
@@ -176,7 +189,7 @@ def emit(name, draw, data):
 def main():
     os.makedirs(OUT, exist_ok=True)
     emit("EdgeSnap.info", icon_commodity,
-         chunk(WBTOOL, stack=65536, tooltypes=("DONOTWAIT",)))
+         chunk(WBTOOL, stack=65536, tooltypes=ICON.COMMODITY_TOOLTYPES))
     emit("EdgeSnapPrefs.info", icon_prefs, chunk(WBTOOL, stack=65536))
     # The Install of the AROS archives is installer/Install-aros, a
     # Shell script that IconX runs in the package's drawer: AROS's
