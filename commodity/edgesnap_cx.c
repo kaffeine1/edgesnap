@@ -4471,6 +4471,24 @@ static LONG spike_rexx_command(const char *line, char *result, int size,
     return RC_ERROR;
 }
 
+/*
+ * Is this an ARexx command? rexxsyslib's IsRexxMsg() should say, but
+ * MorphOS's own rexxsyslib (50.x, a reimplementation that has no
+ * interpreter) leaves the name IsRexxMsg() looks for empty in what its
+ * CreateRexxMsg() makes (ln_Name NULL, mn_Length 128: VM, 2026-10-20),
+ * so a message as long as a RexxMsg, whose action is a command and
+ * which carries the command line, counts as one too. The port is named
+ * for ARexx; nothing else sends to it.
+ */
+static int spike_rexx_is_command(struct RexxMsg *rm)
+{
+    if (!IsRexxMsg(rm) &&
+        rm->rm_Node.mn_Length < (UWORD)sizeof(struct RexxMsg)) {
+        return 0;
+    }
+    return (rm->rm_Action & RXCODEMASK) == RXCOMM && rm->rm_Args[0] != 0;
+}
+
 /* Everything waiting at the port. Returns 1 when QUIT came. */
 static int spike_rexx_events(void)
 {
@@ -4483,14 +4501,21 @@ static int spike_rexx_events(void)
         LONG rc = RC_ERROR;
 
         result[0] = '\0';
-        if (!IsRexxMsg(rm)) {
-            ReplyMsg((struct Message *)rm);   /* not ours to answer */
+        if (!spike_rexx_is_command(rm)) {
+            spike_out("edgesnap: ARexx port: not a command (IsRexxMsg %ld, "
+                      "length %ld, action %08lx)\n", (long)IsRexxMsg(rm),
+                      (long)rm->rm_Node.mn_Length,
+                      (unsigned long)rm->rm_Action);
+            if (IsRexxMsg(rm) ||
+                rm->rm_Node.mn_Length >= (UWORD)sizeof(struct RexxMsg)) {
+                rm->rm_Result1 = RC_ERROR;   /* a function call, say */
+                rm->rm_Result2 = 0;
+            }
+            ReplyMsg((struct Message *)rm);
             continue;
         }
-        if ((rm->rm_Action & RXCODEMASK) == RXCOMM && rm->rm_Args[0] != 0) {
-            rc = spike_rexx_command((const char *)rm->rm_Args[0], result,
-                                    (int)sizeof(result), &secondary, &quit);
-        }
+        rc = spike_rexx_command((const char *)rm->rm_Args[0], result,
+                                (int)sizeof(result), &secondary, &quit);
         rm->rm_Result1 = rc;
         rm->rm_Result2 = 0;
         if (rc == RC_OK) {

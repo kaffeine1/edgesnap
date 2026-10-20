@@ -1345,13 +1345,34 @@ of this verification.
 - **Corners and opening the preferences.** I give the four quarters
   direct key actions, unset as they come, through the existing
   `ESnap_SnapWindow` zones and the same after-snap path as the halves.
-  Exchange's Show and `CX_POPKEY` (also `POPKEY`, unset by default)
-  call one `spike_open_prefs(void)`, which the ARexx frontend can call
-  too. It loads `SYS:Prefs/EdgeSnap` and starts it as a separate
-  process with NIL: input/output and 64 KB stacks, without waiting.
+  Exchange's Show, `CX_POPKEY` (also `POPKEY`, unset by default) and
+  the ARexx port's `PREFS` call one `spike_open_prefs(void)`. It checks
+  that `SYS:Prefs/EdgeSnap` is there, which an asynchronous start could
+  not report, and starts it through `SystemTags` with `SYS_Asynch`,
+  NIL: for input and output and a 64 KB stack, without waiting.
   MUI's SingleTask/DoubleStart brings an existing window forward;
   ReAction publishes a named port and a second instance signals it
   under `Forbid`. Hide does nothing to another program's window.
+
+- **An ARexx port, `EDGESNAP`.** The 1.0 stage asks for a second real
+  client, and a port is the Amiga's own: a script, a dock button or a
+  file manager can now do what the hotkeys do. `SNAP` (the zones by
+  name, `CENTRE` included), `RESTORE`, `QUERY` (the zone as a word in
+  RESULT), `SELECT`, `PREFS`, `ENABLE`, `DISABLE`, `VERSION`, `HELP`
+  and `QUIT`, with a template each read by `ReadArgs`, as a Shell
+  command reads its own. Without `TITLE` a command acts on the active
+  window, which is the Shell's own when the line comes from one, so
+  `TITLE` names another with an AmigaDOS pattern, screens from the
+  front. Nothing new happens in the port: it calls what the hotkeys
+  call, and the library checks the window as it does for them. The
+  codes are ARexx's: 0, 5 for a refusal (the library's own code as the
+  secondary result), 10 for a word it does not know. Without
+  rexxsyslib.library there is no port and nothing else changes. On
+  MorphOS the system's rexxsyslib is a reimplementation without an
+  interpreter: its `CreateRexxMsg()` leaves the message without the
+  name `IsRexxMsg()` looks for, so that answered no for every command
+  (VM, 2026-10-20). A message as long as a RexxMsg whose action is a
+  command counts as one too.
 
 - **Live keys without a gap in mouse input.** On a reload I remove
   and rebuild the key filters, leaving the broker and its CxCustom

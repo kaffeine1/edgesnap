@@ -498,11 +498,22 @@ static Object *es_settings_pages(struct ESPrefsGui *gui)
             continue;
         }
         body = es_settings_group(gui, t, first, i - 1);
-        if (first == 0) {
+        /*
+         * Every page ends in empty space that takes what is left over:
+         * the pages share the height of the tallest, and a shorter one
+         * without it was centred, with a gap above its first section
+         * (seen on MorphOS, 2026-10-20). The first page also carries the
+         * system's own setting, after its last group.
+         */
+        if (body != NULL) {
             body = MUI_NewObject(MUIC_Group,
                                  MUIA_Group_Child, (ESTagData)body,
+                                 first == 0 ? MUIA_Group_Child : TAG_IGNORE,
+                                     first == 0 ?
+                                     (ESTagData)es_offscreen_group(gui) : 0,
                                  MUIA_Group_Child,
-                                     (ESTagData)es_offscreen_group(gui),
+                                     (ESTagData)MUI_NewObject(MUIC_Rectangle,
+                                                              TAG_DONE),
                                  TAG_DONE);
         }
         if (body == NULL) {

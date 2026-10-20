@@ -14,6 +14,7 @@ by Michele Dipace <michele.dipace@kaffeine.net>
   @{" Using it            " link USING}
   @{" Settings            " link SETTINGS}
   @{" From the Shell      " link SHELL}
+  @{" From ARexx          " link AREXX}
   @{" For programmers     " link LIBRARY}
   @{" Licence and author  " link AUTHOR}
 
@@ -253,6 +254,59 @@ which helps when something does not behave as expected.
 Settings are re-read while it runs: whatever writes
 @{b}ENV:EdgeSnap.prefs@{ub} (the preferences window, an editor, a
 script) is noticed at once.
+
+@endnode
+
+@node AREXX "From ARexx"
+@{b}From ARexx@{ub}
+
+EdgeSnap answers at the ARexx port @{b}EDGESNAP@{ub}, so a script, a
+button in a dock or a file manager, or a line in the Shell can do what
+the hotkeys do:
+
+  rx "ADDRESS EDGESNAP 'SNAP LEFT'"
+
+  @{b}SNAP ZONE/A,TITLE/K@{ub}
+      Snap a window. ZONE is LEFT, RIGHT, MAXIMIZE, TOPLEFT, TOPRIGHT,
+      BOTTOMLEFT, BOTTOMRIGHT or CENTRE. LEFT and RIGHT again take the
+      width cycle, as the hotkeys do.
+  @{b}RESTORE TITLE/K@{ub}
+      Put it back where it was before its first snap.
+  @{b}QUERY TITLE/K@{ub}
+      RESULT is where the window is snapped: one of the zones above,
+      PLACED for a place a program chose, NONE when it is not snapped.
+  @{b}SELECT@{ub}
+      Open the selector under the pointer.
+  @{b}PREFS@{ub}
+      Open the preferences window.
+  @{b}ENABLE@{ub}, @{b}DISABLE@{ub}
+      What Exchange's buttons do.
+  @{b}VERSION@{ub}, @{b}HELP@{ub}
+      RESULT is the version of EdgeSnap and of the library, or the
+      list of commands.
+  @{b}QUIT@{ub}
+      Stop EdgeSnap.
+
+Without TITLE a command acts on the active window. From a Shell that
+is the Shell itself, so TITLE names another one: an AmigaDOS pattern,
+matched against the window titles without regard to case, screens from
+the front; the first window that matches is taken.
+
+  /* the drawer of the RAM disk on the left, a Shell on the right */
+  OPTIONS RESULTS
+  ADDRESS EDGESNAP
+  'SNAP LEFT TITLE="Ram Disk#?"'
+  'SNAP RIGHT TITLE=#?Shell#?'
+  'QUERY TITLE="Ram Disk#?"'
+  SAY RESULT
+
+The return codes are the usual ones: 0 when it was done, 5 when it was
+refused (no window matches, or the library said no, for instance to a
+window that cannot be resized), 10 for a command or a word the port
+does not know. RESULT needs @{b}OPTIONS RESULTS@{ub} in the script.
+
+ARexx itself must be installed and running (RexxMast); EdgeSnap only
+needs rexxsyslib.library to open its port, and works without it.
 
 @endnode
 
