@@ -46,6 +46,33 @@ typedef struct ESConfig {
 
 void es_config_defaults(ESConfig *cfg);
 
+/* Frontend keys never travel through ESConfig or the library's stack.
+ * A stored description fits the line parser's 63-character value. An
+ * empty buffer means no key; the file spells that value "none". */
+#define ES_HOTKEY_SIZE 64
+enum ESHotkey {
+    ES_HK_LEFT, ES_HK_RIGHT, ES_HK_MAX,
+    ES_HK_TOPLEFT, ES_HK_TOPRIGHT, ES_HK_BOTTOMLEFT, ES_HK_BOTTOMRIGHT,
+    ES_HK_CENTRE, ES_HK_RESTORE, ES_HK_SELECT, ES_HK_POPKEY,
+    ES_HK_DUMP, ES_HK_FRAME, ES_HOTKEY_COUNT
+};
+
+typedef struct ESHotkeys {
+    char key[ES_HOTKEY_COUNT][ES_HOTKEY_SIZE];
+} ESHotkeys;
+
+void es_hotkeys_defaults(ESHotkeys *keys);
+
+/* The frontend vocabulary: configuration plus keys. Keys are printable
+ * ASCII, optionally double-quoted, or none/off (case-insensitive).
+ * ParseIX in the frontend checks the system's input syntax afterwards.
+ * The configuration-only functions below retain their vocabulary. */
+int es_prefs_set(ESConfig *cfg, ESHotkeys *keys,
+                 const char *key, const char *value);
+int es_prefs_line(ESConfig *cfg, ESHotkeys *keys, const char *line);
+int es_prefs_write(const ESConfig *cfg, const ESHotkeys *keys,
+                   char *buf, int size);
+
 /*
  * Apply one KEY=VALUE pair. Returns ES_OK, ES_ERR_BAD_ARGS (key known,
  * value not legal) or ES_ERR_UNSUPPORTED (key not known).
@@ -66,7 +93,8 @@ int es_config_line(ESConfig *cfg, const char *line);
  * legal in one is refused by the other. So the vocabulary describes
  * itself here, once, and a GUI walks the table to build its window -
  * an integer becomes a slider between min and max, a boolean a
- * checkbox, a choice a cycle gadget, the zone mask a row of them.
+ * checkbox, a choice a cycle gadget, the zone mask a row of them,
+ * a key a string field. Page and group names keep each run together.
  *
  * Writing goes through the same door: es_setting_apply() formats the
  * value and hands it to es_config_set(), so the GUI cannot accept
@@ -77,11 +105,13 @@ typedef enum ESSettingKind {
     ES_SET_INT,      /* whole number, min..max                        */
     ES_SET_BOOL,     /* yes or no                                     */
     ES_SET_CHOICE,   /* one of `choices`, value is the index          */
-    ES_SET_ZONES     /* the zone mask; value is ES_ZONEBIT(..) | ..   */
+    ES_SET_ZONES,    /* the zone mask; value is ES_ZONEBIT(..) | ..   */
+    ES_SET_KEY       /* a commodities input description, or empty    */
 } ESSettingKind;
 
 typedef struct ESSetting {
     const char *key;              /* EDGEPX - as written in the file  */
+    const char *page;             /* Snapping or Hotkeys              */
     /*
      * The section this setting belongs to. Entries sharing a group sit
      * next to each other in the table, so a window builds its frames by
@@ -124,12 +154,18 @@ typedef struct ESSetting {
  * it. `count` receives the number of entries. */
 const ESSetting *es_settings(int *count);
 
-/* Current value of setting `index`, as an int (see ESSettingKind). */
+/* Current value of setting `index`, as an int (see ESSettingKind).
+ * Text rows return 0; use es_setting_text for them. */
 int es_setting_value(const ESConfig *cfg, int index);
 
 /* Set it, with exactly the validation the file parser applies.
  * Returns ES_OK or ES_ERR_BAD_ARGS. */
 int es_setting_apply(ESConfig *cfg, int index, int value);
+
+/* ES_SET_KEY only: NULL for another kind or an invalid index. Writes
+ * go through es_prefs_set, just as integer writes use es_config_set. */
+const char *es_setting_text(const ESHotkeys *keys, int index);
+int es_setting_apply_text(ESHotkeys *keys, int index, const char *value);
 
 /*
  * Write the settings as a preferences file. Returns the number of

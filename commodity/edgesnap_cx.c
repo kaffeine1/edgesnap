@@ -20,7 +20,7 @@
  *     stale window refs;
  *   - provides hotkeys through the same snap path the future
  *     ESnap_SnapWindow() will use, Exchange integration, and a
- *     window-dump diagnostic (ctrl alt d).
+ *     window-dump diagnostic (ctrl alt d as it comes).
  *
  * Field-proven rules encoded here (see docs/DESIGN.md spike findings):
  * the engine task never blocks on console I/O (buffered log, flushed
@@ -43,6 +43,7 @@
 #include <exec/ports.h>
 #include <exec/tasks.h>
 #include <dos/dos.h>       /* RETURN_*, SIGBREAKF_CTRL_C                */
+#include <dos/dostags.h>
 #include <dos/notify.h>    /* StartNotify: prefs that change while we run */
 #include <dos/dostags.h>   /* SystemTags: the preferences window        */
 #include <dos/rdargs.h>    /* ReadArgs on an ARexx command line         */
@@ -287,7 +288,7 @@ struct SpikeShared {
     ULONG engine_sigmask;
     volatile ULONG presses;
     /* diagnostics: how often the action ran, and which input classes
-     * it saw (index = ie_Class & 15); shown by the ctrl alt d dump */
+     * it saw (index = ie_Class & 15); shown by the window dump */
     volatile ULONG diag_calls;
     volatile ULONG diag_class[16];
     volatile ULONG releases;
@@ -334,7 +335,7 @@ static void spike_cx_action(CxMsg *msg, CxObj *obj)
     }
     /* Diagnostics only: which classes reach us. Written so that a port
      * where the mouse speaks another dialect (AROS with a USB tablet,
-     * 2026-09-03) shows its hand in the ctrl alt d dump instead of
+     * 2026-09-03) shows its hand in the window dump instead of
      * leaving 'drag not detected' to be guessed at. */
     g_shared.diag_class[ie->ie_Class & 15]++;
     /*
@@ -569,6 +570,13 @@ static void spike_out(const char *fmt, ...)
 #define ES_PREFS_ENVARC "ENVARC:EdgeSnap.prefs"
 
 static ESConfig g_cfg;
+static ESHotkeys g_keys;
+static CxObj *g_hotkey_broker;
+static struct MsgPort *g_hotkey_port;
+static CxObj *g_hotkey_filter[ES_HOTKEY_COUNT];
+
+static void spike_hotkeys_rebuild(void);
+static void spike_hotkeys_print(void);
 
 /*
  * Kept so the settings can be loaded again while running: a
@@ -581,7 +589,7 @@ static char **g_argv;
 
 static void spike_config_line(const char *line, const char *src)
 {
-    int rc = es_config_line(&g_cfg, line);
+    int rc = es_prefs_line(&g_cfg, &g_keys, line);
 
     if (rc == ES_ERR_UNSUPPORTED) {
         spike_out("edgesnap: %s: unknown setting: %s\n", src, line);
@@ -701,6 +709,7 @@ static void spike_config_load(int argc, char **argv)
     g_argv = argv;
 
     es_config_defaults(&g_cfg);
+    es_hotkeys_defaults(&g_keys);
     if (!spike_config_load_file(ES_PREFS_ENV)) {
         spike_config_load_file(ES_PREFS_ENVARC);
     }
@@ -2955,7 +2964,8 @@ static void spike_engine_step(void)
 /* ------------------------------------------------------- diagnostics */
 
 /*
- * ctrl alt d: dump every window of the active screen with geometry,
+ * Window dump (ctrl alt d as it comes): every window of the active
+ * screen with geometry,
  * flags and the panel-policy verdict, plus the resulting usable area.
  * This is the ground-truth probe for tuning dock detection on real
  * systems: collect under LockIBase, print after unlocking.
@@ -3312,6 +3322,7 @@ static void spike_config_reload(void)
 {
     spike_config_load(g_argc, g_argv);
     spike_push_config();
+    spike_hotkeys_rebuild();
     spike_out("edgesnap: preferences reloaded: zones %04x, edge %d px, "
               "corner %s, drag %d px,\n",
               (unsigned)g_cfg.engine.zones_mask, g_cfg.engine.edge_px,
@@ -3324,6 +3335,7 @@ static void spike_config_reload(void)
               g_cfg.animate ? "on" : "off");
     spike_out("edgesnap:        drag restore %s\n",
               g_cfg.drag_restore ? "on" : "off");
+    spike_hotkeys_print();
 }
 
 /* ------------------------------------------------------------ commodity */
@@ -3333,27 +3345,209 @@ static void spike_config_reload(void)
 #define HK_SNAP_MAX    3
 #define HK_RESTORE     4
 #define HK_DUMP        5
-#define HK_FRAME       6   /* ctrl alt f: the preview frame, no drag */
-#define HK_CENTRE      7   /* ctrl alt c: its own size, in the middle */
-#define HK_SELECT      8   /* ctrl alt z: the selector, under the pointer */
+#define HK_FRAME       6   /* the preview frame, no drag */
+#define HK_CENTRE      7   /* its own size, in the middle */
+/* The selector's hotkey is ctrl alt z as it comes. It began on ctrl
+ * alt space, but MorphOS's keymap switch took it on real hardware
+ * (2026-09-25). The user can now choose around such conflicts. */
+#define HK_SELECT      8
+#define HK_TOPLEFT     9
+#define HK_TOPRIGHT   10
+#define HK_BOTTOMLEFT 11
+#define HK_BOTTOMRIGHT 12
+#define HK_PREFS      13
 
-static int spike_add_hotkey(CxObj *broker, struct MsgPort *port,
-                            STRPTR descr, LONG id)
+static const struct {
+    const char *name;
+    LONG id;
+} spike_hotkey_action[ES_HOTKEY_COUNT] = {
+    { "HOTKEYLEFT", HK_SNAP_LEFT }, { "HOTKEYRIGHT", HK_SNAP_RIGHT },
+    { "HOTKEYMAX", HK_SNAP_MAX }, { "HOTKEYTOPLEFT", HK_TOPLEFT },
+    { "HOTKEYTOPRIGHT", HK_TOPRIGHT }, { "HOTKEYBOTTOMLEFT", HK_BOTTOMLEFT },
+    { "HOTKEYBOTTOMRIGHT", HK_BOTTOMRIGHT }, { "HOTKEYCENTRE", HK_CENTRE },
+    { "HOTKEYRESTORE", HK_RESTORE }, { "HOTKEYSELECT", HK_SELECT },
+    { "CX_POPKEY", HK_PREFS }, { "HOTKEYDUMP", HK_DUMP },
+    { "HOTKEYFRAME", HK_FRAME }
+};
+
+static CxObj *spike_add_hotkey(STRPTR descr, int index)
 {
-    CxObj *filter;
+    CxObj *filter = CxFilter(descr);
+    CxObj *sender;
+    CxObj *eat;
+    LONG error;
 
-    filter = CxFilter(descr);
     if (filter == NULL) {
-        return 0;
+        spike_out("edgesnap: no memory for hotkey %s\n", (char *)descr);
+        return NULL;
     }
-    AttachCxObj(filter, CxSender(port, id));
-    AttachCxObj(filter, CxTranslate(NULL));
+    error = CxObjError(filter);
+    if (error != 0) {
+        spike_out("edgesnap: skipping %s=%s (%s)\n",
+                  spike_hotkey_action[index].name, (char *)descr,
+                  (error & COERR_BADFILTER) ? "bad input description" :
+                                               "filter error");
+        DeleteCxObjAll(filter);
+        return NULL;
+    }
+    sender = CxSender(g_hotkey_port, spike_hotkey_action[index].id);
+    eat = CxTranslate(NULL);
+    if (sender == NULL || eat == NULL) {
+        if (sender != NULL) { DeleteCxObjAll(sender); }
+        if (eat != NULL) { DeleteCxObjAll(eat); }
+        DeleteCxObjAll(filter);
+        spike_out("edgesnap: no memory for %s=%s\n",
+                  spike_hotkey_action[index].name, (char *)descr);
+        return NULL;
+    }
+    AttachCxObj(filter, sender);
+    AttachCxObj(filter, eat);
     if (CxObjError(filter) != 0) {
         DeleteCxObjAll(filter);
-        return 0;
+        spike_out("edgesnap: could not build %s=%s\n",
+                  spike_hotkey_action[index].name, (char *)descr);
+        return NULL;
     }
-    AttachCxObj(broker, filter);
-    return 1;
+    return filter;
+}
+
+/* Compare the expression's fields, never its structure padding. */
+static int spike_same_key(const struct InputXpression *a,
+                            const struct InputXpression *b)
+{
+    return a->ix_Version == b->ix_Version && a->ix_Class == b->ix_Class &&
+           a->ix_Code == b->ix_Code && a->ix_CodeMask == b->ix_CodeMask &&
+           a->ix_Qualifier == b->ix_Qualifier &&
+           a->ix_QualMask == b->ix_QualMask && a->ix_QualSame == b->ix_QualSame;
+}
+
+static void spike_hotkeys_rebuild(void)
+{
+    struct InputXpression parsed[ES_HOTKEY_COUNT];
+    int i, j;
+
+    /* Remove only the filters. The broker and CxCustom keep seeing
+     * mouse facts, especially a button release during an open drag.
+     * RemoveCxObj serialises removal with the commodities handler. */
+    for (i = 0; i < ES_HOTKEY_COUNT; i++) {
+        if (g_hotkey_filter[i] != NULL) {
+            RemoveCxObj(g_hotkey_filter[i]);
+            DeleteCxObjAll(g_hotkey_filter[i]);
+            g_hotkey_filter[i] = NULL;
+        }
+    }
+    memset(parsed, 0, sizeof(parsed));
+    for (i = 0; i < ES_HOTKEY_COUNT; i++) {
+        CxObj *filter;
+        const char *text = g_keys.key[i];
+
+        if (*text == '\0') {
+            continue;
+        }
+        /* Check CxObjError before attaching anything to the broker:
+         * a refused key must never poison the engine's object tree. */
+        filter = spike_add_hotkey((STRPTR)text, i);
+        if (filter == NULL) {
+            continue;
+        }
+        if (ParseIX((STRPTR)text, &parsed[i]) != 0) {
+            spike_out("edgesnap: skipping %s=%s (bad input description)\n",
+                      spike_hotkey_action[i].name, text);
+            DeleteCxObjAll(filter);
+            continue;
+        }
+        /* Qualifier order in the original description is immaterial. */
+        for (j = 0; j < i; j++) {
+            if (g_hotkey_filter[j] != NULL &&
+                spike_same_key(&parsed[i], &parsed[j])) {
+                break;
+            }
+        }
+        if (j < i) {
+            spike_out("edgesnap: skipping %s=%s: same key as %s\n",
+                      spike_hotkey_action[i].name, text,
+                      spike_hotkey_action[j].name);
+            DeleteCxObjAll(filter);
+            continue;
+        }
+        AttachCxObj(g_hotkey_broker, filter);
+        g_hotkey_filter[i] = filter;
+    }
+}
+
+static void spike_hotkeys_print(void)
+{
+    int i;
+
+    spike_out("edgesnap: hotkeys in force:\n");
+    for (i = 0; i < ES_HOTKEY_COUNT; i++) {
+        spike_out("  %s=%s%s", spike_hotkey_action[i].name,
+                  g_hotkey_filter[i] != NULL ? g_keys.key[i] : "none",
+                  (i % 3) == 2 || i == ES_HOTKEY_COUNT - 1 ? "\n" : "; ");
+    }
+}
+
+/* The ARexx frontend calls this too. All of it runs in our task.
+ * A loaded segment lets a failed launch be reported before returning;
+ * the new process owns the segment and NIL: handles only on success. */
+static void spike_open_prefs(void)
+{
+    struct TagItem tags[12];
+    struct Process *proc;
+    BPTR segment;
+    BPTR input;
+    BPTR output;
+    int n = 0;
+
+    segment = LoadSeg((STRPTR)"SYS:Prefs/EdgeSnap");
+    if (segment == 0) {
+        spike_out("edgesnap: cannot load SYS:Prefs/EdgeSnap (%ld)\n",
+                  (long)IoErr());
+        return;
+    }
+    input = Open((STRPTR)"NIL:", MODE_OLDFILE);
+    output = Open((STRPTR)"NIL:", MODE_NEWFILE);
+    if (input == 0 || output == 0) {
+        spike_out("edgesnap: cannot open NIL: for the preferences\n");
+        if (input != 0) { Close(input); }
+        if (output != 0) { Close(output); }
+        UnLoadSeg(segment);
+        return;
+    }
+    tags[n].ti_Tag = NP_Seglist;
+    tags[n++].ti_Data = (ESTagData)segment;
+    tags[n].ti_Tag = NP_FreeSeglist;
+    tags[n++].ti_Data = TRUE;
+    tags[n].ti_Tag = NP_Input;
+    tags[n++].ti_Data = (ESTagData)input;
+    tags[n].ti_Tag = NP_Output;
+    tags[n++].ti_Data = (ESTagData)output;
+    tags[n].ti_Tag = NP_CloseInput;
+    tags[n++].ti_Data = TRUE;
+    tags[n].ti_Tag = NP_CloseOutput;
+    tags[n++].ti_Data = TRUE;
+    tags[n].ti_Tag = NP_Cli;
+    tags[n++].ti_Data = TRUE;
+    tags[n].ti_Tag = NP_Name;
+    tags[n++].ti_Data = (ESTagData)"EdgeSnap Preferences";
+    tags[n].ti_Tag = NP_StackSize;
+    tags[n++].ti_Data = 65536;
+#ifdef __MORPHOS__
+    tags[n].ti_Tag = NP_PPCStackSize;
+    tags[n++].ti_Data = 65536;
+#endif
+    tags[n].ti_Tag = NP_Arguments;
+    tags[n++].ti_Data = (ESTagData)"";
+    tags[n].ti_Tag = TAG_DONE;
+    tags[n].ti_Data = 0;
+    proc = CreateNewProc(tags);
+    if (proc == NULL) {
+        spike_out("edgesnap: cannot start SYS:Prefs/EdgeSnap (%ld)\n",
+                  (long)IoErr());
+        Close(input);
+        Close(output);
+        UnLoadSeg(segment);
+    }
 }
 
 static void spike_divider_sync(void);
@@ -3378,12 +3572,13 @@ static struct Window *spike_active_window(void)
  * three rows, each in the place the window would go: the corners in
  * the corners, the halves at the sides, maximise at the top in the
  * middle (the top edge maximises in a drag too), the centre in the
- * middle, and "put it back" at the bottom, where the cursor-down hotkey
- * lives. Each cell shows a miniature of its zone, drawn by the same
+ * middle, and "put it back" at the bottom. Each cell shows a miniature
+ * of its zone, drawn by the same
  * geometry that places the window, so the picture cannot lie.
  *
- * It opens under the pointer on ctrl alt z, takes the mouse and the
- * cursor keys, and goes away on a choice, on Esc or the right button,
+ * It opens under the pointer on the selector's hotkey (ctrl alt z as
+ * it comes), takes the mouse and cursor keys, and goes away on a
+ * choice, on Esc or the right button,
  * on the hotkey again, or when anything else is activated. Plain
  * Intuition and graphics.library, so it is the same window on all
  * three systems, and the choice goes through the calls the hotkeys
@@ -3759,6 +3954,10 @@ static void spike_handle_hotkey(LONG id)
     struct Window *win;
     LONG rc = ES_OK;
 
+    if (id == HK_PREFS) {
+        spike_open_prefs();
+        return;
+    }
     if (id == HK_SELECT) {
         if (g_selector != NULL) {
             spike_sel_close();
@@ -3808,6 +4007,18 @@ static void spike_handle_hotkey(LONG id)
         break;
     case HK_SNAP_MAX:
         rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_MAX);
+        break;
+    case HK_TOPLEFT:
+        rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_TOP_LEFT);
+        break;
+    case HK_TOPRIGHT:
+        rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_TOP_RIGHT);
+        break;
+    case HK_BOTTOMLEFT:
+        rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_BOTTOM_LEFT);
+        break;
+    case HK_BOTTOMRIGHT:
+        rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_BOTTOM_RIGHT);
         break;
     case HK_CENTRE:
         rc = ES_CALL(ESnap_SnapWindow)(win, ES_ZONE_CENTRE);
@@ -4405,6 +4616,7 @@ int main(int argc, char **argv)
     nb.nb_Title = (STRPTR)"EdgeSnap " ES_VERSION " by Michele Dipace";
     nb.nb_Descr = (STRPTR)"Drag windows to screen edges to tile them";
     nb.nb_Unique = NBU_UNIQUE | NBU_NOTIFY;
+    nb.nb_Flags = COF_SHOW_HIDE;
     nb.nb_Pri = 0;
     nb.nb_Port = port;
 
@@ -4460,29 +4672,13 @@ int main(int argc, char **argv)
     g_broker = broker;
     custom = CxCustom(ES_CX_ACTION, 0);
     AttachCxObj(broker, custom);
-    if (!spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_left",
-                          HK_SNAP_LEFT) ||
-        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_right",
-                          HK_SNAP_RIGHT) ||
-        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_up",
-                          HK_SNAP_MAX) ||
-        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt cursor_down",
-                          HK_RESTORE) ||
-        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt c", HK_CENTRE) ||
-        /*
-         * Not ctrl alt space, which is where it began: MorphOS switches
-         * keymaps on that combination when more than one is set up, and
-         * took the first press every time (real hardware, 2026-09-25).
-         * Z as in Windows' own Win+Z, which opens the same kind of
-         * layout picker.
-         */
-        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt z", HK_SELECT) ||
-        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt d", HK_DUMP) ||
-        !spike_add_hotkey(broker, port, (STRPTR)"ctrl alt f", HK_FRAME) ||
-        CxObjError(broker) != 0) {
+    if (custom == NULL || CxObjError(broker) != 0) {
         spike_out("edgesnap: could not build the commodity tree\n");
         goto out;
     }
+    g_hotkey_broker = broker;
+    g_hotkey_port = port;
+    spike_hotkeys_rebuild();
 
     g_shared.engine_task = FindTask(NULL);
     g_shared.engine_sigmask = 1UL << engine_sig;
@@ -4511,17 +4707,16 @@ int main(int argc, char **argv)
            "<michele.dipace@kaffeine.net>, MIT license.\n");
     spike_out("  drag a window's title bar until the pointer touches a\n");
     spike_out("  screen edge or corner, then release.\n");
-    spike_out("  hotkeys: ctrl alt cursor left/right/up = snap, down = "
-           "restore,\n");
-    spike_out("           ctrl alt c = centre, ctrl alt z = selector,\n");
-    spike_out("           ctrl alt d = window dump.\n");
+    spike_hotkeys_print();
     spike_out("  quit: Ctrl-C here, or remove it from Exchange.\n");
     /* The centre is a zone the library learned in 2.9. An older one in
      * LIBS: answers BAD_ARGS, and the width cycle taught us that a
      * refusal nobody explains costs an evening. */
     if (EdgeSnapBase->lib_Revision < 9) {
         spike_out("edgesnap: the library in LIBS: is older than 2.9, "
-                  "so ctrl alt c (centre) will be refused.\n");
+                  "so %s (centre) will be refused.\n",
+                  g_keys.key[ES_HK_CENTRE][0] != '\0' ?
+                  g_keys.key[ES_HK_CENTRE] : "none");
     }
     spike_out("edgesnap: prefs: zones %04x, edge %d px, corner %s, "
            "drag %d px,\n", (unsigned)g_cfg.engine.zones_mask,
@@ -4602,6 +4797,12 @@ int main(int argc, char **argv)
                             spike_out("edgesnap: asked to quit\n");
                             running = 0;
                         }
+                        break;
+                    case CXCMD_APPEAR:
+                        spike_open_prefs();
+                        break;
+                    case CXCMD_DISAPPEAR:
+                        /* Another program owns the preferences window. */
                         break;
                     case CXCMD_DISABLE:
                         spike_set_enabled(0);

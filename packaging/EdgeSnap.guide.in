@@ -160,6 +160,12 @@ become smaller than it allows: that is a limit, not a fault. Three or
 four windows that share one line share one seam.
 
 @{b}Hotkeys@{ub}
+I keep these as the defaults. Change them on the @{b}Hotkeys@{ub} page
+of the preferences, with the @{b}HOTKEY...@{ub} settings below, or in
+the icon's tooltypes. I use the same input descriptions as Exchange:
+@{b}HOTKEYLEFT="ctrl alt x"@{ub}, for instance. @{b}none@{ub} or
+@{b}off@{ub} disables a key; an empty string in the window does too.
+
   @{b}ctrl alt cursor left@{ub}    snap the active window left
   @{b}ctrl alt cursor right@{ub}   snap it right
       Press the same one again and the window takes two thirds of the
@@ -181,6 +187,19 @@ four windows that share one line share one seam.
       else closes it. It acts on the window that was active when it
       opened.
   @{b}ctrl alt d@{ub}              print a window dump, to diagnose dock detection
+  @{b}ctrl alt f@{ub}              show the preview frame briefly, without a drag
+
+The four quarter actions have no key until you give them one:
+@{b}HOTKEYTOPLEFT@{ub}, @{b}HOTKEYTOPRIGHT@{ub},
+@{b}HOTKEYBOTTOMLEFT@{ub} and @{b}HOTKEYBOTTOMRIGHT@{ub}.
+@{b}CX_POPKEY@{ub} (or @{b}POPKEY@{ub}) opens these preferences,
+as Exchange's @{b}Show@{ub} does; it has no key by default. Asking
+again brings the window already open to the front.
+
+I check the input descriptions before saving, and refuse two actions
+on the same key even when their descriptions spell the qualifiers in
+a different order. The commodity skips a bad or duplicate key and
+reports it in its output, so the rest of EdgeSnap can still run.
 
 @{b}Changing the settings@{ub}
 Open @{b}SYS:Prefs/EdgeSnap@{ub}: the installer puts it there, with
@@ -189,8 +208,8 @@ Save; EdgeSnap follows immediately, without being restarted. Use
 applies the change for this session only, Cancel changes nothing.
 
 The window offers every setting listed under
-@{" Settings " link SETTINGS}, each with the range it accepts, so
-nothing you can choose there can be refused. It also has the
+@{" Settings " link SETTINGS}, on the Snapping and Hotkeys pages.
+A refused hotkey leaves the window open for correction. It also has the
 system's own "Windows can move off-screen", in a section named after
 the system (see above): it is kept in the system's preferences, not in
 EdgeSnap's, and the system follows it at once.

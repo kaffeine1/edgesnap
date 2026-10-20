@@ -38,6 +38,8 @@
 #endif
 
 #include <exec/types.h>
+#include <exec/ports.h>
+#include <libraries/commodities.h>
 #include <intuition/intuition.h>
 #include <intuition/gadgetclass.h>
 #include <libraries/gadtools.h>
@@ -47,6 +49,8 @@
 #include <gadgets/checkbox.h>
 #include <gadgets/integer.h>
 #include <gadgets/chooser.h>
+#include <gadgets/string.h>
+#include <gadgets/clicktab.h>
 #include <images/label.h>
 #include <reaction/reaction_macros.h>
 
@@ -60,6 +64,9 @@
 #include <proto/checkbox.h>
 #include <proto/integer.h>
 #include <proto/chooser.h>
+#include <proto/string.h>
+#include <proto/clicktab.h>
+#include <proto/commodities.h>
 #include <proto/label.h>
 
 #include "prefs_io.h"
@@ -74,12 +81,13 @@ static const char es_stack_cookie[] __attribute__((used)) =
 static const char es_version_cookie[] __attribute__((used)) =
     "$VER: EdgeSnapPrefs " ES_VERSION " (" ES_VERSION_DATE ") Michele Dipace";
 
-#define ES_MAX_SETTINGS 32
+#define ES_MAX_SETTINGS 48
 #define ES_ZONE_COUNT   7
 
 #define GID_SAVE    1
 #define GID_USE     2
 #define GID_CANCEL  3
+#define GID_PAGES   5
 #define GID_OFFSCREEN 4          /* the system's setting, not ours    */
 #define GID_SETTING 100          /* + index of the setting            */
 #define GID_ZONE    200          /* + zone number                     */
@@ -93,6 +101,11 @@ struct ESPrefsGui {
     Object *field[ES_MAX_SETTINGS];      /* one gadget per setting    */
     Object *zone[ES_ZONE_COUNT + 1];     /* checkboxes for the mask   */
     ESConfig cfg;
+    ESHotkeys keys;
+    Object *pages;
+    Object *tabs;
+    struct List tab_labels;
+    int hotkey_page;
     /* label.image keeps the pointer we give it rather than copying the
      * text, so these have to outlive the call that builds the window.
      * The table's labels carry no colon: they also feed the AmigaGuide
@@ -111,6 +124,10 @@ struct IntuitionIFace *IIntuition;
 
 struct Library *WindowBase, *LayoutBase, *ButtonBase, *CheckBoxBase;
 struct Library *IntegerBase, *ChooserBase, *LabelBase;
+struct Library *StringBase, *ClickTabBase, *CxBase;
+struct CommoditiesIFace *ICommodities;
+struct StringIFace *IString;
+struct ClickTabIFace *IClickTab;
 struct WindowIFace *IWindow;
 struct LayoutIFace *ILayout;
 struct ButtonIFace *IButton;
@@ -167,6 +184,15 @@ static int es_open_classes(void)
     if (IIntuition == NULL) {
         return 0;
     }
+    CxBase = OpenLibrary("commodities.library", 37);
+    if (CxBase != NULL) {
+        ICommodities = (struct CommoditiesIFace *)
+            GetInterface(CxBase, "main", 1, NULL);
+    }
+    StringBase = es_open_class("gadgets/string.gadget", "main",
+                               (APTR *)&IString);
+    ClickTabBase = es_open_class("gadgets/clicktab.gadget", "main",
+                                 (APTR *)&IClickTab);
     WindowBase = es_open_class("window.class", "main", (APTR *)&IWindow);
     LayoutBase = es_open_class("gadgets/layout.gadget", "main",
                                (APTR *)&ILayout);
@@ -181,11 +207,15 @@ static int es_open_classes(void)
     LabelBase = es_open_class("images/label.image", "main",
                               (APTR *)&ILabel);
     return WindowBase && LayoutBase && ButtonBase && CheckBoxBase &&
-           IntegerBase && ChooserBase && LabelBase;
+           IntegerBase && ChooserBase && LabelBase && StringBase &&
+           ClickTabBase && ICommodities;
 }
 
 static void es_close_classes(void)
 {
+    es_close_class(ClickTabBase, IClickTab);
+    es_close_class(StringBase, IString);
+    es_close_class(CxBase, ICommodities);
     es_close_class(LabelBase, ILabel);
     es_close_class(ChooserBase, IChooser);
     es_close_class(IntegerBase, IInteger);
@@ -365,6 +395,14 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
             CHOOSER_LabelArray, s->choices,
             CHOOSER_Selected, value,
         End;
+    case ES_SET_KEY:
+        return StringObject,
+            GA_ID, GID_SETTING + index,
+            GA_RelVerify, TRUE,
+            GA_TabCycle, TRUE,
+            STRINGA_TextVal, es_setting_text(&gui->keys, index),
+            STRINGA_MaxChars, ES_HOTKEY_SIZE,
+        End;
     case ES_SET_ZONES:
         return es_zone_group(gui);
     default:
@@ -380,80 +418,49 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
     }
 }
 
-static Object *es_build_window(struct ESPrefsGui *gui)
+/* A page contains its contiguous run of groups from the table. */
+static Object *es_settings_page(struct ESPrefsGui *gui, const ESSetting *t,
+                                 int first, int last)
 {
-    const ESSetting *t;
-    Object *rows;
-    Object *buttons;
-    int count = 0;
-    int i;
-
-    t = es_settings(&count);
-    if (count > ES_MAX_SETTINGS) {
-        count = ES_MAX_SETTINGS;
-    }
-
-    /*
-     * One framed section per group, in table order. Four margins under
-     * a "Margins" title read better than four labels each repeating the
-     * word, and the sections come from the shared settings table, so
-     * this window, the MorphOS one and the manual all show the same
-     * ones.
-     */
-    rows = VLayoutObject,
+    Object *rows = VLayoutObject,
         LAYOUT_SpaceOuter, TRUE,
     End;
+    Object *sect = NULL;
+    const char *open = NULL;
+    int i;
+
     if (rows == NULL) {
         return NULL;
     }
-    {
-        Object *sect = NULL;
-        const char *open = NULL;
-
-        for (i = 0; i < count; i++) {
-            if (open == NULL || !es_same_group(t[i].group, open)) {
-                sect = VLayoutObject,
-                    LAYOUT_SpaceOuter, TRUE,
-                    LAYOUT_BevelStyle, BVS_GROUP,
-                    LAYOUT_Label, t[i].group,
-                End;
-                if (sect == NULL) {
-                    break;
-                }
-                es_add_child(rows, sect, NULL, 0);
-                open = t[i].group;
+    for (i = first; i <= last; i++) {
+        if (open == NULL || !es_same_group(t[i].group, open)) {
+            sect = VLayoutObject,
+                LAYOUT_SpaceOuter, TRUE,
+                LAYOUT_BevelStyle, BVS_GROUP,
+                LAYOUT_Label, t[i].group,
+            End;
+            if (sect == NULL) {
+                DisposeObject(rows);
+                return NULL;
             }
-            gui->field[i] = es_widget(gui, &t[i], i);
-            if (gui->field[i] == NULL) {
-                continue;
-            }
-            /*
-             * Inside a section every row reads "label: widget", so a
-             * checkbox keeps that shape too: its own text on the right
-             * would break the column the sliders line up in. It also
-             * gets no width weight, or the layout would stretch the box
-             * across the column instead of leaving it at the left edge
-             * where the sliders start.
-             */
-            es_add_child(sect, gui->field[i],
-                         es_label(gui, i, t[i].label),
-                         t[i].kind == ES_SET_BOOL ? 2 : 0);
+            es_add_child(rows, sect, NULL, 0);
+            open = t[i].group;
         }
+        gui->field[i] = es_widget(gui, &t[i], i);
+        if (gui->field[i] == NULL) {
+            DisposeObject(rows);
+            return NULL;
+        }
+        es_add_child(sect, gui->field[i], es_label(gui, i, t[i].label),
+                     t[i].kind == ES_SET_BOOL ? 2 : 0);
     }
-
-    /*
-     * The system's own setting, in a section of its own named after the
-     * system, so that nobody takes it for one of ours. A file this
-     * program cannot read leaves the box greyed out rather than guessing
-     * what the system would make of a rewritten one.
-     */
-    {
-        Object *sect = VLayoutObject,
+    /* The system's setting follows the first page's last group. */
+    if (first == 0) {
+        sect = VLayoutObject,
             LAYOUT_SpaceOuter, TRUE,
             LAYOUT_BevelStyle, BVS_GROUP,
             LAYOUT_Label, eso_system(),
         End;
-
         gui->offscreen = CheckBoxObject,
             GA_ID, GID_OFFSCREEN,
             GA_RelVerify, TRUE,
@@ -461,11 +468,96 @@ static Object *es_build_window(struct ESPrefsGui *gui)
             GA_Selected, gui->off_was == 1 ? TRUE : FALSE,
             GA_Disabled, gui->off_was < 0 ? TRUE : FALSE,
         End;
-        if (sect != NULL && gui->offscreen != NULL) {
-            es_add_child(rows, sect, NULL, 0);
-            es_add_child(sect, gui->offscreen,
-                         "Windows can move off-screen:", 2);
+        if (sect == NULL || gui->offscreen == NULL) {
+            if (sect != NULL) { DisposeObject(sect); }
+            if (gui->offscreen != NULL) { DisposeObject(gui->offscreen); }
+            DisposeObject(rows);
+            return NULL;
         }
+        es_add_child(rows, sect, NULL, 0);
+        es_add_child(sect, gui->offscreen, "Windows can move off-screen:", 2);
+    }
+    return rows;
+}
+
+static Object *es_settings_pages(struct ESPrefsGui *gui)
+{
+    struct TagItem tags[ES_MAX_SETTINGS + 2];
+    const ESSetting *t;
+    int count, first = 0, pages = 0, n = 0, i;
+
+    t = es_settings(&count);
+    if (count > ES_MAX_SETTINGS) {
+        return NULL;
+    }
+    tags[n].ti_Tag = PAGE_Current;
+    tags[n++].ti_Data = 0;
+    for (i = 1; i <= count; i++) {
+        Object *body;
+        struct Node *label;
+
+        if (i < count && es_same_group(t[i].page, t[first].page)) {
+            continue;
+        }
+        body = es_settings_page(gui, t, first, i - 1);
+        if (body == NULL) {
+            break;
+        }
+        label = AllocClickTabNode(TNA_Text, (ULONG)t[first].page, TAG_DONE);
+        if (label == NULL) {
+            DisposeObject(body);
+            break;
+        }
+        AddTail(&gui->tab_labels, label);
+        if (es_same_group(t[first].page, "Hotkeys")) {
+            gui->hotkey_page = pages;
+        }
+        pages++;
+        tags[n].ti_Tag = PAGE_Add;
+        tags[n++].ti_Data = (ULONG)body;
+        first = i;
+    }
+    if (i <= count) {
+        while (--n > 0) {
+            DisposeObject((Object *)tags[n].ti_Data);
+        }
+        return NULL;
+    }
+    tags[n].ti_Tag = TAG_DONE;
+    tags[n].ti_Data = 0;
+    gui->pages = NewObjectA(PAGE_GetClass(), NULL, tags);
+    if (gui->pages == NULL) {
+        while (--n > 0) {
+            DisposeObject((Object *)tags[n].ti_Data);
+        }
+        return NULL;
+    }
+    gui->tabs = ClickTabObject,
+        GA_ID, GID_PAGES,
+        GA_RelVerify, TRUE,
+        CLICKTAB_Labels, &gui->tab_labels,
+        CLICKTAB_Current, 0,
+        CLICKTAB_PageGroup, gui->pages,
+    End;
+    if (gui->tabs == NULL) {
+        DisposeObject(gui->pages);
+        return NULL;
+    }
+    return VLayoutObject,
+        LAYOUT_SpaceOuter, FALSE,
+        LAYOUT_AddChild, gui->tabs,
+        CHILD_WeightedHeight, 0,
+        LAYOUT_AddChild, gui->pages,
+    End;
+}
+
+static Object *es_build_window(struct ESPrefsGui *gui)
+{
+    Object *rows = es_settings_pages(gui);
+    Object *buttons;
+
+    if (rows == NULL) {
+        return NULL;
     }
 
     buttons = HLayoutObject,
@@ -517,7 +609,37 @@ static Object *es_build_window(struct ESPrefsGui *gui)
 
 /* ------------------------------------------------------ reading it back */
 
-static void es_collect(struct ESPrefsGui *gui)
+static void es_key_error(struct ESPrefsGui *gui, int bad, int duplicate,
+                          const char *text)
+{
+    const ESSetting *t = es_settings(NULL);
+    struct EasyStruct es;
+    ULONG args[3];
+
+    SetGadgetAttrs((struct Gadget *)gui->tabs, gui->window, NULL,
+                   CLICKTAB_Current, gui->hotkey_page, TAG_DONE);
+    SetGadgetAttrs((struct Gadget *)gui->pages, gui->window, NULL,
+                   PAGE_Current, gui->hotkey_page, TAG_DONE);
+    es.es_StructSize = sizeof(es);
+    es.es_Flags = 0;
+    es.es_Title = (STRPTR)"EdgeSnap Preferences";
+    es.es_GadgetFormat = (STRPTR)"OK";
+    args[0] = (ULONG)t[bad].label;
+    args[1] = (ULONG)text;
+    if (duplicate >= 0) {
+        args[2] = (ULONG)t[duplicate].label;
+        es.es_TextFormat = (STRPTR)"The hotkey for %s:\n%s\n\nMatches %s. "
+                                  "Choose another key or leave it empty.";
+    } else {
+        es.es_TextFormat = (STRPTR)"Invalid hotkey for %s:\n%s\n\nUse an input "
+                                  "description as Exchange writes it, or "
+                                  "leave it empty.";
+    }
+    EasyRequestArgs(gui->window, &es, NULL, args);
+    ActivateGadget((struct Gadget *)gui->field[bad], gui->window, NULL);
+}
+
+static int es_collect(struct ESPrefsGui *gui)
 {
     const ESSetting *t;
     int count = 0;
@@ -541,6 +663,20 @@ static void es_collect(struct ESPrefsGui *gui)
         case ES_SET_CHOICE:
             GetAttr(CHOOSER_Selected, gui->field[i], &value);
             es_setting_apply(&gui->cfg, i, (int)value);
+            break;
+        case ES_SET_KEY:
+            {
+                ULONG text = 0;
+
+                GetAttr(STRINGA_TextVal, gui->field[i], &text);
+                if (text == 0 ||
+                    es_setting_apply_text(&gui->keys, i, (const char *)text)
+                        != ES_OK) {
+                    es_key_error(gui, i, -1, text != 0 ?
+                                  (const char *)text : "");
+                    return 0;
+                }
+            }
             break;
         case ES_SET_ZONES:
             {
@@ -570,6 +706,15 @@ static void es_collect(struct ESPrefsGui *gui)
             break;
         }
     }
+    {
+        int bad, duplicate;
+
+        if (!esp_validate_hotkeys(&gui->keys, &bad, &duplicate)) {
+            es_key_error(gui, bad, duplicate, es_setting_text(&gui->keys, bad));
+            return 0;
+        }
+    }
+    return 1;
 }
 
 /*
@@ -599,12 +744,61 @@ static void es_store_offscreen(struct ESPrefsGui *gui, int permanent)
     }
 }
 
+/* A public port makes finding and signalling an existing instance one
+ * indivisible operation. It is published before window construction, so
+ * a second launch during startup is remembered by the port's signal. */
+static struct MsgPort *es_instance_open(int *already)
+{
+    struct MsgPort *port = CreateMsgPort();
+    struct MsgPort *other;
+
+    *already = 0;
+    if (port == NULL) {
+        return NULL;
+    }
+    Forbid();
+    other = FindPort((STRPTR)"EdgeSnap.Preferences");
+    if (other != NULL) {
+        Signal(other->mp_SigTask, 1UL << other->mp_SigBit);
+        *already = 1;
+    } else {
+        port->mp_Node.ln_Name = (STRPTR)"EdgeSnap.Preferences";
+        AddPort(port);
+    }
+    Permit();
+    if (*already) {
+        DeleteMsgPort(port);
+        return NULL;
+    }
+    return port;
+}
+
+static void es_instance_close(struct MsgPort *port)
+{
+    Forbid();
+    RemPort(port);
+    Permit();
+    DeleteMsgPort(port);
+}
+
+static void es_free_tabs(struct ESPrefsGui *gui)
+{
+    struct Node *node;
+
+    while ((node = RemHead(&gui->tab_labels)) != NULL) {
+        FreeClickTabNode(node);
+    }
+}
+
 /* ---------------------------------------------------------------- main */
 
 int main(int argc, char **argv)
 {
     struct ESPrefsGui gui;
     ULONG signals, result;
+    struct MsgPort *instance;
+    ULONG instance_mask;
+    int already;
     UWORD code;
     int running = 1;
     int rc = RETURN_FAIL;
@@ -615,6 +809,12 @@ int main(int argc, char **argv)
     if (eso_is_command(argc, argv)) {
         return eso_command(argc, argv);
     }
+    instance = es_instance_open(&already);
+    if (instance == NULL) {
+        return already ? RETURN_OK : RETURN_FAIL;
+    }
+    instance_mask = 1UL << instance->mp_SigBit;
+    NewList(&gui.tab_labels);
     gui.offscreen = NULL;
     gui.off_was = eso_query(0);
     if (gui.off_was >= 0 && eso_query(1) < 0) {
@@ -626,27 +826,40 @@ int main(int argc, char **argv)
     for (i = 0; i <= ES_ZONE_COUNT; i++) {
         gui.zone[i] = NULL;
     }
-    esp_load(&gui.cfg);
+    esp_load(&gui.cfg, &gui.keys);
 
     if (!es_open_classes()) {
+        es_instance_close(instance);
         es_close_classes();
         return RETURN_FAIL;
     }
     gui.win = es_build_window(&gui);
     if (gui.win == NULL) {
+        es_free_tabs(&gui);
+        es_instance_close(instance);
         es_close_classes();
         return RETURN_FAIL;
     }
     gui.window = (struct Window *)IDoMethod(gui.win, WM_OPEN, NULL);
     if (gui.window == NULL) {
         DisposeObject(gui.win);
+        es_free_tabs(&gui);
+        es_instance_close(instance);
         es_close_classes();
         return RETURN_FAIL;
     }
 
     while (running) {
+        ULONG wake;
+
         GetAttr(WINDOW_SigMask, gui.win, &signals);
-        if (Wait(signals | SIGBREAKF_CTRL_C) & SIGBREAKF_CTRL_C) {
+        wake = Wait(signals | instance_mask | SIGBREAKF_CTRL_C);
+        if (wake & instance_mask) {
+            ScreenToFront(gui.window->WScreen);
+            WindowToFront(gui.window);
+            ActivateWindow(gui.window);
+        }
+        if (wake & SIGBREAKF_CTRL_C) {
             running = 0;
             rc = RETURN_OK;
             break;
@@ -662,18 +875,26 @@ int main(int argc, char **argv)
             case WMHI_GADGETUP:
                 switch (result & WMHI_GADGETMASK) {
                 case GID_SAVE:
-                    es_collect(&gui);
-                    esp_store(&gui.cfg, 1);
-                    es_store_offscreen(&gui, 1);
-                    running = 0;
-                    rc = RETURN_OK;
-                    break;
                 case GID_USE:
-                    es_collect(&gui);
-                    esp_store(&gui.cfg, 0);
-                    es_store_offscreen(&gui, 0);
-                    running = 0;
-                    rc = RETURN_OK;
+                    if (es_collect(&gui)) {
+                        int permanent = (result & WMHI_GADGETMASK) == GID_SAVE;
+
+                        if (esp_store(&gui.cfg, &gui.keys, permanent)) {
+                            es_store_offscreen(&gui, permanent);
+                            running = 0;
+                            rc = RETURN_OK;
+                        } else {
+                            struct EasyStruct es;
+
+                            es.es_StructSize = sizeof(es);
+                            es.es_Flags = 0;
+                            es.es_Title = (STRPTR)"EdgeSnap Preferences";
+                            es.es_TextFormat = (STRPTR)
+                                "The preferences could not be written.";
+                            es.es_GadgetFormat = (STRPTR)"OK";
+                            EasyRequestArgs(gui.window, &es, NULL, NULL);
+                        }
+                    }
                     break;
                 case GID_CANCEL:
                     running = 0;
@@ -690,7 +911,9 @@ int main(int argc, char **argv)
     }
 
     IDoMethod(gui.win, WM_CLOSE, NULL);
+    es_instance_close(instance);
     DisposeObject(gui.win);
+    es_free_tabs(&gui);
     es_close_classes();
     return rc;
 }

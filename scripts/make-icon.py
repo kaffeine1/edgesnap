@@ -165,6 +165,19 @@ COMMODITY_TOOLTYPES = [
     "(CYCLESIZES=yes)",
     "(ANIMATE=yes)",
     "(DRAGRESTORE=yes)",
+    "(HOTKEYLEFT=ctrl alt cursor_left)",
+    "(HOTKEYRIGHT=ctrl alt cursor_right)",
+    "(HOTKEYMAX=ctrl alt cursor_up)",
+    "(HOTKEYTOPLEFT=none)",
+    "(HOTKEYTOPRIGHT=none)",
+    "(HOTKEYBOTTOMLEFT=none)",
+    "(HOTKEYBOTTOMRIGHT=none)",
+    "(HOTKEYCENTRE=ctrl alt c)",
+    "(HOTKEYRESTORE=ctrl alt cursor_down)",
+    "(HOTKEYSELECT=ctrl alt z)",
+    "(CX_POPKEY=none)",
+    "(HOTKEYDUMP=ctrl alt d)",
+    "(HOTKEYFRAME=ctrl alt f)",
 ]
 
 # The icons this project ships. A script gets a PROJECT icon whose

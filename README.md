@@ -239,12 +239,21 @@ What the spike does today:
   same vocabulary either way
   (`EdgeSnap ZONES=halves EDGEPX=24 BYPASSQUAL=alt`);
   the startup banner echoes the settings in force;
-- hotkeys (no drag heuristics involved):
+- hotkeys (no drag heuristics involved), with these defaults:
   `ctrl alt cursor left/right/up` = snap left / right / maximize,
   `ctrl alt cursor down` = restore pre-snap geometry,
   `ctrl alt c` = the window's own size in the middle of the screen area,
   `ctrl alt z` = a selector under the pointer, nine cells that are
-  the map of the screen, by mouse or cursor keys;
+  the map of the screen, by mouse or cursor keys,
+  `ctrl alt d` = window dump, `ctrl alt f` = preview frame test.
+  I let each key be changed on the Hotkeys page of the preferences,
+  with a `HOTKEY...` setting or an icon tooltype, using input
+  descriptions as Exchange writes them. `none` or `off` disables a
+  key; an empty field does too. The four quarters (`HOTKEYTOPLEFT`,
+  `HOTKEYTOPRIGHT`, `HOTKEYBOTTOMLEFT`, `HOTKEYBOTTOMRIGHT`) have no
+  key until one is assigned. `CX_POPKEY` (also `POPKEY`) opens the
+  preferences, as Exchange's Show does, and has no key by default.
+  Asking again brings the open preferences window to the front;
 - `EdgeSnap QUIT` stops a running instance from a Shell or a script,
   which is how an update replaces itself without a reboot; launching it
   twice by accident is simply refused, and the running one carries on;
