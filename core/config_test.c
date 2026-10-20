@@ -348,6 +348,9 @@ static void test_settings_table(void)
     for (i = 0; i < count; i++) {
         int v;
 
+        if (t[i].kind == ES_SET_KEY) {
+            continue;       /* text accessors are exercised below */
+        }
         switch (t[i].kind) {
         case ES_SET_INT:    v = t[i].max; break;
         case ES_SET_BOOL:   v = 0; break;
@@ -408,6 +411,228 @@ static void test_groups_are_named_and_contiguous(void)
     }
 }
 
+static void feed_prefs(ESConfig *cfg, ESHotkeys *keys, const char *text)
+{
+    char line[256];
+    int n = 0;
+
+    es_config_defaults(cfg);
+    es_hotkeys_defaults(keys);
+    for (;;) {
+        if (*text == '\n' || *text == '\0') {
+            line[n] = '\0';
+            CHECK(es_prefs_line(cfg, keys, line) == ES_OK);
+            n = 0;
+            if (*text == '\0') {
+                return;
+            }
+        } else if (n < (int)sizeof(line) - 1) {
+            line[n++] = *text;
+        }
+        text++;
+    }
+}
+
+static void test_hotkey_defaults_and_spelling(void)
+{
+    ESConfig cfg;
+    ESHotkeys keys;
+    static const char *const defaults[ES_HOTKEY_COUNT] = {
+        "ctrl alt cursor_left", "ctrl alt cursor_right", "ctrl alt cursor_up",
+        "", "", "", "", "ctrl alt c", "ctrl alt cursor_down",
+        "ctrl alt z", "", "ctrl alt d", "ctrl alt f"
+    };
+    int i;
+
+    es_config_defaults(&cfg);
+    es_hotkeys_defaults(&keys);
+    for (i = 0; i < ES_HOTKEY_COUNT; i++) {
+        CHECK(strcmp(keys.key[i], defaults[i]) == 0);
+    }
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEY_LEFT=alt x") == ES_OK);
+    CHECK(strcmp(keys.key[ES_HK_LEFT], "alt x") == 0);
+    CHECK(es_prefs_line(&cfg, &keys, "hotkeyleft=ctrl x") == ES_OK);
+    CHECK(strcmp(keys.key[ES_HK_LEFT], "ctrl x") == 0);
+    CHECK(es_prefs_line(&cfg, &keys, "CX_POPKEY=ctrl p") == ES_OK);
+    CHECK(strcmp(keys.key[ES_HK_POPKEY], "ctrl p") == 0);
+    CHECK(es_prefs_line(&cfg, &keys, "POPKEY=alt p") == ES_OK);
+    CHECK(strcmp(keys.key[ES_HK_POPKEY], "alt p") == 0);
+    CHECK(es_prefs_line(&cfg, &keys, "EDGEPX=25") == ES_OK);
+    CHECK(cfg.engine.edge_px == 25);
+    CHECK(es_config_line(&cfg, "HOTKEYLEFT=ctrl q") == ES_ERR_UNSUPPORTED);
+    CHECK(es_prefs_line(&cfg, &keys, "WOBBLE=x") == ES_ERR_UNSUPPORTED);
+}
+
+static void test_hotkey_validation(void)
+{
+    ESConfig cfg;
+    ESHotkeys keys;
+    char value[ES_HOTKEY_SIZE + 4];
+    char line[128];
+    int i;
+
+    es_config_defaults(&cfg);
+    es_hotkeys_defaults(&keys);
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=\"ctrl alt x\"") == ES_OK);
+    CHECK(strcmp(keys.key[ES_HK_LEFT], "ctrl alt x") == 0);
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=NoNe") == ES_OK);
+    CHECK(keys.key[ES_HK_LEFT][0] == '\0');
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=\"OFF\"") == ES_OK);
+    CHECK(keys.key[ES_HK_LEFT][0] == '\0');
+    CHECK(es_prefs_set(&cfg, &keys, "HOTKEYLEFT", "") == ES_OK);
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=\"\"") == ES_OK);
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=") == ES_ERR_BAD_ARGS);
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=ctrl x\r\n") == ES_OK);
+    /* prefs_io splits on LF, leaving the CR of a DOS text line. */
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=ctrl x\r") == ES_OK);
+
+    /* Every non-printable byte fails atomically, including high ASCII. */
+    for (i = 1; i <= 255; i++) {
+        if (i >= 32 && i <= 126) {
+            continue;
+        }
+        value[0] = 'x'; value[1] = (char)i; value[2] = 'y'; value[3] = '\0';
+        CHECK(es_prefs_set(&cfg, &keys, "HOTKEYLEFT", value) == ES_ERR_BAD_ARGS);
+        CHECK(strcmp(keys.key[ES_HK_LEFT], "ctrl x") == 0);
+        strcpy(line, "HOTKEYLEFT=");
+        strcat(line, value);
+        CHECK(es_prefs_line(&cfg, &keys, line) == ES_ERR_BAD_ARGS);
+        CHECK(strcmp(keys.key[ES_HK_LEFT], "ctrl x") == 0);
+    }
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=ctrl x\t") == ES_ERR_BAD_ARGS);
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=\tctrl x") == ES_ERR_BAD_ARGS);
+    for (i = 0; i < ES_HOTKEY_SIZE - 1; i++) {
+        value[i] = 'x';
+    }
+    value[i] = '\0';
+    CHECK(es_prefs_set(&cfg, &keys, "HOTKEYLEFT", value) == ES_OK);
+    strcpy(line, "HOTKEYLEFT=");
+    strcat(line, value);
+    CHECK(es_prefs_line(&cfg, &keys, line) == ES_OK);
+    value[i++] = 'y'; value[i] = '\0';
+    CHECK(es_prefs_set(&cfg, &keys, "HOTKEYLEFT", value) == ES_ERR_BAD_ARGS);
+    strcpy(line, "HOTKEYLEFT=");
+    strcat(line, value);
+    CHECK(es_prefs_line(&cfg, &keys, line) == ES_ERR_BAD_ARGS);
+    CHECK(strlen(keys.key[ES_HK_LEFT]) == ES_HOTKEY_SIZE - 1);
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=\"ctrl x") == ES_ERR_BAD_ARGS);
+    CHECK(es_prefs_line(&cfg, &keys, "HOTKEYLEFT=ctrl x\"") == ES_ERR_BAD_ARGS);
+    CHECK(es_prefs_set(&cfg, &keys, "HOTKEYLEFT", 0) == ES_ERR_BAD_ARGS);
+}
+
+static void test_prefs_table_and_round_trip(void)
+{
+    ESConfig a, b;
+    ESHotkeys ka, kb;
+    const ESSetting *t;
+    char buf[4096];
+    char legacy[1024];
+    char after[1024];
+    int count, i, j, key_count = 0;
+    int seen[ES_HOTKEY_COUNT];
+
+    es_config_defaults(&a);
+    es_hotkeys_defaults(&ka);
+    memset(seen, 0, sizeof(seen));
+    t = es_settings(&count);
+    es_config_write(&a, legacy, (int)sizeof(legacy));
+    CHECK(es_prefs_write(&a, &ka, buf, (int)sizeof(buf)) < (int)sizeof(buf));
+    CHECK(strstr(buf, "\n#HOTKEYLEFT=ctrl alt cursor_left\n") != 0);
+    CHECK(strstr(buf, "\n#HOTKEYTOPLEFT=none\n") != 0);
+    CHECK(strstr(buf, "\n#CX_POPKEY=none\n") != 0);
+    for (i = 0; i < count; i++) {
+        CHECK(t[i].page != 0 && t[i].page[0] != '\0');
+        if (i > 0 && strcmp(t[i].page, t[i - 1].page) != 0) {
+            for (j = 0; j < i - 1; j++) {
+                CHECK(strcmp(t[j].page, t[i].page) != 0);
+            }
+        }
+        if (strcmp(t[i].key, "CYCLESIZES") == 0) {
+            CHECK(strcmp(t[i].page, "Hotkeys") == 0);
+            CHECK(strcmp(t[i].group, "Snap the active window") == 0);
+        } else if (t[i].kind != ES_SET_KEY) {
+            CHECK(strcmp(t[i].page, "Snapping") == 0);
+        }
+        if (t[i].kind == ES_SET_KEY) {
+            const char *text = es_setting_text(&ka, i);
+
+            key_count++;
+            CHECK(strcmp(t[i].page, "Hotkeys") == 0);
+            CHECK(text != 0);
+            for (j = 0; j < ES_HOTKEY_COUNT; j++) {
+                if (text == ka.key[j]) {
+                    seen[j]++;
+                }
+            }
+            CHECK(es_setting_apply(&a, i, 42) == ES_ERR_BAD_ARGS);
+            CHECK(es_setting_apply_text(&ka, i, "\001") == ES_ERR_BAD_ARGS);
+            CHECK(es_setting_apply_text(&ka, i, "ctrl shift x") == ES_OK);
+            CHECK(strcmp(es_setting_text(&ka, i), "ctrl shift x") == 0);
+            CHECK(es_setting_apply_text(&ka, i, "") == ES_OK);
+            CHECK(es_setting_text(&ka, i)[0] == '\0');
+            CHECK(es_prefs_set(&a, &ka, t[i].key, text) == ES_OK);
+        } else {
+            CHECK(es_setting_text(&ka, i) == 0);
+            CHECK(es_setting_apply_text(&ka, i, "x") == ES_ERR_BAD_ARGS);
+        }
+    }
+    CHECK(key_count == ES_HOTKEY_COUNT);
+    for (i = 0; i < ES_HOTKEY_COUNT; i++) {
+        CHECK(seen[i] == 1);
+    }
+    CHECK(es_setting_text(&ka, -1) == 0);
+    CHECK(es_setting_text(&ka, count) == 0);
+    CHECK(es_setting_apply_text(&ka, count, "x") == ES_ERR_BAD_ARGS);
+    CHECK(es_setting_apply_text(&ka, -1, "x") == ES_ERR_BAD_ARGS);
+
+    CHECK(es_prefs_line(&a, &ka, "HOTKEYLEFT=\"ctrl shift x\"") == ES_OK);
+    CHECK(es_prefs_line(&a, &ka, "HOTKEYTOPRIGHT=alt r") == ES_OK);
+    CHECK(es_prefs_line(&a, &ka, "CX_POPKEY=ctrl p") == ES_OK);
+    CHECK(es_prefs_line(&a, &ka, "HOTKEYRESTORE=off") == ES_OK);
+    CHECK(es_prefs_write(&a, &ka, buf, (int)sizeof(buf)) < (int)sizeof(buf));
+    CHECK(strstr(buf, "\nHOTKEYRESTORE=none\n") != 0);
+    feed_prefs(&b, &kb, buf);
+    CHECK(same_config(&a, &b));
+    CHECK(memcmp(&ka, &kb, sizeof(ka)) == 0);
+    es_config_write(&a, after, (int)sizeof(after));
+    CHECK(strcmp(legacy, after) == 0);
+    CHECK(strstr(after, "HOTKEY") == 0 && strstr(after, "POPKEY") == 0);
+    CHECK(strstr(after, "#BYPASSQUAL=none\n#CYCLESIZES=yes\n#DRAGRESTORE=yes") != 0);
+
+    /* Every text row survives a non-default round trip. */
+    for (i = 0; i < count; i++) {
+        if (t[i].kind == ES_SET_KEY) {
+            char text[] = "ctrl shift a";
+
+            text[11] = (char)('a' + (i % ES_HOTKEY_COUNT));
+            CHECK(es_setting_apply_text(&ka, i, text) == ES_OK);
+        }
+    }
+    CHECK(es_prefs_write(&a, &ka, buf, (int)sizeof(buf)) < (int)sizeof(buf));
+    feed_prefs(&b, &kb, buf);
+    CHECK(memcmp(&ka, &kb, sizeof(ka)) == 0);
+}
+
+static void test_quoted_text_round_trip(void)
+{
+    static const char *const values[] = {
+        "\" ctrl x \"", "\"\"ctrl x\"\"", "\"\"ctrl x\"", "\" \"", "ctrl \" x", 0
+    };
+    ESConfig a, b;
+    ESHotkeys ka, kb;
+    char buf[4096];
+    int i;
+
+    es_config_defaults(&a);
+    es_hotkeys_defaults(&ka);
+    for (i = 0; values[i] != 0; i++) {
+        CHECK(es_prefs_set(&a, &ka, "HOTKEYLEFT", values[i]) == ES_OK);
+        es_prefs_write(&a, &ka, buf, (int)sizeof(buf));
+        feed_prefs(&b, &kb, buf);
+        CHECK(memcmp(&ka, &kb, sizeof(ka)) == 0);
+    }
+}
+
 int main(void)
 {
     test_corner_div_range();
@@ -420,6 +645,10 @@ int main(void)
     test_zones();
     test_bypass_qualifier();
     test_groups_are_named_and_contiguous();
+    test_hotkey_defaults_and_spelling();
+    test_hotkey_validation();
+    test_prefs_table_and_round_trip();
+    test_quoted_text_round_trip();
 
     /* the table and the writer stand on the parser: only once it holds,
      * and their failures count as much as its own */

@@ -1307,6 +1307,63 @@ of this verification.
   `esnaptest D` and `DL` give a window to drag away by hand or by a
   script.
 
+### 0.5
+
+- **Keys the user can change.** On real MorphOS hardware the keymap
+  switch took `ctrl alt space`, the selector's first key, before it
+  could reach EdgeSnap. I changed the default to `ctrl alt z`, but
+  another fixed key would only postpone the same problem. Each action
+  now takes an Exchange input description from the preferences file,
+  Shell arguments or icon tooltypes, with the current eight keys as
+  defaults. `none`, `off` or an empty window field leaves a key unset.
+  The portable parser checks length, printable ASCII and surrounding
+  quotes; `ParseIX` judges the system's syntax. The windows refuse a
+  bad description or two actions with the same parsed key, and the
+  commodity skips and reports either, so one bad key cannot stop it.
+
+- **Frontend storage, the same vocabulary.** I keep the thirteen key
+  buffers in `ESHotkeys`, outside `ESConfig`. The library copies an
+  `ESConfig` onto the caller's stack in `esb_set_options`; putting the
+  keys there would charge every client nearly a kilobyte of stack
+  and string handling for something it never uses. `es_prefs_set`,
+  `es_prefs_line` and `es_prefs_write` handle both structures;
+  `es_config_set`, `es_config_line` and `es_config_write` keep their
+  configuration-only vocabulary and output. The table has a text
+  kind, `ES_SET_KEY`, with `es_setting_text` and
+  `es_setting_apply_text`, alongside the integer accessors. Both doors
+  use the parser's validation. No library change or revision.
+
+- **Two pages from the table.** Two extra help lines had already made
+  the Zune window 735 pixels tall on a 768-pixel AROS One screen.
+  I give every table row a page as well as a group: Snapping and
+  Hotkeys become a ReAction clicktab with a page group, or a MUI/Zune
+  Register. The system's off-screen switch stays after the last group
+  on Snapping; Save, Use and Cancel stay below the pages. The width
+  cycle moves beside the side keys on Hotkeys. The manual takes the
+  same page and group headings.
+
+- **Corners and opening the preferences.** I give the four quarters
+  direct key actions, unset as they come, through the existing
+  `ESnap_SnapWindow` zones and the same after-snap path as the halves.
+  Exchange's Show and `CX_POPKEY` (also `POPKEY`, unset by default)
+  call one `spike_open_prefs(void)`, which the ARexx frontend can call
+  too. It loads `SYS:Prefs/EdgeSnap` and starts it as a separate
+  process with NIL: input/output and 64 KB stacks, without waiting.
+  MUI's SingleTask/DoubleStart brings an existing window forward;
+  ReAction publishes a named port and a second instance signals it
+  under `Forbid`. Hide does nothing to another program's window.
+
+- **Live keys without a gap in mouse input.** On a reload I remove
+  and rebuild the key filters, leaving the broker and its CxCustom
+  active so a button release cannot be lost during a drag. Removal
+  uses commodities.library's serialisation with its input handler.
+  Shell arguments and tooltypes are reapplied after the file just as
+  at startup. The startup and reload messages list the keys in force,
+  skipped keys as none. Closing the selector on its own hotkey still
+  uses `HK_SELECT`, independent of the chosen key code. Host checks
+  cover the vocabulary; the five target builds and runtime behaviour
+  still need their own checks.
+
 ### 2.5 - what a tiling client asked for first
 
 The first client beyond the commodity announced itself on 2026-09-04: a

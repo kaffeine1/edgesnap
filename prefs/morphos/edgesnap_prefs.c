@@ -33,6 +33,7 @@
 
 #include <exec/types.h>
 #include <libraries/mui.h>
+#include <libraries/commodities.h>
 #include <dos/dos.h>
 
 #include <clib/alib_protos.h>   /* DoMethod                             */
@@ -52,7 +53,7 @@
 static const char es_version_cookie[] __attribute__((used)) =
     "$VER: EdgeSnapPrefs " ES_VERSION " (" ES_VERSION_DATE ") Michele Dipace";
 
-#define ES_MAX_SETTINGS 24
+#define ES_MAX_SETTINGS 48
 #define ES_ZONE_COUNT   7
 /* Six columns is three zones per row, a zone being a checkmark and its
  * label. The labels are short ("Top left", "Bottom right"), so three
@@ -77,11 +78,16 @@ static const char *const es_zone_label[ES_ZONE_COUNT] = {
 enum {
     ES_ID_SAVE = 1,
     ES_ID_USE,
-    ES_ID_CANCEL
+    ES_ID_CANCEL,
+    ES_ID_SHOW
 };
 
 struct ESPrefsGui {
     ESConfig cfg;
+    ESHotkeys keys;
+    Object *pages;
+    char *page_name[ES_MAX_SETTINGS + 1];
+    int hotkey_page;
     Object *app;
     Object *win;
     Object *offscreen;      /* the system's setting, not ours        */
@@ -98,6 +104,7 @@ struct ESPrefsGui {
 };
 
 struct Library *MUIMasterBase;
+struct Library *CxBase;
 #ifdef __AROS__
 /* MorphOS's startup opens Intuition for us; AROS's inline stubs want
  * the base by name and nothing provides it, so it is ours to open. */
@@ -153,6 +160,13 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
             }
             return o;
         }
+    case ES_SET_KEY:
+        return StringObject,
+            StringFrame,
+            MUIA_String_Contents, (ESTagData)es_setting_text(&gui->keys, index),
+            MUIA_String_MaxLen, ES_HOTKEY_SIZE,
+            MUIA_CycleChain, 1,
+        End;
     case ES_SET_ZONES:
         return NULL;    /* built by es_zone_group() */
     default:
@@ -338,6 +352,9 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
             widget = es_widget(gui, &t[i], i);
         }
         gui->field[i] = widget;
+        if (widget != NULL) {
+            set(widget, MUIA_ShortHelp, (ESTagData)t[i].help);
+        }
         if (widget == NULL) {
             continue;
         }
@@ -387,23 +404,17 @@ static Object *es_section(struct ESPrefsGui *gui, const ESSetting *t,
  * 0.1, and the sections come from the shared table so the AmigaOS 4
  * window and the manual show the same ones.
  */
-static Object *es_settings_group(struct ESPrefsGui *gui)
+static Object *es_settings_group(struct ESPrefsGui *gui,
+                                  const ESSetting *t, int first, int last)
 {
     struct TagItem tags[ES_MAX_SETTINGS + 2];
-    const ESSetting *t;
-    int count = 0;
     int n = 0;
-    int first = 0;
     int i;
 
-    t = es_settings(&count);
-    if (count > ES_MAX_SETTINGS) {
-        count = ES_MAX_SETTINGS;
-    }
-    for (i = 1; i <= count; i++) {
+    for (i = first + 1; i <= last + 1; i++) {
         Object *sect;
 
-        if (i < count && es_same_group(t[i].group, t[first].group)) {
+        if (i <= last && es_same_group(t[i].group, t[first].group)) {
             continue;
         }
         sect = es_section(gui, t, first, i - 1);
@@ -466,9 +477,87 @@ static Object *es_offscreen_group(struct ESPrefsGui *gui)
                          TAG_DONE);
 }
 
+/* Both page titles and their sections come from the settings table.
+ * The system's off-screen setting follows the first page's last group. */
+static Object *es_settings_pages(struct ESPrefsGui *gui)
+{
+    struct TagItem tags[ES_MAX_SETTINGS + 2];
+    const ESSetting *t;
+    int count, first = 0, pages = 0, n = 0, i;
+
+    t = es_settings(&count);
+    if (count > ES_MAX_SETTINGS) {
+        return NULL;
+    }
+    tags[n].ti_Tag = MUIA_Register_Titles;
+    tags[n++].ti_Data = (ESTagData)gui->page_name;
+    for (i = 1; i <= count; i++) {
+        Object *body;
+
+        if (i < count && es_same_group(t[i].page, t[first].page)) {
+            continue;
+        }
+        body = es_settings_group(gui, t, first, i - 1);
+        if (first == 0) {
+            body = MUI_NewObject(MUIC_Group,
+                                 MUIA_Group_Child, (ESTagData)body,
+                                 MUIA_Group_Child,
+                                     (ESTagData)es_offscreen_group(gui),
+                                 TAG_DONE);
+        }
+        if (body == NULL) {
+            return NULL;
+        }
+        gui->page_name[pages] = (char *)t[first].page;
+        if (es_same_group(t[first].page, "Hotkeys")) {
+            gui->hotkey_page = pages;
+        }
+        pages++;
+        tags[n].ti_Tag = MUIA_Group_Child;
+        tags[n++].ti_Data = (ESTagData)body;
+        first = i;
+    }
+    gui->page_name[pages] = NULL;
+    tags[n].ti_Tag = TAG_DONE;
+    tags[n].ti_Data = 0;
+    gui->pages = MUI_NewObjectA(MUIC_Register, tags);
+    return gui->pages;
+}
+
+/* MUI_RequestA takes plain char * on MorphOS and CONST_STRPTR on AROS. */
+#ifdef __AROS__
+#define ES_REQ_TEXT(s) ((CONST_STRPTR)(s))
+#else
+#define ES_REQ_TEXT(s) ((char *)(s))
+#endif
+
+static void es_key_error(struct ESPrefsGui *gui, int bad, int duplicate,
+                          const char *text)
+{
+    const ESSetting *t = es_settings(NULL);
+    ESTagData args[3];
+    const char *message;
+
+    set(gui->pages, MUIA_Group_ActivePage, gui->hotkey_page);
+    args[0] = (ESTagData)t[bad].label;
+    args[1] = (ESTagData)text;
+    if (duplicate >= 0) {
+        args[2] = (ESTagData)t[duplicate].label;
+        message = "The hotkey for %s:\n%s\n\nMatches %s. "
+                  "Choose another key or leave it empty.";
+    } else {
+        message = "Invalid hotkey for %s:\n%s\n\nUse an input "
+                  "description as Exchange writes it, or leave it empty.";
+    }
+    MUI_RequestA(gui->app, gui->win, 0,
+                 ES_REQ_TEXT("EdgeSnap Preferences"), ES_REQ_TEXT("_OK"),
+                 ES_REQ_TEXT(message), (APTR)args);
+    set(gui->win, MUIA_Window_ActiveObject, (ESTagData)gui->field[bad]);
+}
+
 /* ------------------------------------------------ back to the file */
 
-static void es_collect(struct ESPrefsGui *gui)
+static int es_collect(struct ESPrefsGui *gui)
 {
     const ESSetting *t;
     int count = 0;
@@ -492,6 +581,20 @@ static void es_collect(struct ESPrefsGui *gui)
         case ES_SET_CHOICE:
             get(gui->field[i], MUIA_Cycle_Active, &value);
             es_setting_apply(&gui->cfg, i, (int)value);
+            break;
+        case ES_SET_KEY:
+            {
+                STRPTR text = NULL;
+
+                get(gui->field[i], MUIA_String_Contents, &text);
+                if (text == NULL ||
+                    es_setting_apply_text(&gui->keys, i, (const char *)text)
+                        != ES_OK) {
+                    es_key_error(gui, i, -1, text != NULL ?
+                                  (const char *)text : "");
+                    return 0;
+                }
+            }
             break;
         case ES_SET_ZONES:
             {
@@ -521,14 +624,16 @@ static void es_collect(struct ESPrefsGui *gui)
             break;
         }
     }
-}
+    {
+        int bad, duplicate;
 
-/* MUI_RequestA takes plain char * on MorphOS and CONST_STRPTR on AROS. */
-#ifdef __AROS__
-#define ES_REQ_TEXT(s) ((CONST_STRPTR)(s))
-#else
-#define ES_REQ_TEXT(s) ((char *)(s))
-#endif
+        if (!esp_validate_hotkeys(&gui->keys, &bad, &duplicate)) {
+            es_key_error(gui, bad, duplicate, es_setting_text(&gui->keys, bad));
+            return 0;
+        }
+    }
+    return 1;
+}
 
 /*
  * The window's id is what makes it remember its place and size. Zune
@@ -598,7 +703,7 @@ int main(int argc, char **argv)
     for (i = 0; i < ES_ZONE_COUNT; i++) {
         gui.zone[i] = NULL;
     }
-    esp_load(&gui.cfg);
+    esp_load(&gui.cfg, &gui.keys);
 
 #ifdef __AROS__
     IntuitionBase = (struct IntuitionBase *)OpenLibrary("intuition.library", 36);
@@ -606,8 +711,16 @@ int main(int argc, char **argv)
         return RETURN_FAIL;
     }
 #endif
+    CxBase = OpenLibrary("commodities.library", 37);
+    if (CxBase == NULL) {
+#ifdef __AROS__
+        CloseLibrary((struct Library *)IntuitionBase);
+#endif
+        return RETURN_FAIL;
+    }
     MUIMasterBase = OpenLibrary(MUIMASTER_NAME, MUIMASTER_VMIN);
     if (MUIMasterBase == NULL) {
+        CloseLibrary(CxBase);
         Printf((CONST_STRPTR)"EdgeSnapPrefs: muimaster.library %ld is needed\n",
                (LONG)MUIMASTER_VMIN);
 #ifdef __AROS__
@@ -627,12 +740,12 @@ int main(int argc, char **argv)
         MUIA_Application_Author,      "Michele Dipace",
         MUIA_Application_Description, "Window snapping preferences",
         MUIA_Application_Base,        "EDGESNAPPREFS",
+        MUIA_Application_SingleTask,  TRUE,
         SubWindow, gui.win = WindowObject,
             MUIA_Window_Title, "EdgeSnap Preferences",
             ES_WINDOW_ID,
             WindowContents, VGroup,
-                Child, es_settings_group(&gui),
-                Child, es_offscreen_group(&gui),
+                Child, es_settings_pages(&gui),
                 Child, HGroup,
                     MUIA_Group_SameWidth, TRUE,
                     Child, save,
@@ -646,12 +759,15 @@ int main(int argc, char **argv)
     if (gui.app == NULL) {
         Printf((CONST_STRPTR)"EdgeSnapPrefs: the window would not build\n");
         CloseLibrary(MUIMasterBase);
+        CloseLibrary(CxBase);
 #ifdef __AROS__
         CloseLibrary((struct Library *)IntuitionBase);
 #endif
         return RETURN_FAIL;
     }
 
+    DoMethod(gui.app, MUIM_Notify, MUIA_Application_DoubleStart, MUIV_EveryTime,
+             (ESTagData)gui.app, 2, MUIM_Application_ReturnID, ES_ID_SHOW);
     DoMethod(gui.win, MUIM_Notify, MUIA_Window_CloseRequest, TRUE,
              (ESTagData)gui.app, 2, MUIM_Application_ReturnID,
              MUIV_Application_ReturnID_Quit);
@@ -667,19 +783,32 @@ int main(int argc, char **argv)
     while ((LONG)(id = DoMethod(gui.app, MUIM_Application_NewInput,
                                &signals)) !=
                (LONG)MUIV_Application_ReturnID_Quit) {
-        if (id == ES_ID_SAVE) {
-            es_collect(&gui);
-            esp_store(&gui.cfg, 1);
-            es_store_offscreen(&gui, 1);
-            rc = RETURN_OK;
-            break;
+        if (id == ES_ID_SHOW) {
+            struct Window *window = NULL;
+
+            set(gui.win, MUIA_Window_Open, TRUE);
+            get(gui.win, MUIA_Window_Window, &window);
+            if (window != NULL) {
+                ScreenToFront(window->WScreen);
+                WindowToFront(window);
+                ActivateWindow(window);
+            }
         }
-        if (id == ES_ID_USE) {
-            es_collect(&gui);
-            esp_store(&gui.cfg, 0);
-            es_store_offscreen(&gui, 0);
-            rc = RETURN_OK;
-            break;
+        if (id == ES_ID_SAVE || id == ES_ID_USE) {
+            int permanent = id == ES_ID_SAVE;
+
+            if (es_collect(&gui)) {
+                if (esp_store(&gui.cfg, &gui.keys, permanent)) {
+                    es_store_offscreen(&gui, permanent);
+                    rc = RETURN_OK;
+                    break;
+                }
+                MUI_RequestA(gui.app, gui.win, 0,
+                             ES_REQ_TEXT("EdgeSnap Preferences"),
+                             ES_REQ_TEXT("_OK"),
+                             ES_REQ_TEXT("The preferences could not be written."),
+                             NULL);
+            }
         }
         if (id == ES_ID_CANCEL) {
             rc = RETURN_OK;
@@ -700,6 +829,7 @@ int main(int argc, char **argv)
     set(gui.win, MUIA_Window_Open, FALSE);
     MUI_DisposeObject(gui.app);
     CloseLibrary(MUIMasterBase);
+    CloseLibrary(CxBase);
 #ifdef __AROS__
     CloseLibrary((struct Library *)IntuitionBase);
 #endif

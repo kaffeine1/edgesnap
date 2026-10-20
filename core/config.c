@@ -47,13 +47,123 @@ static int es_key_eq(const char *s, const char *ref)
             s++;
             continue;
         }
-        if (*ref == '\0' || es_lower((unsigned char)*s) != *ref) {
+        if (*ref == '\0' || es_lower((unsigned char)*s) !=
+                            es_lower((unsigned char)*ref)) {
             return 0;
         }
         s++;
         ref++;
     }
     return *ref == '\0';
+}
+
+static const char *const es_hotkey_names[ES_HOTKEY_COUNT] = {
+    "HOTKEYLEFT", "HOTKEYRIGHT", "HOTKEYMAX",
+    "HOTKEYTOPLEFT", "HOTKEYTOPRIGHT", "HOTKEYBOTTOMLEFT", "HOTKEYBOTTOMRIGHT",
+    "HOTKEYCENTRE", "HOTKEYRESTORE", "HOTKEYSELECT", "CX_POPKEY",
+    "HOTKEYDUMP", "HOTKEYFRAME"
+};
+
+static const char *const es_hotkey_defaults[ES_HOTKEY_COUNT] = {
+    "ctrl alt cursor_left", "ctrl alt cursor_right", "ctrl alt cursor_up",
+    "", "", "", "", "ctrl alt c", "ctrl alt cursor_down",
+    "ctrl alt z", "", "ctrl alt d", "ctrl alt f"
+};
+
+void es_hotkeys_defaults(ESHotkeys *keys)
+{
+    int i, n;
+
+    for (i = 0; i < ES_HOTKEY_COUNT; i++) {
+        const char *p = es_hotkey_defaults[i];
+
+        for (n = 0; n < ES_HOTKEY_SIZE; n++) {
+            keys->key[i][n] = *p;
+            if (*p != '\0') {
+                p++;
+            }
+        }
+    }
+}
+
+static int es_hotkey_index(const char *key)
+{
+    int i;
+
+    if (key == 0) {
+        return -1;
+    }
+    if (es_key_eq(key, "popkey") || es_key_eq(key, "cxpopkey")) {
+        return ES_HK_POPKEY;
+    }
+    for (i = 0; i < ES_HOTKEY_COUNT; i++) {
+        if (es_key_eq(key, es_hotkey_names[i])) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* Unlike setting names, the words none/off ignore case only. */
+static int es_text_eq(const char *a, const char *b)
+{
+    while (*a != '\0' && es_lower((unsigned char)*a) ==
+                            es_lower((unsigned char)*b)) {
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
+int es_prefs_set(ESConfig *cfg, ESHotkeys *keys,
+                 const char *key, const char *value)
+{
+    int index = es_hotkey_index(key);
+    char text[ES_HOTKEY_SIZE];
+    int n = 0;
+    int first = 0;
+    int last;
+    int i;
+
+    if (key == 0 || value == 0) {
+        return ES_ERR_BAD_ARGS;
+    }
+    if (index < 0 || keys == 0) {
+        return cfg != 0 ? es_config_set(cfg, key, value) : ES_ERR_BAD_ARGS;
+    }
+    while (value[n] != '\0') {
+        unsigned char c = (unsigned char)value[n];
+
+        if (n >= ES_HOTKEY_SIZE - 1 || c < 32 || c > 126) {
+            return ES_ERR_BAD_ARGS;
+        }
+        text[n] = (char)c;
+        n++;
+    }
+    last = n;
+    while (first < last && text[first] == ' ') { first++; }
+    while (last > first && text[last - 1] == ' ') { last--; }
+    if (first < last && (text[first] == '"' || text[last - 1] == '"')) {
+        if (last - first < 2 || text[first] != '"' || text[last - 1] != '"') {
+            return ES_ERR_BAD_ARGS;
+        }
+        first++;
+        last--;
+    }
+    n = last - first;
+    for (i = 0; i < n; i++) {
+        text[i] = text[first + i];
+    }
+    text[n] = '\0';
+    if (es_text_eq(text, "none") || es_text_eq(text, "off")) {
+        n = 0;
+    }
+    /* Zero the tail too, without changing anything before validation.
+     * value may itself point into keys. */
+    for (i = 0; i < ES_HOTKEY_SIZE; i++) {
+        keys->key[index][i] = i < n ? text[i] : '\0';
+    }
+    return ES_OK;
 }
 
 static int es_parse_int(const char *v, int *out)
@@ -348,13 +458,15 @@ int es_config_set(ESConfig *cfg, const char *key, const char *value)
     return ES_ERR_UNSUPPORTED;
 }
 
-int es_config_line(ESConfig *cfg, const char *line)
+static int es_read_line(ESConfig *cfg, ESHotkeys *keys, const char *line)
 {
     char key[ES_CFG_MAXTOK];
     char val[ES_CFG_MAXTOK];
     const char *eq;
     const char *p;
     int n;
+    int hotkey;
+    const char *end;
 
     if (line == 0) {
         return ES_ERR_BAD_ARGS;
@@ -388,26 +500,45 @@ int es_config_line(ESConfig *cfg, const char *line)
         return ES_ERR_BAD_ARGS;
     }
 
+    hotkey = keys != 0 && es_hotkey_index(key) >= 0;
     p = eq + 1;
-    while (es_blank((unsigned char)*p)) {
+    end = p;
+    while (*end != '\0') { end++; }
+    /* A line terminator is syntax, not part of an input description. */
+    if (hotkey && end > p && end[-1] == '\n') {
+        end--;
+    }
+    if (hotkey && end > p && end[-1] == '\r') { end--; }
+    while (p < end && (hotkey ? *p == ' ' : es_blank((unsigned char)*p))) {
         p++;
     }
     n = 0;
-    while (*p != '\0') {
+    while (p < end) {
         if (n >= ES_CFG_MAXTOK - 1) {
             return ES_ERR_BAD_ARGS;
         }
         val[n++] = *p;
         p++;
     }
-    while (n > 0 && es_blank((unsigned char)val[n - 1])) {
+    while (n > 0 && (hotkey ? val[n - 1] == ' ' :
+                             es_blank((unsigned char)val[n - 1]))) {
         n--;
     }
     val[n] = '\0';
     if (n == 0) {
         return ES_ERR_BAD_ARGS;
     }
-    return es_config_set(cfg, key, val);
+    return es_prefs_set(cfg, keys, key, val);
+}
+
+int es_config_line(ESConfig *cfg, const char *line)
+{
+    return es_read_line(cfg, 0, line);
+}
+
+int es_prefs_line(ESConfig *cfg, ESHotkeys *keys, const char *line)
+{
+    return es_read_line(cfg, keys, line);
 }
 
 
@@ -424,58 +555,97 @@ static const char *const es_qual_choices[] = {
 };
 
 static const ESSetting es_setting_table[] = {
-    { "ZONES", "Zones", "Which corners and edges react",
+    { "ZONES", "Snapping", "Zones", "Which corners and edges react",
       "Which screen edges and corners snap a window.",
       ES_SET_ZONES, 0, 0, 0 },
-    { "BYPASSQUAL", "Zones", "Hold to ignore zones",
+    { "BYPASSQUAL", "Snapping", "Zones", "Hold to ignore zones",
       "Qualifier that lets a window be dragged past the zones.",
       ES_SET_CHOICE, 0, 0, es_qual_choices },
-    { "CYCLESIZES", "Zones", "Repeat a hotkey for a third",
-      "Pressing the same side hotkey again gives the window two "
-      "thirds of the screen, then one third, then a half again.",
-      ES_SET_BOOL, 0, 0, 0 },
-    { "DRAGRESTORE", "Zones", "Old size when dragged away",
+    { "DRAGRESTORE", "Snapping", "Zones", "Old size when dragged away",
       "A snapped window dragged by its title bar and let go away from the "
       "edges gets back the size it had before it was snapped, under the "
       "pointer. With the bypass key held it keeps the snapped size.",
       ES_SET_BOOL, 0, 0, 0 },
-    { "EDGEPX", "Sensitivity", "Edge distance",
+    { "EDGEPX", "Snapping", "Sensitivity", "Edge distance",
       "How close to an edge the pointer must come, in pixels.",
       ES_SET_INT, ES_EDGE_PX_MIN, ES_EDGE_PX_MAX, 0 },
-    { "CORNERDIV", "Sensitivity", "Corner size",
+    { "CORNERDIV", "Snapping", "Sensitivity", "Corner size",
       "0: a corner only where the pointer is pushed into it. From 2: "
       "a band at each end of the side edges, the usable height divided "
       "by this.",
       ES_SET_INT, ES_CORNER_DIV_MIN, ES_CORNER_DIV_MAX, 0 },
-    { "DRAGMINPX", "Sensitivity", "Drag threshold",
+    { "DRAGMINPX", "Snapping", "Sensitivity", "Drag threshold",
       "How far the pointer must travel before it counts as a drag.",
       ES_SET_INT, ES_DRAG_MIN_PX_MIN, ES_DRAG_MIN_PX_MAX, 0 },
-    { "PREVIEW", "Look", "Show the preview frame",
+    { "PREVIEW", "Snapping", "Look", "Show the preview frame",
       "Outline where the window will land while dragging.",
       ES_SET_BOOL, 0, 0, 0 },
-    { "ANIMATE", "Look", "Glide into place",
+    { "ANIMATE", "Snapping", "Look", "Glide into place",
       "Move the window to its zone in a few steps instead of one. "
       "Every step asks the program to redraw itself, so on a slow "
       "machine or with a large window the plain jump looks better.",
       ES_SET_BOOL, 0, 0, 0 },
-    { "PANELDETECT", "Docks", "Keep clear of docks",
+    { "PANELDETECT", "Snapping", "Docks", "Keep clear of docks",
       "Detect docks and panels, and never cover them.",
       ES_SET_BOOL, 0, 0, 0 },
-    { "PANELMARGIN", "Docks", "Space around a dock",
+    { "PANELMARGIN", "Snapping", "Docks", "Space around a dock",
       "Breathing room left around a detected dock, in pixels.",
       ES_SET_INT, ES_PANEL_MARGIN_MIN, ES_PANEL_MARGIN_MAX, 0 },
-    { "MARGINLEFT", "Margins", "Left",
+    { "MARGINLEFT", "Snapping", "Margins", "Left",
       "Extra space left free at the left edge.",
       ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
-    { "MARGINTOP", "Margins", "Top",
+    { "MARGINTOP", "Snapping", "Margins", "Top",
       "Extra space left free at the top edge.",
       ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
-    { "MARGINRIGHT", "Margins", "Right",
+    { "MARGINRIGHT", "Snapping", "Margins", "Right",
       "Extra space left free at the right edge.",
       ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
-    { "MARGINBOTTOM", "Margins", "Bottom",
+    { "MARGINBOTTOM", "Snapping", "Margins", "Bottom",
       "Extra space left free at the bottom edge.",
-      ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 }
+      ES_SET_INT, ES_MARGIN_MIN, ES_MARGIN_MAX, 0 },
+    { "HOTKEYLEFT", "Hotkeys", "Snap the active window", "Left half",
+      "Snap left. Repeat for the width cycle below.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYRIGHT", "Hotkeys", "Snap the active window", "Right half",
+      "Snap right. Repeat for the width cycle below.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYMAX", "Hotkeys", "Snap the active window", "Maximize",
+      "Fill the usable screen area.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYTOPLEFT", "Hotkeys", "Snap the active window", "Top left",
+      "Snap to the top left quarter.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYTOPRIGHT", "Hotkeys", "Snap the active window", "Top right",
+      "Snap to the top right quarter.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYBOTTOMLEFT", "Hotkeys", "Snap the active window", "Bottom left",
+      "Snap to the bottom left quarter.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYBOTTOMRIGHT", "Hotkeys", "Snap the active window", "Bottom right",
+      "Snap to the bottom right quarter.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYCENTRE", "Hotkeys", "Snap the active window", "Centre",
+      "Keep the window's own size and put it in the middle.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYRESTORE", "Hotkeys", "Snap the active window", "Put back",
+      "Restore the box the window had before its first snap.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "CYCLESIZES", "Hotkeys", "Snap the active window", "Repeat a hotkey for a third",
+      "Pressing the same side hotkey again gives the window two "
+      "thirds of the screen, then one third, then a half again.",
+      ES_SET_BOOL, 0, 0, 0 },
+    { "HOTKEYSELECT", "Hotkeys", "Open", "Selector",
+      "Open the selector under the pointer. The same hotkey closes it.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "CX_POPKEY", "Hotkeys", "Open", "Preferences",
+      "Open these preferences, as Exchange's Show does. POPKEY works too.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYDUMP", "Hotkeys", "Diagnostics", "Window dump",
+      "Print the windows and dock decisions in the commodity's output.",
+      ES_SET_KEY, 0, 0, 0 },
+    { "HOTKEYFRAME", "Hotkeys", "Diagnostics", "Preview frame test",
+      "Show the preview frame briefly, without a drag.",
+      ES_SET_KEY, 0, 0, 0 }
 };
 
 #define ES_SETTING_COUNT \
@@ -626,6 +796,8 @@ int es_setting_apply(ESConfig *cfg, int index, int value)
     }
     s = &es_setting_table[index];
     switch (s->kind) {
+    case ES_SET_KEY:
+        return ES_ERR_BAD_ARGS;
     case ES_SET_BOOL:
         text = value ? "yes" : "no";
         break;
@@ -652,6 +824,27 @@ int es_setting_apply(ESConfig *cfg, int index, int value)
     return es_config_set(cfg, s->key, text);
 }
 
+const char *es_setting_text(const ESHotkeys *keys, int index)
+{
+    int key;
+
+    if (keys == 0 || index < 0 || index >= ES_SETTING_COUNT ||
+        es_setting_table[index].kind != ES_SET_KEY) {
+        return 0;
+    }
+    key = es_hotkey_index(es_setting_table[index].key);
+    return key >= 0 ? keys->key[key] : 0;
+}
+
+int es_setting_apply_text(ESHotkeys *keys, int index, const char *value)
+{
+    if (keys == 0 || index < 0 || index >= ES_SETTING_COUNT ||
+        es_setting_table[index].kind != ES_SET_KEY) {
+        return ES_ERR_BAD_ARGS;
+    }
+    return es_prefs_set(0, keys, es_setting_table[index].key, value);
+}
+
 static int es_emit(char *buf, int size, int at, const char *text)
 {
     while (*text != '\0') {
@@ -664,7 +857,8 @@ static int es_emit(char *buf, int size, int at, const char *text)
     return at;
 }
 
-int es_config_write(const ESConfig *cfg, char *buf, int size)
+static int es_write(const ESConfig *cfg, const ESHotkeys *keys,
+                     char *buf, int size)
 {
     static const char header[] =
         "# EdgeSnap preferences\n"
@@ -674,11 +868,20 @@ int es_config_write(const ESConfig *cfg, char *buf, int size)
         "# A line that starts with # is a setting left as it comes,\n"
         "# so that a later version's default reaches it.\n"
         "\n";
+    /* Configuration-only callers keep the order used before pages. */
+    static const char *const config_order[] = {
+        "ZONES", "BYPASSQUAL", "CYCLESIZES", "DRAGRESTORE",
+        "EDGEPX", "CORNERDIV", "DRAGMINPX", "PREVIEW", "ANIMATE",
+        "PANELDETECT", "PANELMARGIN", "MARGINLEFT", "MARGINTOP",
+        "MARGINRIGHT", "MARGINBOTTOM"
+    };
     ESConfig def;
     char num[16];
     char zones[96];
     int at = 0;
     int i;
+    int rows = keys != 0 ? ES_SETTING_COUNT :
+        (int)(sizeof(config_order) / sizeof(config_order[0]));
 
     if (cfg == 0 || buf == 0 || size <= 0) {
         return 0;
@@ -691,12 +894,51 @@ int es_config_write(const ESConfig *cfg, char *buf, int size)
      */
     es_config_defaults(&def);
     at = es_emit(buf, size, at, header);
-    for (i = 0; i < ES_SETTING_COUNT; i++) {
-        const ESSetting *s = &es_setting_table[i];
-        int v = es_setting_value(cfg, i);
+    for (i = 0; i < rows; i++) {
+        int index = i;
+        const ESSetting *s;
+        int v;
         const char *text;
+        int is_default;
+        int quote = 0;
+
+        if (keys == 0) {
+            for (index = 0; index < ES_SETTING_COUNT; index++) {
+                if (es_key_eq(es_setting_table[index].key, config_order[i])) {
+                    break;
+                }
+            }
+        }
+        s = &es_setting_table[index];
+        v = es_setting_value(cfg, index);
+        is_default = v == es_setting_value(&def, index);
 
         switch (s->kind) {
+        case ES_SET_KEY:
+            {
+                int key = es_hotkey_index(s->key);
+
+                text = es_setting_text(keys, index);
+                /* Input syntax is case-insensitive, but a chosen spelling
+                 * is still the user's, so only exact defaults are comments. */
+                {
+                    const char *a = text;
+                    const char *b = es_hotkey_defaults[key];
+
+                    while (*a != '\0' && *a == *b) { a++; b++; }
+                    is_default = *a == *b;
+                }
+                if (*text == '\0') {
+                    text = "none";
+                } else {
+                    int len = 0;
+
+                    while (text[len] != '\0') { len++; }
+                    quote = text[0] == ' ' || text[0] == '"' ||
+                            text[len - 1] == ' ' || text[len - 1] == '"';
+                }
+            }
+            break;
         case ES_SET_BOOL:
             text = v ? "yes" : "no";
             break;
@@ -710,14 +952,27 @@ int es_config_write(const ESConfig *cfg, char *buf, int size)
             text = es_num(v, num + sizeof(num));
             break;
         }
-        if (v == es_setting_value(&def, i)) {
+        if (is_default) {
             at = es_emit(buf, size, at, "#");
         }
         at = es_emit(buf, size, at, s->key);
         at = es_emit(buf, size, at, "=");
+        if (quote) { at = es_emit(buf, size, at, "\""); }
         at = es_emit(buf, size, at, text);
+        if (quote) { at = es_emit(buf, size, at, "\""); }
         at = es_emit(buf, size, at, "\n");
     }
     buf[at < size ? at : size - 1] = '\0';
     return at;
+}
+
+int es_config_write(const ESConfig *cfg, char *buf, int size)
+{
+    return es_write(cfg, 0, buf, size);
+}
+
+int es_prefs_write(const ESConfig *cfg, const ESHotkeys *keys,
+                   char *buf, int size)
+{
+    return es_write(cfg, keys, buf, size);
 }

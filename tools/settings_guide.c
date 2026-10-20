@@ -38,11 +38,13 @@ int main(void)
 {
     const ESSetting *t;
     ESConfig def;
+    ESHotkeys keys;
     int count = 0;
     int i;
 
     t = es_settings(&count);
     es_config_defaults(&def);
+    es_hotkeys_defaults(&keys);
 
     printf("@node SETTINGS \"Settings\"\n");
     printf("@{b}Settings@{ub}\n\n");
@@ -55,14 +57,32 @@ int main(void)
     for (i = 0; i < count; i++) {
         int d = es_setting_value(&def, i);
 
+        if (i == 0 || !es_same_group(t[i].page, t[i - 1].page)) {
+            printf("@{b}%s page@{ub}\n\n", t[i].page);
+        }
         /* The same sections the preferences windows show: the grouping
          * lives in the settings table, so all three agree. */
-        if (i == 0 || !es_same_group(t[i].group, t[i - 1].group)) {
+        if (i == 0 || !es_same_group(t[i].page, t[i - 1].page) ||
+            !es_same_group(t[i].group, t[i - 1].group)) {
             printf("@{b}%s@{ub}\n\n", t[i].group);
         }
-        printf("@{b}%s@{ub} - %s\n", t[i].key, t[i].label);
+        printf("@{b}%s@{ub}: %s\n", t[i].key, t[i].label);
         printf("    %s\n", t[i].help);
         switch (t[i].kind) {
+        case ES_SET_KEY:
+            {
+                const char *text = es_setting_text(&keys, i);
+
+                printf("    A key as Exchange writes it, for example "
+                       "@{b}ctrl alt x@{ub},\n"
+                       "    or @{b}none@{ub} to leave it unset. "
+                       "Default @{b}%s@{ub}.\n",
+                       *text != '\0' ? text : "none");
+                printf("    Up to %d printable ASCII characters. "
+                       "@{b}off@{ub} also means none.\n",
+                       ES_HOTKEY_SIZE - 1);
+            }
+            break;
         case ES_SET_INT:
             printf("    Whole number from %d to %d. Default %d.\n",
                    t[i].min, t[i].max, d);
