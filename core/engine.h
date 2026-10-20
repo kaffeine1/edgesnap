@@ -89,7 +89,9 @@ typedef struct ESEngineActions {
     int do_drop;        /* 2.24: a window drag was let go               */
                         /* outside every zone; drop_* are valid         */
     void *drop_ref;     /* MAY BE STALE: the executor re-validates it   */
-    ESRect drop_start;  /* start box for the wait and registry checks   */
+    ESRect drop_start;  /* start box for the wait, size and placement   */
+    int drop_start_x, drop_start_y; /* pointer at the gesture's start   */
+    int drop_min_px;    /* engine's pointer travel threshold            */
     ESRect drop_from;   /* box sampled with the grab, not always start  */
     int drop_grab_x, drop_grab_y; /* pointer sampled with drop_from      */
     int drop_x, drop_y; /* the pointer at the last motion               */
@@ -151,11 +153,22 @@ void es_engine_motion(ESEngine *e, const ESWinFacts *facts,
  * never sees it. */
 void es_engine_release(ESEngine *e, ESEngineActions *out);
 
+/* At the decision, the pointer must still be at least drop_min_px from
+ * its start in either axis. A drag brought back within that threshold
+ * does not restore. The start belongs to the gesture, not to the grab
+ * sample, which can be a later motion when the press missed the bar. */
+int es_engine_drop_moved(const ESEngineActions *a, int mx, int my);
+
 /* The pointer after a drop: the live box plus the grab's offset in
- * drop_from. A last motion batched with the release was not processed,
- * so drop_x and drop_y need not be where the drag ended. Coordinates
- * and sizes are sampled from Intuition's signed 16-bit window boxes. */
+ * drop_from, unless the box is still within the drag threshold of its
+ * start while the pointer is not. That window could not follow the
+ * drag, so use mx, my, sampled together with live. Otherwise the live
+ * box keeps a later pointer fling from carrying the restore away.
+ * A last motion batched with the release was not processed, so drop_x
+ * and drop_y need not be where the drag ended. Coordinates and sizes
+ * are sampled from Intuition's signed 16-bit window boxes. */
 void es_engine_drop_point(const ESEngineActions *a, const ESRect *live,
+                           int mx, int my,
                            int *px, int *py);
 
 /* Abort any tracking (disable, shutdown): emits hide_preview if one

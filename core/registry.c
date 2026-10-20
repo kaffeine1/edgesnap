@@ -148,7 +148,7 @@ int es_registry_restore(ESRegistry *reg, void *ref, const ESRect *current,
 }
 
 int es_registry_drag_out(ESRegistry *reg, void *ref, const ESRect *start,
-                         const ESRect *now, ESRect *out)
+                         const ESRect *now, int moved, ESRect *out)
 {
     ESRegistryEntry *e;
 
@@ -157,14 +157,13 @@ int es_registry_drag_out(ESRegistry *reg, void *ref, const ESRect *start,
                     e->zone == ES_ZONE_CENTRE)) {
         return ES_ERR_NOT_SNAPPED;
     }
-    /* a drag moves a window; one that changed size is not ours to size */
+    /* A changed size is not ours to restore; slack here is for rounding. */
     if (!es_near(start->w, e->snapped.w) || !es_near(start->h, e->snapped.h) ||
         !es_near(now->w, e->snapped.w) || !es_near(now->h, e->snapped.h)) {
         return ES_ERR_CHANGED;
     }
-    if ((es_near(now->x, e->snapped.x) && es_near(now->y, e->snapped.y)) ||
-        (es_near(now->x, start->x) && es_near(now->y, start->y))) {
-        return ES_ERR_CHANGED;     /* it hardly moved */
+    if (!moved) {
+        return ES_ERR_CHANGED;     /* pointer back within drag threshold */
     }
     *out = e->prebox;
     e->used = 0;

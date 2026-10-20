@@ -2389,14 +2389,13 @@ static void esb_absorb(const ESEngineActions *a, struct ESnapReport *out)
  * that sees the release, ahead of this task; AmigaOS 4 in its ghost and
  * outline modes may do it later. So the window is looked at until it
  * has left the box it had when the drag began, for ESB_DROP_TICKS at
- * most, holding no lock. Only a window that never moves waits that
- * long, a press that slid off a gadget or a drag put back where it
- * began, and then nothing happens.
+ * most, holding no lock. A window kept on screen may never leave that
+ * box; it waits the full time, then pointer travel decides the drop.
  *
  * Then, under the semaphore, the refusals of a snap and the registry's
- * own: snapped to a zone, still the snapped size, and let go beyond the
- * slack from where the snap put it and from where the drag began. The
- * start stays in drop_start: from 2.25 drop_from may be the latest
+ * own: snapped to a zone, still the snapped size, and the pointer at
+ * least the engine's drag threshold away from its start. The start
+ * box stays in drop_start: from 2.25 drop_from may be the latest
  * motion's box, paired with its pointer for the grab instead.
  * The glide is the restore hotkey's, ANIMATE and all; a drag never
  * changes depth on the Amiga, so nothing is raised.
@@ -2430,8 +2429,11 @@ static void esb_drag_out(const ESEngineActions *a)
     } else if (!esb_is_excluded(win) && esb_snappable(&s) &&
                !esb_locked_for(win) && !esb_grouped(win) &&
                es_registry_drag_out(&g_registry, win, &a->drop_start,
-                                    &s.box, &pre) == ES_OK) {
-        es_engine_drop_point(a, &s.box, &px, &py);
+                                    &s.box,
+                                    es_engine_drop_moved(a, s.mouse_x,
+                                                         s.mouse_y),
+                                    &pre) == ES_OK) {
+        es_engine_drop_point(a, &s.box, s.mouse_x, s.mouse_y, &px, &py);
         es_unsnap_rect(&pre, &a->drop_from, a->drop_grab_x,
                        a->drop_grab_y, px, py, &s.usable,
                        s.min_w, s.min_h, s.max_w, s.max_h, &r);

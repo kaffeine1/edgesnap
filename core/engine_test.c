@@ -7,6 +7,7 @@
  */
 
 #include <stdio.h>
+#include <limits.h>
 
 #include "engine.h"
 
@@ -813,6 +814,9 @@ static int same_actions(const ESEngineActions *a, const ESEngineActions *b)
            same_rect(&a->snap_rect, &b->snap_rect) &&
            a->do_drop == b->do_drop && a->drop_ref == b->drop_ref &&
            same_rect(&a->drop_start, &b->drop_start) &&
+           a->drop_start_x == b->drop_start_x &&
+           a->drop_start_y == b->drop_start_y &&
+           a->drop_min_px == b->drop_min_px &&
            same_rect(&a->drop_from, &b->drop_from) &&
            a->drop_grab_x == b->drop_grab_x &&
            a->drop_grab_y == b->drop_grab_y &&
@@ -1064,7 +1068,8 @@ static void test_drop_point_comes_from_the_live_box(void)
         live = a.drop_from;
         live.x = 400;
         live.y = 300;
-        es_engine_drop_point(&a, &live, &px, &py);
+        /* The pointer flung on after release; the moved box locates it. */
+        es_engine_drop_point(&a, &live, 600, 440, &px, &py);
         CHECK(px == 500 && py == 310);
         want = live;
         want.w = 100;
@@ -1072,6 +1077,142 @@ static void test_drop_point_comes_from_the_live_box(void)
         es_unsnap_rect(&want, &a.drop_from, a.drop_grab_x, a.drop_grab_y,
                        px, py, &f.usable, 0, 0, 0, 0, &placed);
         CHECK(placed.x == 450 && placed.y == 300);
+    }
+}
+
+/* A maximised window can follow a small pull or stay pinned to the
+ * screen. Four pixels start the drag; the old size belongs under the
+ * pointer even when the system could not move the full-height box. */
+static void test_drop_small_pull_and_a_window_that_cannot_move(void)
+{
+    static const int pull[] = { 3, 4, 5, 200 };
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    ESRect pre, placed;
+    int w1, live, i, px, py;
+
+    for (live = 0; live <= 1; live++) {
+        for (i = 0; i < 4; i++) {
+            es_engine_init(&e, 0);
+            std_facts(&f, &w1);
+            pre = f.box;
+            f.box = f.usable;
+            f.bar_h = 20;
+            f.mouse_x = 320;
+            f.mouse_y = f.box.y + 10;
+            es_engine_press_on(&e, &w1, &f.box,
+                               f.mouse_x, f.mouse_y, &a);
+            es_engine_motion(&e, &f, &a);
+            f.mouse_y += pull[i];
+            if (live) {
+                f.box.y += pull[i];
+            }
+            es_engine_motion(&e, &f, &a);
+            CHECK(a.drag_started == (pull[i] >= 4));
+            CHECK(a.zone == ES_ZONE_NONE && a.show_preview == 0);
+            es_engine_release(&e, &a);
+            CHECK(a.do_drop == (pull[i] >= 4) && a.do_snap == 0);
+            if (a.do_drop) {
+                CHECK(a.drop_start_x == 320 && a.drop_start_y == 22);
+                CHECK(a.drop_min_px == 4);
+                CHECK(es_engine_drop_moved(&a, f.mouse_x, f.mouse_y) == 1);
+                es_engine_drop_point(&a, &f.box, f.mouse_x, f.mouse_y,
+                                      &px, &py);
+                CHECK(px == f.mouse_x && py == f.mouse_y);
+                es_unsnap_rect(&pre, &a.drop_from, a.drop_grab_x,
+                               a.drop_grab_y, px, py, &f.usable,
+                               0, 0, 0, 0, &placed);
+                CHECK(placed.w == pre.w && placed.h == pre.h);
+                CHECK(placed.y == f.mouse_y - 10);
+                CHECK(f.mouse_x >= placed.x &&
+                      f.mouse_x < placed.x + placed.w &&
+                      f.mouse_y >= placed.y &&
+                      f.mouse_y < placed.y + f.bar_h);
+            }
+        }
+    }
+}
+
+/* A drag goes 100 px away, then returns inside the threshold in both
+ * axes. The decision uses the current pointer, not the greatest travel
+ * or the old grab. A configured threshold applies in either direction. */
+static void test_drop_travel_is_measured_at_the_decision(void)
+{
+    ESEngine e;
+    ESEngineConfig cfg;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, min_px;
+
+    for (min_px = 4; min_px <= 9; min_px += 5) {
+        es_engine_config_defaults(&cfg);
+        cfg.drag_min_px = min_px;
+        es_engine_init(&e, &cfg);
+        std_facts(&f, &w1);
+        f.bar_h = 20;
+        if (min_px == 4) {
+            es_engine_press(&e, -1, -1, &a);
+        } else {
+            es_engine_press_on(&e, &w1, &f.box, 200, 110, &a);
+        }
+        es_engine_motion(&e, &f, &a);
+        f.box.x += 100;
+        f.mouse_x += 100;
+        es_engine_motion(&e, &f, &a);
+        CHECK(a.drag_started == 1);
+        f.box.x = 100 + min_px - 1;
+        f.box.y = 100 + min_px - 1;
+        f.mouse_x = 200 + min_px - 1;
+        f.mouse_y = 110 + min_px - 1;
+        es_engine_motion(&e, &f, &a);
+        es_engine_release(&e, &a);
+        CHECK(a.do_drop == 1 && a.do_snap == 0);
+        CHECK(a.drop_start_x == 200 && a.drop_start_y == 110);
+        CHECK(a.drop_min_px == min_px);
+        CHECK(es_engine_drop_moved(&a, f.mouse_x, f.mouse_y) == 0);
+        CHECK(es_engine_drop_moved(&a, 200, 110) == 0);
+        CHECK(es_engine_drop_moved(&a, 300, 110) == 1);
+        CHECK(es_engine_drop_moved(&a, 200 + min_px, 110) == 1);
+        CHECK(es_engine_drop_moved(&a, 200 - min_px, 110) == 1);
+        CHECK(es_engine_drop_moved(&a, 200, 110 + min_px) == 1);
+        CHECK(es_engine_drop_moved(&a, 200, 110 - min_px) == 1);
+    }
+
+    /* The new distance test must not overflow on opposite int limits. */
+    a.drop_start_x = INT_MIN;
+    a.drop_start_y = INT_MAX;
+    CHECK(es_engine_drop_moved(&a, INT_MAX, INT_MIN) == 1);
+    CHECK(es_engine_drop_moved(&a, INT_MIN + 3, INT_MAX - 3) == 0);
+}
+
+/* A box still short of the threshold needs the sampled pointer. Once
+ * the box has followed by the threshold, a later fling is ignored. */
+static void test_drop_point_distinguishes_a_pinned_box_from_a_fling(void)
+{
+    static const int moved[] = { 0, 3, 4 };
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    ESRect live;
+    int w1, axis, i, px, py;
+
+    es_engine_init(&e, 0);
+    start_bar_drag(&e, &f, &w1);
+    es_engine_release(&e, &a);
+    CHECK(a.do_drop == 1);
+    for (axis = 0; axis <= 1; axis++) {
+        for (i = 0; i < 3; i++) {
+            live = a.drop_start;
+            live.x += axis ? 0 : moved[i];
+            live.y += axis ? moved[i] : 0;
+            es_engine_drop_point(&a, &live, 400, 310, &px, &py);
+            if (moved[i] < 4) {
+                CHECK(px == 400 && py == 310);
+            } else {
+                CHECK(px == live.x + 100 && py == live.y + 10);
+            }
+        }
     }
 }
 
@@ -1126,11 +1267,15 @@ static void test_drop_when_the_press_missed_the_bar(void)
             CHECK(same_rect(&a.drop_start, &start));
             CHECK(same_rect(&a.drop_from, &f.box));
             CHECK(!same_rect(&a.drop_start, &a.drop_from));
+            CHECK(a.drop_start_x == 200 &&
+                  a.drop_start_y == (late == 1 ? 150 : 110));
+            CHECK(es_engine_drop_moved(&a, a.drop_start_x,
+                                       a.drop_start_y) == 0);
             CHECK(a.drop_grab_x == f.mouse_x && a.drop_grab_y == f.mouse_y);
             live = f.box;
             live.x += 30;              /* final motion batched with release */
             live.y += 20;
-            es_engine_drop_point(&a, &live, &px, &py);
+            es_engine_drop_point(&a, &live, f.mouse_x, f.mouse_y, &px, &py);
             CHECK(px == live.x + 100 && py == live.y + 10);
             want = live;
             want.w = want.h = 100;
@@ -1504,6 +1649,9 @@ int main(void)
     test_drop_refusals();
     test_drop_leaves_bypass_to_the_release();
     test_drop_point_comes_from_the_live_box();
+    test_drop_small_pull_and_a_window_that_cannot_move();
+    test_drop_travel_is_measured_at_the_decision();
+    test_drop_point_distinguishes_a_pinned_box_from_a_fling();
     test_drop_when_the_press_missed_the_bar();
     test_drop_refuses_a_stationary_box();
     test_drop_does_not_reuse_another_candidates_movement();

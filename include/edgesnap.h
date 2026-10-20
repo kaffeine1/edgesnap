@@ -129,7 +129,9 @@ typedef ULONG ESTagData;
                     every zone, gets back its size from before the snap,
                     under the pointer (2.24). A drag is recognised from
                     the bar press or from the window following the pointer
-                    (2.25) */
+                    (2.25). The pointer's distance from its start must
+                    still meet the threshold set by ES_OPT_DragMinPx in
+                    either axis; the window's box need not move */
 
 /* Bypass qualifier values for ES_OPT_BypassQual. */
 #define ES_QUAL_NONE  0
@@ -202,10 +204,16 @@ struct ESnapReport {
  * ticks (three seconds at 50 Hz). These bounds count the explicit
  * waits; the system calls and scheduling take their own time.
  *
- * From 2.25 the restore uses the drop's live window box and the grab's
- * offset, so a last motion batched with the release cannot leave it
- * short of the drop. A window that followed the pointer also qualifies
- * when the sampled press missed its bar; its grab comes from the latest
+ * From 2.25 the decision compares the pointer's distance from its start
+ * with the threshold set by ES_OPT_DragMinPx, in either axis. Size
+ * rounding slack is not a drag threshold. If the live box is still
+ * within that threshold of its start, the restore uses the pointer
+ * sampled with it, so a window kept on screen restores under the
+ * pointer too.
+ * Otherwise the live box and the grab's offset locate the drop, even
+ * when a last motion was batched with the release or the pointer went
+ * on after it. A window that followed the pointer also qualifies when
+ * the sampled press missed its bar; its grab comes from the latest
  * motion's box and pointer, sampled together. The original bar-press
  * grab still serves outline drags. Only the release's own qualifiers
  * decide whether the bypass key skips the restore. A snap still uses

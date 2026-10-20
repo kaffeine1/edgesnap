@@ -1215,27 +1215,29 @@ of this verification.
   is up (see "The preview frame on AmigaOS 4"), and AROS drags an
   outline and moves the window only then. The engine reports the
   gesture and nothing more, `do_drop` from `es_engine_release` with the
-  box the drag began from, a box and pointer locating the grab, and the
-  last motion's pointer; the registry decides and consumes the entry
-  (`es_registry_drag_out`); the box is `es_unsnap_rect`, next to
+  box and pointer the drag began from, its threshold, a box and pointer
+  locating the grab, and the last motion's pointer; the registry decides
+  and consumes the entry (`es_registry_drag_out`); the box is
+  `es_unsnap_rect`, next to
   `es_centre_rect`; the library body does what needs the system.
 
   The conditions: the window was snapped to a zone (halves, quarters,
   maximise, centre, a cycled width; never a client's placement,
   `ES_ZONE_RECT`); it had the snapped size when the drag began and
-  still has it after the drop; it was let go beyond the slack both from
-  where the snap put it and from where the drag began; it is not
-  excluded, and it is in no layout group, locked or not; the bypass key
-  is not held as the button comes up; and `DRAGRESTORE` is on, as it
-  comes.
-  A refusal leaves the registry as it was, so a window let go within
-  the slack stays snapped and `ctrl alt cursor down` still puts it
-  back. The position at the start is not compared: where the window
-  follows the pointer the library first samples it at the first motion
-  it sees, and a fast pull can have taken it further than the slack by
-  then. So a snapped window moved once with the bypass key held, or
-  while the setting was off, gets its old size at its next plain drag;
-  I think that is right.
+  still has it after the drop; the pointer at the decision is at least
+  `DRAGMINPX` from its start in either axis; it is not excluded, and it
+  is in no layout group, locked or not; the bypass key is not held as
+  the button comes up; and `DRAGRESTORE` is on, as it comes.
+  A refusal leaves the registry as it was. A drag brought back within
+  the pointer threshold does nothing and keeps its entry; the restore
+  hotkey retains its own geometry check. I use the engine's threshold
+  here, 4 pixels as it comes, not the registry's 16-pixel allowance for
+  rounded sizes. A 5-pixel pull of a maximised window therefore restores
+  it, while a 3-pixel pull never becomes a drag. The registry compares
+  only the starting and final sizes with the snapped size, with that
+  same rounding allowance, not their positions. So a snapped window
+  moved once with the bypass key held, or while the setting was off,
+  gets its old size at its next plain drag; I think that is right.
 
   The press carries the box of the window that was active at it
   (`es_engine_press_on`). On AmigaOS 4 and MorphOS a window pulled down
@@ -1253,8 +1255,11 @@ of this verification.
   can make that judgement wrong. For this case I take the grab from
   the latest motion's box and pointer, sampled together: the lag is
   smallest as the pointer slows before the release. I keep the start
-  box separate (`drop_start`) for the wait and the registry's movement
-  checks; the latest box would make a settled drop look stationary.
+  box separate (`drop_start`) for the wait, the size check and the
+  placement decision. I keep the gesture's starting pointer separate
+  from this later grab too: it is the `base_mx/my` the engine used to
+  recognise the drag, or the first motion's pointer if the press was
+  unknown. Measuring from the latest grab would lose that travel.
   AROS's outline drag still uses the bar press and its original grab.
   A body drag or a right/bottom resize that never moves the box offers
   no drop. A left/top resize can offer one, but the registry refuses
@@ -1263,6 +1268,14 @@ of this verification.
   Snapping does not change: the host tests drive the same drags, live
   and outline, into every kind of zone and into none, through both
   kinds of press, and compare every action.
+
+  When a full-height window is kept on screen, its box may never move
+  down, however far the pointer travels. If the box is still within
+  the drag threshold of its start while the pointer is not, I place
+  the restored window under the pointer read in the same sample as
+  that live box. Where the box did follow the drag, I keep its grab
+  offset instead: a pointer read after release can have gone anywhere
+  a fling took it, but the box stays where the drag left it.
 
   The decision needs the window where the drop left it, so the library
   waits for it, in the caller's task and holding no lock: it looks at
@@ -1278,11 +1291,11 @@ of this verification.
   active (`HandleIntuiActions`), so nothing we ask for can be overtaken
   by the drop. The wait is for AmigaOS 4 in its ghost and outline
   modes, whose drop cannot be seen from outside, and for an AROS on
-  several cores. A window that never moves, a press that slid off a
-  close or depth gadget or a drag put back where it began, waits the
-  whole fifth of a second, and then nothing happens. The restore
-  glides as the restore hotkey does, `ANIMATE` and all, and raises
-  nothing: a drag never changes depth on the Amiga.
+  several cores. A window whose box never moves waits the whole fifth
+  of a second; the pointer's travel then decides whether it restores.
+  A drag put back within the pointer threshold is left alone. The
+  restore glides as the restore hotkey does, `ANIMATE` and all, and
+  raises nothing: a drag never changes depth on the Amiga.
 
   No vector: one tag, `ES_OPT_DragRestore`, and one row in the settings
   table, from which the preference windows and the manual take it. The
