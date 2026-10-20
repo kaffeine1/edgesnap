@@ -1370,8 +1370,8 @@ of this verification.
   `TITLE` names another with an AmigaDOS pattern, screens from the
   front. Nothing new happens in the port: it calls what the hotkeys
   call, and the library checks the window as it does for them. The
-  codes are ARexx's: 0, 5 for a refusal (the library's own code as the
-  secondary result), 10 for a word it does not know. Without
+  codes are ARexx's: 0, 5 for a refusal, 10 for a word it does not
+  know; the secondary result stays 0 (below). Without
   rexxsyslib.library there is no port and nothing else changes. On
   MorphOS the system's rexxsyslib is a reimplementation without an
   interpreter: its `CreateRexxMsg()` leaves the message without the
@@ -1383,7 +1383,9 @@ of this verification.
   the RESULT text, after every command to the port. Zune's own
   application ports answer the same way as this one
   (`workbench/libs/muimaster/classes/application.c`), so I take it as
-  that interpreter's reading of the reply, not as ours to change.
+  that interpreter's reading of the reply, not as ours to change; it
+  is also why a refusal carries no number in the secondary result,
+  which that interpreter read like a string.
 
 - **Live keys without a gap in mouse input.** On a reload I remove
   and rebuild the key filters, leaving the broker and its CxCustom

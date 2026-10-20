@@ -4129,9 +4129,11 @@ static void spike_set_enabled(int on)
  * Nothing new happens here: every command goes through the calls the
  * hotkeys use, and the library checks the window as it does for them.
  *
- * Return codes as ARexx has them: 0 done, 5 refused (by the library,
- * whose own code is the secondary result, or no window to act on), 10
- * a command or an argument this port does not know.
+ * Return codes as ARexx has them: 0 done, 5 refused (by the library, or
+ * no window to act on), 10 a command or an argument this port does not
+ * know. The secondary result stays 0: ARexx shows a script nothing of
+ * it, and AROS One's interpreter read it like a string (its RC came
+ * back holding RESULT's text), so a number there is a risk for nothing.
  */
 #define ES_REXX_PORT "EDGESNAP"
 #define ES_REXX_LINE 256
@@ -4212,7 +4214,8 @@ static void spike_rexx_close(void)
         /* Whatever came in before the port went is answered, not lost:
          * a script waits for its reply. */
         while ((msg = GetMsg(g_rexx_port)) != NULL) {
-            if (IsRexxMsg((struct RexxMsg *)msg)) {
+            if (IsRexxMsg((struct RexxMsg *)msg) ||
+                msg->mn_Length >= (UWORD)sizeof(struct RexxMsg)) {
                 ((struct RexxMsg *)msg)->rm_Result1 = RC_FATAL;
                 ((struct RexxMsg *)msg)->rm_Result2 = 0;
             }
@@ -4350,12 +4353,11 @@ static int spike_rexx_no_args(const char *rest)
 }
 
 /*
- * One command. Returns its RC; `result` gets the text of a RESULT,
- * `secondary` the library's code on a refusal, and `quit` is set by
- * QUIT.
+ * One command. Returns its RC; `result` gets the text of a RESULT, and
+ * `quit` is set by QUIT.
  */
 static LONG spike_rexx_command(const char *line, char *result, int size,
-                               LONG *secondary, int *quit)
+                               int *quit)
 {
     char word[16];
     char buf[ES_REXX_LINE + 2];
@@ -4427,7 +4429,6 @@ static LONG spike_rexx_command(const char *line, char *result, int size,
             }
         }
         if (rc != ES_OK) {
-            *secondary = rc;
             return RC_WARN;
         }
         spike_after_snap(rc);
@@ -4499,8 +4500,7 @@ static int spike_rexx_events(void)
 
     while ((rm = (struct RexxMsg *)GetMsg(g_rexx_port)) != NULL) {
         char result[ES_REXX_LINE];
-        LONG secondary = 0;
-        LONG rc = RC_ERROR;
+        LONG rc;
 
         result[0] = '\0';
         if (!spike_rexx_is_command(rm)) {
@@ -4517,18 +4517,15 @@ static int spike_rexx_events(void)
             continue;
         }
         rc = spike_rexx_command((const char *)rm->rm_Args[0], result,
-                                (int)sizeof(result), &secondary, &quit);
+                                (int)sizeof(result), &quit);
         rm->rm_Result1 = rc;
         rm->rm_Result2 = 0;
-        if (rc == RC_OK) {
-            /* A RESULT only for a script that asked (OPTIONS RESULTS),
-             * as an argstring it then owns. */
-            if (result[0] != '\0' && (rm->rm_Action & RXFF_RESULT) != 0) {
-                rm->rm_Result2 = ES_RX_RESULT2(
-                    CreateArgstring((STRPTR)result, (ULONG)strlen(result)));
-            }
-        } else {
-            rm->rm_Result2 = ES_RX_RESULT2(secondary);
+        /* A RESULT only for a script that asked (OPTIONS RESULTS), as
+         * an argstring it then owns. */
+        if (rc == RC_OK && result[0] != '\0' &&
+            (rm->rm_Action & RXFF_RESULT) != 0) {
+            rm->rm_Result2 = ES_RX_RESULT2(
+                CreateArgstring((STRPTR)result, (ULONG)strlen(result)));
         }
         ReplyMsg((struct Message *)rm);
         spike_log_flush();
