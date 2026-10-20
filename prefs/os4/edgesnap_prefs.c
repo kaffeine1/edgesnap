@@ -477,6 +477,18 @@ static Object *es_settings_page(struct ESPrefsGui *gui, const ESSetting *t,
         es_add_child(rows, sect, NULL, 0);
         es_add_child(sect, gui->offscreen, "Windows can move off-screen:", 2);
     }
+    /*
+     * Empty space last, taking what is left over: the pages share the
+     * height of the tallest, and on a shorter one the layout spread its
+     * sections apart instead (AmigaOS 4 VM, 2026-10-20).
+     */
+    {
+        Object *slack = VLayoutObject,
+            LAYOUT_SpaceOuter, FALSE,
+        End;
+
+        es_add_child(rows, slack, NULL, 1);
+    }
     return rows;
 }
 
@@ -492,6 +504,14 @@ static Object *es_settings_pages(struct ESPrefsGui *gui)
     }
     tags[n].ti_Tag = PAGE_Current;
     tags[n++].ti_Data = 0;
+    /*
+     * Layout and rendering on a change of page are deferred to our
+     * task, as in the SDK's Examples/GUI/ClickTab/PageExample.c: without
+     * it the clicktab took the click and showed the new tab selected,
+     * but the old page stayed drawn (AmigaOS 4 VM, 2026-10-20).
+     */
+    tags[n].ti_Tag = LAYOUT_DeferLayout;
+    tags[n++].ti_Data = TRUE;
     for (i = 1; i <= count; i++) {
         Object *body;
         struct Node *label;
@@ -503,7 +523,10 @@ static Object *es_settings_pages(struct ESPrefsGui *gui)
         if (body == NULL) {
             break;
         }
-        label = AllocClickTabNode(TNA_Text, (ULONG)t[first].page, TAG_DONE);
+        /* Each tab needs its own number: without one they were all 0,
+         * and every click showed the first page (clicktab_gc.doc). */
+        label = AllocClickTabNode(TNA_Text, (ULONG)t[first].page,
+                                  TNA_Number, (ULONG)pages, TAG_DONE);
         if (label == NULL) {
             DisposeObject(body);
             break;
@@ -601,6 +624,7 @@ static Object *es_build_window(struct ESPrefsGui *gui)
         WA_SizeGadget, TRUE,
         WINDOW_Position, WPOS_CENTERSCREEN,
         WINDOW_Layout, VLayoutObject,
+            LAYOUT_DeferLayout, TRUE,
             LAYOUT_SpaceOuter, TRUE,
             LAYOUT_AddChild, rows,
             LAYOUT_AddChild, buttons,

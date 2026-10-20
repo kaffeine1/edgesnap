@@ -3482,7 +3482,9 @@ static void spike_hotkeys_print(void)
 
     spike_out("edgesnap: hotkeys in force:\n");
     for (i = 0; i < ES_HOTKEY_COUNT; i++) {
-        spike_out("  %s=%s%s", spike_hotkey_action[i].name,
+        /* three to a line, each line indented, "; " between them */
+        spike_out("%s%s=%s%s", (i % 3) == 0 ? "  " : "",
+                  spike_hotkey_action[i].name,
                   g_hotkey_filter[i] != NULL ? g_keys.key[i] : "none",
                   (i % 3) == 2 || i == ES_HOTKEY_COUNT - 1 ? "\n" : "; ");
     }
