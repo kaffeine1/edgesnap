@@ -129,11 +129,11 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. I checked it on real MorphOS hardware, and
-under emulation on AmigaOS 4.1, MorphOS, AROS One 1.3 x86_64 and AROS
-One x86, where I installed the package over an earlier version. The
-build for AROS on the Raspberry Pi comes from the same sources, and I
-tried it on a Raspberry Pi 400 with 0.42. On one AROS installation
+Version %s is still a beta. I checked it on real MorphOS hardware, on a
+Raspberry Pi 400 with AROS aarch64, and under emulation on AmigaOS 4.1,
+MorphOS, AROS One 1.3 x86_64 and AROS One x86; on the Pi and under
+emulation by installing the package over an earlier version. On one
+AROS installation
 Wanderer's drawers can show black areas after a snap; another program
 that moves windows does the same there, and the AROS developers are
 looking into how Wanderer redraws a drawer. All of it remains worth
