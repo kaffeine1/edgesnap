@@ -21,6 +21,6 @@
 
 #define ES_VERSION       "0.43"
 #define ES_VERSION_LABEL "0.43 beta"
-#define ES_VERSION_DATE  "19.10.2026"
+#define ES_VERSION_DATE  "20.10.2026"
 
 #endif /* EDGESNAP_VERSION_H */

@@ -69,7 +69,7 @@ first gesture is the drag.
 
 *The MorphOS preferences window (MUI), version 0.2. The AmigaOS 4 window is the same sections in ReAction: both are generated from one settings table.*
 
-- **0.43 (2026-10-19):** a snapped window dragged away by its title bar
+- **0.43 (2026-10-20):** a snapped window dragged away by its title bar
   and let go away from the edges gets back the size it had before the
   snap, under the pointer, as on Windows; a box in the preferences,
   "Old size when dragged away", turns it off. For tiling window
