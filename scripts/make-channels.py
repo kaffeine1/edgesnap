@@ -552,11 +552,12 @@ screen edge or corner and it glides into that half or quarter of the
 screen. Two windows side by side share a seam that can be dragged to
 re-balance them. It installs as a commodity that starts with the system.
 MIT licence."""
-MORPHOS_STORAGE_NEW = ("New in %s: docks are recognised in two more shapes, "
-                       "a short one along a side of the screen and an Ambient "
-                       "panel kept behind the windows, so snapped windows no "
-                       "longer cover them (library %s); and an AROS build for "
-                       "the Raspberry Pi." % (VERSION, LIBRARY_VERSION))
+MORPHOS_STORAGE_NEW = ("New in %s: a snapped window dragged away from the "
+                       "edges gets back the size it had before, for every "
+                       "zone, and a box in the preferences turns it off; a "
+                       "seam between windows kept apart by a gap keeps the "
+                       "gap when dragged, and the whole gap can be grabbed "
+                       "(library %s)." % (VERSION, LIBRARY_VERSION))
 
 
 def arosarchives_script():
