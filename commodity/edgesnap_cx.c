@@ -3925,7 +3925,9 @@ static void spike_after_snap(LONG rc)
     }
 #endif
     spike_divider_sync();
-    spike_log_flush();
+    if (!g_drag_active) {
+        spike_log_flush();    /* the ARexx port can ask during a drag */
+    }
     if (rc != ES_OK) {
         spike_out("edgesnap: hotkey refused (%ld)\n", (long)rc);
     }
@@ -4504,12 +4506,12 @@ static int spike_rexx_events(void)
 
         result[0] = '\0';
         if (!spike_rexx_is_command(rm)) {
-            spike_out("edgesnap: ARexx port: not a command (IsRexxMsg %ld, "
-                      "length %ld, action %08lx)\n", (long)IsRexxMsg(rm),
-                      (long)rm->rm_Node.mn_Length,
-                      (unsigned long)rm->rm_Action);
+            /* Only a message as long as a RexxMsg has the fields below:
+             * a shorter one is answered untouched. */
             if (IsRexxMsg(rm) ||
                 rm->rm_Node.mn_Length >= (UWORD)sizeof(struct RexxMsg)) {
+                spike_log("edgesnap: ARexx port: not a command (action "
+                          "%08lx)\n", (unsigned long)rm->rm_Action);
                 rm->rm_Result1 = RC_ERROR;   /* a function call, say */
                 rm->rm_Result2 = 0;
             }
@@ -4528,7 +4530,11 @@ static int spike_rexx_events(void)
                 CreateArgstring((STRPTR)result, (ULONG)strlen(result)));
         }
         ReplyMsg((struct Message *)rm);
-        spike_log_flush();
+        /* Not while a drag is in flight: writing to a console that is
+         * being dragged blocks until the release (see spike_log). */
+        if (!g_drag_active) {
+            spike_log_flush();
+        }
     }
     return quit;
 }

@@ -517,6 +517,10 @@ static Object *es_settings_pages(struct ESPrefsGui *gui)
                                  TAG_DONE);
         }
         if (body == NULL) {
+            /* the pages built so far belong to no Register yet */
+            while (--n > 0) {
+                MUI_DisposeObject((Object *)tags[n].ti_Data);
+            }
             return NULL;
         }
         gui->page_name[pages] = (char *)t[first].page;

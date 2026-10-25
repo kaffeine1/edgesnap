@@ -541,8 +541,11 @@ static Object *es_settings_pages(struct ESPrefsGui *gui)
         first = i;
     }
     if (i <= count) {
-        while (--n > 0) {
-            DisposeObject((Object *)tags[n].ti_Data);
+        while (--n >= 0) {
+            /* the pages only: the other tags carry numbers */
+            if (tags[n].ti_Tag == PAGE_Add) {
+                DisposeObject((Object *)tags[n].ti_Data);
+            }
         }
         return NULL;
     }
@@ -550,8 +553,11 @@ static Object *es_settings_pages(struct ESPrefsGui *gui)
     tags[n].ti_Data = 0;
     gui->pages = NewObjectA(PAGE_GetClass(), NULL, tags);
     if (gui->pages == NULL) {
-        while (--n > 0) {
-            DisposeObject((Object *)tags[n].ti_Data);
+        while (--n >= 0) {
+            /* the pages only: the other tags carry numbers */
+            if (tags[n].ti_Tag == PAGE_Add) {
+                DisposeObject((Object *)tags[n].ti_Data);
+            }
         }
         return NULL;
     }
