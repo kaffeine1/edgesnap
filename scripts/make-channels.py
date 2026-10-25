@@ -99,22 +99,34 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-A snapped window that you drag away by its title bar, and let go away
-from the edges, now gets back the size it had before it was snapped. It
-comes back under the pointer, which keeps its place along the title bar,
-as on Windows, and this works for every zone: a half, a quarter, the
-whole screen. If you would rather keep the snapped size, untick "Old
-size when dragged away" in the preferences.
+Every hotkey can now be changed on a new Hotkeys page of the
+preferences, in the icon's tooltypes or as a Shell argument, with an
+input description as Exchange writes it (HOTKEYLEFT=ctrl alt
+cursor_left); none, or an empty field, leaves an action without a key.
+The keys as they come are the ones of 0.43. The four quarters get
+actions of their own (HOTKEYTOPLEFT and so on), with no key until you
+give them one, and CX_POPKEY (also POPKEY) opens the preferences, as
+Exchange's Show button does. The preferences window now has two pages,
+Snapping and Hotkeys, with the width cycle setting beside the side
+keys; it refuses a key the system does not understand, or two actions
+on the same key, with a requester, while the commodity skips such a key
+and says so in its output instead of not starting. Keys change at once
+when the preferences are saved, without a restart.
 
-For tiling window managers, edgesnap.library 2.24 lists the seams
-between the windows of a layout group, each with a token that names its
-windows, and moves a seam by its token alone. A seam between windows
-kept apart by a gap keeps that gap when you drag it, and the whole gap
-lights up and can be grabbed, not only a thin strip in its middle.
+An ARexx port, EDGESNAP, lets a script, a dock button or a file manager
+do what the hotkeys do: SNAP (LEFT RIGHT MAXIMIZE TOPLEFT TOPRIGHT
+BOTTOMLEFT BOTTOMRIGHT CENTRE), RESTORE, QUERY (RESULT is where the
+window is snapped), SELECT, PREFS, ENABLE, DISABLE, VERSION, HELP and
+QUIT, on the active window or on another window matched by a TITLE
+AmigaDOS pattern, for example rx "ADDRESS EDGESNAP 'SNAP LEFT'". On
+MorphOS an ARexx interpreter must be installed, as the system's own
+rexxsyslib has none; on AROS One the command is SYS:Rexxc/RX.
 
-The four archives now come out together: one for AmigaOS 4 and MorphOS,
-and one each for AROS x86_64, AROS on the Raspberry Pi (aarch64) and
-32-bit AROS (i386).
+edgesnap.library 2.25 brings corrections from a review of 2.24, among
+them a window closed while the library waits for it, a press beside a
+seam on AROS, and two cases of the old size coming back on a drag away:
+a short pull of a maximised window (a few pixels are now enough), and a
+window that followed the pointer during the drag.
 """),
     ("WHAT IT IS", """
 EdgeSnap gives AmigaOS 4.x, MorphOS and AROS (x86_64, aarch64 and i386)
@@ -130,11 +142,11 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. I checked it on real MorphOS hardware, on a
-Raspberry Pi 400 with AROS aarch64, and under emulation on AmigaOS 4.1,
-MorphOS, AROS One 1.3 x86_64 and AROS One x86; on the Pi and under
-emulation by installing the package over an earlier version. On one
-AROS installation
+Version %s is still a beta. I checked it on real hardware on MorphOS
+3.20 on a PowerMac G5 (with ARexx) and on a Raspberry Pi 400 with AROS
+aarch64, and under emulation on AmigaOS 4.1, MorphOS and AROS One 1.3
+x86_64. The i386 build comes from the same sources; library 2.25 was
+tried on AROS One x86 under emulation. On one AROS installation
 Wanderer's drawers can show black areas after a snap; another program
 that moves windows does the same there, and the AROS developers are
 looking into how Wanderer redraws a drawer. All of it remains worth
@@ -171,6 +183,11 @@ a new library takes over at the next boot.
     ctrl alt cursor down puts it back where it was, ctrl alt c puts
     it in the middle at the size it has, and ctrl alt z opens a
     selector under the pointer with all of that on nine cells.
+  - Every hotkey can be changed on the Hotkeys page of the preferences,
+    in the icon's tooltypes or from the Shell, and the four quarters
+    and opening the preferences can be given keys there too.
+  - The ARexx port EDGESNAP lets a script, a dock button or a file
+    manager do what the hotkeys do: rx "ADDRESS EDGESNAP 'SNAP LEFT'".
   - Settings live in SYS:Prefs/EdgeSnap, native on each system: ReAction
     on AmigaOS 4, MUI on MorphOS, Zune on AROS. EdgeSnap follows changes
     at once, without being restarted.
@@ -207,8 +224,9 @@ ship them with it. The testers on the AROSWorld forum found the black
 areas in Wanderer's drawers, the colour left along the seam and the
 traces of the preview frame on one graphics driver, each with a video
 or a log that made the cause findable. A MorphOS user asked for the old
-size back when a snapped window is dragged away, and the author of a
-tiling window manager for the seams of a group.
+size back when a snapped window is dragged away, the hotkeys came from
+a conflict found on real MorphOS hardware, and the author of a tiling
+window manager asked for the seams of a group.
 """),
     ("LICENCE AND SOURCE", """
 MIT. The full text is in the LICENSE file inside the archive.
@@ -553,12 +571,13 @@ screen edge or corner and it glides into that half or quarter of the
 screen. Two windows side by side share a seam that can be dragged to
 re-balance them. It installs as a commodity that starts with the system.
 MIT licence."""
-MORPHOS_STORAGE_NEW = ("New in %s: a snapped window dragged away from the "
-                       "edges gets back the size it had before, for every "
-                       "zone, and a box in the preferences turns it off; a "
-                       "seam between windows kept apart by a gap keeps the "
-                       "gap when dragged, and the whole gap can be grabbed "
-                       "(library %s)." % (VERSION, LIBRARY_VERSION))
+MORPHOS_STORAGE_NEW = ("New in %s: every hotkey can be changed on a new "
+                       "Hotkeys page of the preferences, in the icon's "
+                       "tooltypes or from the Shell, with keys for the "
+                       "four quarters and for opening the preferences; "
+                       "an ARexx port, EDGESNAP, lets scripts and buttons "
+                       "snap, restore and query windows (library %s)."
+                       % (VERSION, LIBRARY_VERSION))
 
 
 def arosarchives_script():

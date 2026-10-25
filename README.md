@@ -69,6 +69,34 @@ first gesture is the drag.
 
 *The MorphOS preferences window (MUI), version 0.2. The AmigaOS 4 window is the same sections in ReAction: both are generated from one settings table.*
 
+- **0.5 (2026-10-25):** every hotkey can be changed on a new Hotkeys
+  page of the preferences, in the icon's tooltypes or as a Shell
+  argument, with an input description as Exchange writes it
+  (`HOTKEYLEFT=ctrl alt cursor_left`, or `none` or an empty field to
+  leave an action without a key); the keys as they come are the ones of
+  0.43, the four quarters get actions of their own (`HOTKEYTOPLEFT` and
+  so on) with no key until given one, and `CX_POPKEY` (also `POPKEY`)
+  and Exchange's Show button open the preferences. The preferences
+  window has two pages, Snapping and Hotkeys, with the width cycle
+  setting beside the side keys; it refuses a key the system does not
+  understand, or two actions on the same key, with a requester, while
+  the commodity skips such a key and says so in its output instead of
+  not starting, and saved keys take effect at once without a restart.
+  An ARexx port, `EDGESNAP`, takes `SNAP`, `RESTORE`, `QUERY` (`RESULT`:
+  where the window is snapped), `SELECT`, `PREFS`, `ENABLE`, `DISABLE`,
+  `VERSION`, `HELP` and `QUIT` on the active window or on another window
+  named by a `TITLE` AmigaDOS pattern (`rx "ADDRESS EDGESNAP 'SNAP
+  LEFT'"`), so a script, a dock button or a file manager can do what
+  the hotkeys do. `edgesnap.library` 2.25 brings corrections from a
+  review of 2.24, among them a window closed while the library waits
+  for it, a press beside a seam on AROS, and two cases of the old size
+  coming back on a drag away: a short pull of a maximised window (a few
+  pixels are now enough), and a window that followed the pointer during
+  the drag. Checked on real hardware on MorphOS 3.20 on a PowerMac G5
+  (with ARexx) and on a Raspberry Pi 400 with AROS aarch64, and under
+  emulation on AmigaOS 4.1, MorphOS and AROS One 1.3 x86_64; the i386
+  build comes from the same sources, and library 2.25 was tried on
+  AROS One x86 under emulation.
 - **0.43 (2026-10-20):** a snapped window dragged away by its title bar
   and let go away from the edges gets back the size it had before the
   snap, under the pointer, as on Windows; a box in the preferences,

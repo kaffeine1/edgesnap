@@ -4,8 +4,8 @@
 @(c) "Copyright (c) 2026 Michele Dipace, MIT licence"
 @wordwrap
 
-@node MAIN "EdgeSnap 0.43 beta"
-@{b}EdgeSnap 0.43 beta@{ub}
+@node MAIN "EdgeSnap 0.5 beta"
+@{b}EdgeSnap 0.5 beta@{ub}
 Window snapping for AmigaOS 4.x, MorphOS and AROS (x86_64, aarch64, i386)
 by Michele Dipace <michele.dipace@kaffeine.net>
 
@@ -320,7 +320,7 @@ everywhere.
 @{b}For programmers@{ub}
 
 @{b}Two version numbers, and why@{ub}
-EdgeSnap is 0.43: a beta, complete in what it does and tested on real
+EdgeSnap is 0.5: a beta, complete in what it does and tested on real
 MorphOS hardware, on a Raspberry Pi 400 with AROS, and on AmigaOS 4,
 MorphOS, AROS x86_64 and AROS i386 under emulation.
 @{b}edgesnap.library@{ub} says %%LIBVER%%, and that is not a mistake: a

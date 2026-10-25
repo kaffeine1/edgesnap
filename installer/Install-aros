@@ -80,7 +80,7 @@ EndIf
 
 ; --- aarch64, i386, or no Installer here can copy: the Shell does it --
 If NOT EXISTS $esbuild/edgesnap.library
-  RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.43 beta" "This package has no EdgeSnap for this processor.*N*NAROS has one archive each for x86_64, aarch64*N(Raspberry Pi) and i386: download the one for*Nthis machine." "OK"
+  RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.5 beta" "This package has no EdgeSnap for this processor.*N*NAROS has one archive each for x86_64, aarch64*N(Raspberry Pi) and i386: download the one for*Nthis machine." "OK"
   If WARN
     Skip norequester
   EndIf
@@ -99,7 +99,7 @@ If EXISTS SYS:Documentation
   Set esguidef SYS:Documentation/EdgeSnap.guide
 EndIf
 
-RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.43 beta" "This installs EdgeSnap:*N*NLIBS:edgesnap.library*NSYS:WBStartup/EdgeSnap, started at every boot*NSYS:Prefs/EdgeSnap, the settings*NEdgeSnap.guide, the manual, in $esguide" "Install" "Cancel"
+RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.5 beta" "This installs EdgeSnap:*N*NLIBS:edgesnap.library*NSYS:WBStartup/EdgeSnap, started at every boot*NSYS:Prefs/EdgeSnap, the settings*NEdgeSnap.guide, the manual, in $esguide" "Install" "Cancel"
 If WARN
   Skip norequester
 EndIf
@@ -111,7 +111,7 @@ EndIf
 ; before the new one and keep it from running (see Install.script).
 Set esold 0
 If EXISTS C:EdgeSnap
-  RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.43 beta" "A copy of the first AROS preview is in C:EdgeSnap.*NAt boot it would start before the new one and*Nkeep it from running.*N*NStop it and remove it?" "Remove" "Keep"
+  RequestChoice >ENV:EdgeSnapAns "EdgeSnap 0.5 beta" "A copy of the first AROS preview is in C:EdgeSnap.*NAt boot it would start before the new one and*Nkeep it from running.*N*NStop it and remove it?" "Remove" "Keep"
   If WARN
     Skip norequester
   EndIf
@@ -206,7 +206,7 @@ Wait 30
 Skip restart
 
 Lab failed
-RequestChoice >NIL: "EdgeSnap 0.43 beta" "A file could not be copied, and EdgeSnap is not*Nfully installed: the window behind this one*Nnames it. Is the system volume write-protected,*Nor full?" "OK"
+RequestChoice >NIL: "EdgeSnap 0.5 beta" "A file could not be copied, and EdgeSnap is not*Nfully installed: the window behind this one*Nnames it. Is the system volume write-protected,*Nor full?" "OK"
 
 Lab restart
 If EXISTS T:EdgeSnapInstalled
@@ -229,6 +229,6 @@ If EXISTS T:EdgeSnapInstalled
   EndIf
 EndIf
 If $esdone EQ 1
-  RequestChoice >NIL: "EdgeSnap 0.43 beta" "EdgeSnap is installed: Wanderer starts it from*NSYS:WBStartup at every boot.*NSettings: SYS:Prefs/EdgeSnap*NManual: $esguidef*N*NThe drawer you ran this from can be deleted." "OK"
+  RequestChoice >NIL: "EdgeSnap 0.5 beta" "EdgeSnap is installed: Wanderer starts it from*NSYS:WBStartup at every boot.*NSettings: SYS:Prefs/EdgeSnap*NManual: $esguidef*N*NThe drawer you ran this from can be deleted." "OK"
 EndIf
 Delete >NIL: ENV:EdgeSnapARM ENV:EdgeSnapX86 ENV:EdgeSnapI386 ENV:EdgeSnapAns QUIET

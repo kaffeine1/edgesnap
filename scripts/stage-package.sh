@@ -125,7 +125,7 @@ Short:        Tile windows by dragging them to an edge
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/cdity
-Version:      0.43 (beta)
+Version:      0.5 (beta)
 Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros; aarch64-aros; i386-aros
 License:      MIT
 
@@ -162,8 +162,37 @@ Installer cannot copy files, Install does the work itself after one
 question. Updating is installing again: no reboot needed, except that
 on the Raspberry Pi a new library takes over at the next boot.
 
+Every hotkey can now be changed on a new Hotkeys page of the
+preferences, in the icon's tooltypes or as a Shell argument, with an
+input description as Exchange writes it (HOTKEYLEFT=ctrl alt
+cursor_left); none, or an empty field, leaves an action without a key.
+The keys as they come are the ones of 0.43. The four quarters get
+actions of their own (HOTKEYTOPLEFT and so on), with no key until you
+give them one, and CX_POPKEY (also POPKEY) opens the preferences, as
+Exchange's Show button does. The preferences window has two pages,
+Snapping and Hotkeys, with the width cycle setting beside the side
+keys; it refuses a key the system does not understand, or two actions
+on the same key, with a requester, while the commodity skips such a key
+and says so in its output instead of not starting. Keys change at once
+when the preferences are saved, without a restart.
+
+An ARexx port, EDGESNAP, lets a script, a dock button or a file manager
+do what the hotkeys do: SNAP (LEFT RIGHT MAXIMIZE TOPLEFT TOPRIGHT
+BOTTOMLEFT BOTTOMRIGHT CENTRE), RESTORE, QUERY (RESULT is where the
+window is snapped), SELECT, PREFS, ENABLE, DISABLE, VERSION, HELP and
+QUIT, on the active window or on another window matched by a TITLE
+AmigaDOS pattern, for example rx "ADDRESS EDGESNAP 'SNAP LEFT'". On
+MorphOS an ARexx interpreter must be installed, as the system's own
+rexxsyslib has none; on AROS One the command is SYS:Rexxc/RX.
+
+edgesnap.library 2.25 brings corrections from a review of 2.24, among
+them a window closed while the library waits for it, a press beside a
+seam on AROS, and two cases of the old size coming back on a drag away:
+a short pull of a maximised window (a few pixels are now enough), and a
+window that followed the pointer during the drag.
+
 A snapped window that you drag away by its title bar, and let go away
-from the edges, now gets back the size it had before it was snapped,
+from the edges, gets back the size it had before it was snapped,
 under the pointer, as on Windows. "Old size when dragged away" in the
 preferences turns that off.
 
