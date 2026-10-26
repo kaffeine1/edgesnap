@@ -412,14 +412,12 @@ def arosarchives_readme():
 
 
 def aminet_arm_readme():
-    # No Replaces: Aminet overwrites a package uploaded again under the same
-    # name, its preferred way to update, and Replaces is for other names.
-    # The first 0.42 upload got a page but lost its file (404 for two days,
-    # no answer by mail); the same pair sent again on 2026-10-12. With 0.43
-    # and 0.5 the four pairs went up in one go, and both times the last two
-    # (aarch64, i386) got their page and lost their file; sent again alone
-    # they came through. So each pair goes up on its own, the next one only
-    # once the previous file can be downloaded.
+    # Replaces, as the other two archives have it. Without one, from the
+    # second upload of the same name on, Aminet gave the package its page
+    # and lost its file: 404 for the archive and the readme alike, with
+    # 0.43 and twice with 0.5 (in a batch of four and sent alone), while
+    # the main and x86_64 archives, each naming itself in Replaces, came
+    # through every time (2026-10-26).
     head = [
         "Short:        %s" % SHORT,
         "Uploader:     %s (Michele Dipace)" % EMAIL,
@@ -427,6 +425,7 @@ def aminet_arm_readme():
         "Type:         util/cdity",
         "Version:      %s" % VERSION,
         "Architecture: i386-aros",
+        "Replaces:     util/cdity/edgesnap.aarch64-aros.lha",
         "",
     ]
     return head + ARM_NOTE + body_lines()
@@ -452,8 +451,8 @@ def arosarchives_arm_readme():
 
 
 def aminet_i386_readme():
-    # Aminet's own i386-aros. No Replaces, as for aarch64: a package sent
-    # again under the same name overwrites it.
+    # Aminet's own i386-aros. Replaces naming itself, as for aarch64 (see
+    # there: without it the file was lost on the second upload).
     head = [
         "Short:        %s" % SHORT,
         "Uploader:     %s (Michele Dipace)" % EMAIL,
@@ -461,6 +460,7 @@ def aminet_i386_readme():
         "Type:         util/cdity",
         "Version:      %s" % VERSION,
         "Architecture: i386-aros",
+        "Replaces:     util/cdity/edgesnap.i386-aros.lha",
         "",
     ]
     return head + I386_NOTE + body_lines()
