@@ -415,7 +415,11 @@ def aminet_arm_readme():
     # No Replaces: Aminet overwrites a package uploaded again under the same
     # name, its preferred way to update, and Replaces is for other names.
     # The first 0.42 upload got a page but lost its file (404 for two days,
-    # no answer by mail); the same pair sent again on 2026-10-12.
+    # no answer by mail); the same pair sent again on 2026-10-12. With 0.43
+    # and 0.5 the four pairs went up in one go, and both times the last two
+    # (aarch64, i386) got their page and lost their file; sent again alone
+    # they came through. So each pair goes up on its own, the next one only
+    # once the previous file can be downloaded.
     head = [
         "Short:        %s" % SHORT,
         "Uploader:     %s (Michele Dipace)" % EMAIL,
