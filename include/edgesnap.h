@@ -132,6 +132,13 @@ typedef ULONG ESTagData;
                     (2.25). The pointer's distance from its start must
                     still meet the threshold set by ES_OPT_DragMinPx in
                     either axis; the window's box need not move */
+#define ES_OPT_PushPx       (ES_TAGBASE + 16) /* LONG 0..200, default 24: a
+                    window held flush with an edge (it may not leave the
+                    screen, or meets AmigaOS 4's edge resistance) keeps
+                    the pointer back; this much of the mouse's own travel
+                    pushing on against that edge counts as the pointer
+                    being on it. 0 turns the push off: only the pointer
+                    reaching the edge makes a zone (2.26) */
 
 /* Bypass qualifier values for ES_OPT_BypassQual. */
 #define ES_QUAL_NONE  0

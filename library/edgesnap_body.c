@@ -1279,6 +1279,13 @@ LONG esb_set_options(const struct TagItem *tags)
         case ES_OPT_DragRestore:
             cfg.drag_restore = v ? 1 : 0;
             break;
+        case ES_OPT_PushPx:
+            if (v < ES_PUSH_PX_MIN || v > ES_PUSH_PX_MAX) {
+                rc = ES_ERR_BAD_ARGS;
+                break;
+            }
+            cfg.engine.push_px = (int)v;
+            break;
         case ES_OPT_BypassQual:
             if (v < ES_QUAL_NONE || v > ES_QUAL_SHIFT) {
                 rc = ES_ERR_BAD_ARGS;

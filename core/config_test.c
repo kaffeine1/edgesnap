@@ -41,6 +41,7 @@ static void test_defaults(void)
     CHECK(c.engine.edge_px == 12);
     CHECK(c.engine.corner_div == 0);
     CHECK(c.engine.drag_min_px == 4);
+    CHECK(c.engine.push_px == 24);
     CHECK(c.engine.zones_mask == ES_ZONEMASK_ALL);
     CHECK(c.panel_detect == 1);
     CHECK(c.panel_margin == ES_PANEL_MARGIN_PX);
@@ -84,6 +85,22 @@ static void test_key_spelling_and_whitespace(void)
     CHECK(c.engine.drag_min_px == 7);
     CHECK(es_config_line(&c, "DragMinPx=5") == ES_OK);
     CHECK(c.engine.drag_min_px == 5);
+}
+
+/* PUSHPX: 0 turns the push off and is a value, not a typo. */
+static void test_push_px(void)
+{
+    ESConfig c;
+
+    es_config_defaults(&c);
+    CHECK(es_config_line(&c, "PUSHPX=0") == ES_OK);
+    CHECK(c.engine.push_px == 0);
+    CHECK(es_config_line(&c, "push_px=60") == ES_OK);
+    CHECK(c.engine.push_px == 60);
+    CHECK(es_config_line(&c, "PUSHPX=-1") == ES_ERR_BAD_ARGS);
+    CHECK(es_config_line(&c, "PUSHPX=201") == ES_ERR_BAD_ARGS);
+    CHECK(es_config_line(&c, "PUSHPX=") == ES_ERR_BAD_ARGS);
+    CHECK(c.engine.push_px == 60);
 }
 
 static void test_comments_and_blanks(void)
@@ -189,6 +206,7 @@ static int same_config(const ESConfig *a, const ESConfig *b)
            a->engine.edge_px == b->engine.edge_px &&
            a->engine.corner_div == b->engine.corner_div &&
            a->engine.drag_min_px == b->engine.drag_min_px &&
+           a->engine.push_px == b->engine.push_px &&
            a->margin.l == b->margin.l && a->margin.t == b->margin.t &&
            a->margin.r == b->margin.r && a->margin.b == b->margin.b &&
            a->panel_detect == b->panel_detect &&
@@ -241,6 +259,7 @@ static void test_write_round_trip(void)
     a.engine.edge_px = 37;
     a.engine.corner_div = 5;
     a.engine.drag_min_px = 9;
+    a.engine.push_px = 0;
     a.margin.l = 11; a.margin.t = 12; a.margin.r = 13; a.margin.b = 14;
     a.panel_detect = 0;
     a.panel_margin = 21;
@@ -639,6 +658,7 @@ int main(void)
     test_defaults();
     test_numbers_and_bounds();
     test_key_spelling_and_whitespace();
+    test_push_px();
     test_comments_and_blanks();
     test_unknown_key_is_distinct();
     test_booleans();

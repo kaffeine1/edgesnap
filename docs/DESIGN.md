@@ -1398,6 +1398,32 @@ of this verification.
   cover the vocabulary; the five target builds and runtime behaviour
   still need their own checks.
 
+### After 0.5
+
+**2.26, the push becomes a setting (2026-10-27).** A user on AmigaOS 4
+with screen edge resistance set in the GUI preferences (GitHub issue
+3, an X5000) asked for a way to lay a window against an edge without a
+snap. The resistance holds the window at the edge for a while, so the
+pointer stops where it has the title bar and the push of 2.7 counts
+the mouse's travel: after 24 pixels of it the zone came up, though all
+the user wanted was the window flush with the edge. The push was a
+constant of the engine. It is now `PUSHPX`, "Push against an edge" in
+Sensitivity, 0 to 200, 24 as it comes; 0 turns it off, and a window
+then snaps only when the pointer itself reaches the edge, on AmigaOS 4
+after the window has gone past the resistance. The library takes it
+as `ES_OPT_PushPx` (2.26). An older library ignores the tag, as it
+does any it does not know, and keeps 24; the commodity says so at
+startup when the setting is not 24. Nothing reads the system's
+resistance: the user chooses, as with the off-screen switch, and on
+MorphOS as delivered, where windows may not leave the screen, 0 would
+leave only the hotkeys, which the guide says. Checked in the AmigaOS
+4.1 Final Edition VM, whose Workbench screen came with a resistance of
+75 (`GUIA_OffScreenResistance`): with 24 the Shell stopped at the left
+edge and snapped to the left half; with 0 it stayed flush and kept its
+size; pushed on past the resistance it went over the edge, the pointer
+reached it and it snapped. The preferences window shows the setting
+and writes it.
+
 ### 2.5 - what a tiling client asked for first
 
 The first client beyond the commodity announced itself on 2026-09-04: a

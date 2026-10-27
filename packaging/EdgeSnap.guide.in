@@ -136,6 +136,16 @@ there: the frame comes up and stays while you hold. For a corner, push
 on into both edges, towards the corner. The zones still answer more
 directly when the window can go on.
 
+How far you push is @{b}PUSHPX@{ub}, "Push against an edge" in the
+preferences (24 pixels as it comes). The same push answers on AmigaOS
+4 when the GUI preferences give the screen edges a resistance: the
+window rests at the edge for a while before it goes on. If you only
+want to lay a window against the edge there, set it to 0 to turn the
+push off: a window then snaps only once the pointer itself reaches the
+edge, after the window has gone past the resistance. Where windows may
+not leave the screen at all, 0 leaves a drag nothing to snap to; the
+hotkeys still snap.
+
 MorphOS as delivered keeps windows on the screen, so the first
 installation there chooses IControl's "allow positioning beyond the
 screen limits", says so on a page of its own, and MorphOS takes it up

@@ -231,6 +231,8 @@ cat > "$DEST/EdgeSnap.prefs" <<'EOF'
 # CORNERDIV   0: a corner only where the pointer is pushed into it
 #             (default); 2..16: a band, usable height / this
 # DRAGMINPX   pointer travel before a drag counts (default 4)
+# PUSHPX      mouse travel against an edge that holds the window back
+#             before it counts as the edge; 0: off (default 24)
 # PREVIEW     show the zone preview frame: yes | no
 # PANELDETECT reserve dock/panel strips: yes | no
 # PANELMARGIN breathing room around a detected dock (default 8)

@@ -366,6 +366,14 @@ int es_config_set(ESConfig *cfg, const char *key, const char *value)
         cfg->engine.drag_min_px = iv;
         return ES_OK;
     }
+    if (es_key_eq(key, "pushpx")) {
+        if (!es_parse_int(value, &iv) ||
+            iv < ES_PUSH_PX_MIN || iv > ES_PUSH_PX_MAX) {
+            return ES_ERR_BAD_ARGS;
+        }
+        cfg->engine.push_px = iv;
+        return ES_OK;
+    }
     if (es_key_eq(key, "marginleft")) {
         if (!es_parse_int(value, &iv) ||
             iv < ES_MARGIN_MIN || iv > ES_MARGIN_MAX) {
@@ -577,6 +585,12 @@ static const ESSetting es_setting_table[] = {
     { "DRAGMINPX", "Snapping", "Sensitivity", "Drag threshold",
       "How far the pointer must travel before it counts as a drag.",
       ES_SET_INT, ES_DRAG_MIN_PX_MIN, ES_DRAG_MIN_PX_MAX, 0 },
+    { "PUSHPX", "Snapping", "Sensitivity", "Push against an edge",
+      "A window held at an edge, because it may not leave the screen "
+      "or AmigaOS 4's edge resistance stops it, keeps the pointer back. "
+      "Pushing the mouse on this far, in pixels, counts as reaching the "
+      "edge. 0: off, only the pointer itself reaching the edge snaps.",
+      ES_SET_INT, ES_PUSH_PX_MIN, ES_PUSH_PX_MAX, 0 },
     { "PREVIEW", "Snapping", "Look", "Show the preview frame",
       "Outline where the window will land while dragging.",
       ES_SET_BOOL, 0, 0, 0 },
@@ -688,6 +702,9 @@ int es_setting_value(const ESConfig *cfg, int index)
         }
         if (es_key_eq(key, "dragminpx")) {
             return cfg->engine.drag_min_px;
+        }
+        if (es_key_eq(key, "pushpx")) {
+            return cfg->engine.push_px;
         }
         if (es_key_eq(key, "preview")) {
             return cfg->preview;
@@ -871,7 +888,8 @@ static int es_write(const ESConfig *cfg, const ESHotkeys *keys,
     /* Configuration-only callers keep the order used before pages. */
     static const char *const config_order[] = {
         "ZONES", "BYPASSQUAL", "CYCLESIZES", "DRAGRESTORE",
-        "EDGEPX", "CORNERDIV", "DRAGMINPX", "PREVIEW", "ANIMATE",
+        "EDGEPX", "CORNERDIV", "DRAGMINPX", "PUSHPX", "PREVIEW",
+        "ANIMATE",
         "PANELDETECT", "PANELMARGIN", "MARGINLEFT", "MARGINTOP",
         "MARGINRIGHT", "MARGINBOTTOM"
     };

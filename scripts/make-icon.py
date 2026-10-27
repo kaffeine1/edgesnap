@@ -154,6 +154,7 @@ COMMODITY_TOOLTYPES = [
     "(EDGEPX=12)",
     "(CORNERDIV=0)",
     "(DRAGMINPX=4)",
+    "(PUSHPX=24)",
     "(PREVIEW=yes)",
     "(PANELDETECT=yes)",
     "(PANELMARGIN=8)",

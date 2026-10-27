@@ -3291,6 +3291,9 @@ static void spike_push_config(void)
     /* 2.24 and later; an older library ignores it, as above */
     tags[n].ti_Tag = ES_OPT_DragRestore;
     tags[n++].ti_Data = (ULONG)g_cfg.drag_restore;
+    /* 2.26 and later; an older library ignores it and keeps its 24 */
+    tags[n].ti_Tag = ES_OPT_PushPx;
+    tags[n++].ti_Data = (ULONG)g_cfg.engine.push_px;
     tags[n].ti_Tag = TAG_DONE;
     tags[n].ti_Data = 0;
 
@@ -3323,9 +3326,10 @@ static void spike_config_reload(void)
     spike_push_config();
     spike_hotkeys_rebuild();
     spike_out("edgesnap: preferences reloaded: zones %04x, edge %d px, "
-              "corner %s, drag %d px,\n",
+              "corner %s, drag %d px, push %d px,\n",
               (unsigned)g_cfg.engine.zones_mask, g_cfg.engine.edge_px,
-              spike_corner_words(), g_cfg.engine.drag_min_px);
+              spike_corner_words(), g_cfg.engine.drag_min_px,
+              g_cfg.engine.push_px);
     spike_out("edgesnap:        preview %s, panel detect %s (margin %d), "
               "width cycle %s, glide %s,\n",
               g_cfg.preview ? "on" : "off",
@@ -4692,10 +4696,16 @@ int main(int argc, char **argv)
                   g_keys.key[ES_HK_CENTRE][0] != '\0' ?
                   g_keys.key[ES_HK_CENTRE] : "none");
     }
+    /* PUSHPX reaches the engine from 2.26; an older library keeps 24 */
+    if (EdgeSnapBase->lib_Revision < 26 && g_cfg.engine.push_px != 24) {
+        spike_out("edgesnap: the library in LIBS: is older than 2.26, "
+                  "so PUSHPX=%d is ignored and the push stays 24 px.\n",
+                  g_cfg.engine.push_px);
+    }
     spike_out("edgesnap: prefs: zones %04x, edge %d px, corner %s, "
-           "drag %d px,\n", (unsigned)g_cfg.engine.zones_mask,
+           "drag %d px, push %d px,\n", (unsigned)g_cfg.engine.zones_mask,
            g_cfg.engine.edge_px, spike_corner_words(),
-           g_cfg.engine.drag_min_px);
+           g_cfg.engine.drag_min_px, g_cfg.engine.push_px);
     spike_out("edgesnap:        preview %s, panel detect %s (margin %d), "
            "bypass %s,\n", g_cfg.preview ? "on" : "off",
            g_cfg.panel_detect ? "on" : "off", g_cfg.panel_margin,

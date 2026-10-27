@@ -125,7 +125,7 @@ EndIf
 ; cannot be deleted, and the next installation would stop on it.
 Set eslib 1
 If EXISTS LIBS:edgesnap.library
-  Version >NIL: LIBS:edgesnap.library 2 25 FILE
+  Version >NIL: LIBS:edgesnap.library 2 26 FILE
   If NOT WARN
     Set eslib 0
   EndIf

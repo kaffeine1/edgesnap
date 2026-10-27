@@ -144,6 +144,9 @@ typedef struct ESSetting {
 #define ES_CORNER_DIV_MAX    16
 #define ES_DRAG_MIN_PX_MIN    1
 #define ES_DRAG_MIN_PX_MAX  200
+/* PUSHPX 0: no push, the pointer itself must reach the edge. */
+#define ES_PUSH_PX_MIN        0
+#define ES_PUSH_PX_MAX      200
 #define ES_PANEL_MARGIN_MIN   0
 #define ES_PANEL_MARGIN_MAX 200
 /* A margin wider than any screen is a typo, not a preference. */
