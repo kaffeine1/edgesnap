@@ -133,8 +133,9 @@ dragging). Where it may not, the window stops at the edge and holds
 the pointer back where it has the title bar. Push the mouse on a little
 further against the edge and EdgeSnap counts the pointer as being
 there: the frame comes up and stays while you hold. For a corner, push
-on into both edges, towards the corner. The zones still answer more
-directly when the window can go on.
+on into both edges, towards the corner. AROS drags a window as an
+outline, and there the push counts where the outline is held at the
+edge. The zones still answer more directly when the window can go on.
 
 How far you push is @{b}PUSHPX@{ub}, "Push against an edge" in the
 preferences (24 pixels as it comes). The same push answers on AmigaOS

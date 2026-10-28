@@ -77,9 +77,13 @@ first gesture is the drag.
   used to snap it when it was only meant to lie against the edge; at 0
   it snaps only once the pointer itself reaches the edge. This needs
   `edgesnap.library` 2.26, in the package; with an older library the
-  commodity says so and keeps 24. Checked under emulation on AmigaOS
-  4.1 with edge resistance, and in the preferences of MorphOS and AROS
-  One 1.3 x86_64.
+  commodity says so and keeps 24. On AROS, where a window is dragged
+  as an outline, the push never counted with off-screen moving turned
+  off in IControl, so a window taken from the middle of the screen did
+  not snap by drag; now it does. Checked on AmigaOS 4.1 under
+  emulation with edge resistance, on MorphOS on a Power Mac G5 and on
+  AROS on a Raspberry Pi 400, and in the preferences of AROS One 1.3
+  x86_64.
 - **0.5 (2026-10-25):** every hotkey can be changed on a new Hotkeys
   page of the preferences, in the icon's tooltypes or as a Shell
   argument, with an input description as Exchange writes it

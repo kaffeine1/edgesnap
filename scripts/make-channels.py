@@ -109,7 +109,10 @@ only meant to lay it against the edge. At 0 the push is off: a window
 snaps only once the pointer itself reaches the edge, after the window
 has gone past the resistance. This needs edgesnap.library 2.26, which
 comes with this version; with an older library the commodity says so
-and keeps 24.
+and keeps 24. On AROS, where a window is dragged as an outline, the
+push never counted with off-screen moving turned off in IControl, so a
+window taken from the middle of the screen did not snap by drag; now
+it does.
 
 Version 0.5, a few days earlier, made every hotkey changeable on a
 Hotkeys page of the preferences and added an ARexx port, EDGESNAP, so
