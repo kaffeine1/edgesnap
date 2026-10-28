@@ -483,6 +483,56 @@ static void test_pinned_pointer_pushing_at_the_edge(void)
     CHECK(a.do_snap == 0);
 }
 
+/* Dragged as an outline (AROS as delivered): the box stays where it was
+ * until the release. Grabbed 100 px into its bar, the outline stops
+ * flush with the left edge and the pointer stays pinned at x 100; the
+ * push must count against the outline, not the box left behind. */
+static void test_outline_pinned_pushing_at_the_edge(void)
+{
+    ESEngine e;
+    ESWinFacts f;
+    ESEngineActions a;
+    int w1, i;
+
+    es_engine_init(&e, 0);
+    std_facts(&f, &w1);
+    f.bar_h = 12;
+    es_engine_press(&e, 200, 110, &a);
+    es_engine_motion(&e, &f, &a);       /* baseline, box never moves */
+    f.mouse_x = 150;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.drag_started == 1);
+    f.mouse_x = 100;                    /* the outline is flush at 0 */
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.zone == ES_ZONE_NONE);
+    for (i = 0; i < 3; i++) {
+        f.push_x = -10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_LEFT);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 1 && a.snap_zone == ES_ZONE_LEFT);
+
+    /* a box left flush at the edge while its outline goes away from
+     * it: a pointer standing there is not held by the edge */
+    std_facts(&f, &w1);
+    f.bar_h = 12;
+    f.box.x = 0;
+    f.mouse_x = 100;
+    es_engine_press(&e, 100, 110, &a);
+    es_engine_motion(&e, &f, &a);
+    f.mouse_x = 300;
+    es_engine_motion(&e, &f, &a);
+    CHECK(a.drag_started == 1);
+    for (i = 0; i < 3; i++) {
+        f.push_x = -10;
+        es_engine_motion(&e, &f, &a);
+    }
+    CHECK(a.zone == ES_ZONE_NONE);
+    es_engine_release(&e, &a);
+    CHECK(a.do_snap == 0);
+}
+
 /* PUSHPX 0 (GitHub issue 3): AmigaOS 4's edge resistance holds a
  * window at the edge for a while, and a user who only wanted it flush
  * there got a snap. With the push off no travel makes an edge; the
@@ -1677,6 +1727,7 @@ int main(void)
     test_default_corner_is_the_corner();
     test_default_top_is_the_screen_bar();
     test_pinned_pointer_pushing_at_the_edge();
+    test_outline_pinned_pushing_at_the_edge();
     test_push_turned_off_or_longer();
     test_pinned_pointer_pushing_into_a_corner();
     test_push_survives_a_hand_mixing_the_axes();
