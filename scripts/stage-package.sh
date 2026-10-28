@@ -125,7 +125,7 @@ Short:        Tile windows by dragging them to an edge
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/cdity
-Version:      0.5 (beta)
+Version:      0.51 (beta)
 Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros; aarch64-aros; i386-aros
 License:      MIT
 
@@ -162,7 +162,18 @@ Installer cannot copy files, Install does the work itself after one
 question. Updating is installing again: no reboot needed, except that
 on the Raspberry Pi a new library takes over at the next boot.
 
-Every hotkey can now be changed on a new Hotkeys page of the
+How far the mouse must push a window held at an edge before that
+counts as the edge is now a setting: "Push against an edge" on the
+Snapping page of the preferences (PUSHPX, 24 pixels as before). On
+AmigaOS 4 with edge resistance set in the GUI preferences, the window
+rests at the edge for a while, and the push used to snap it when you
+only meant to lay it against the edge. At 0 the push is off: a window
+snaps only once the pointer itself reaches the edge, after the window
+has gone past the resistance. This needs edgesnap.library 2.26, which
+comes with this version; with an older library the commodity says so
+and keeps 24.
+
+Since 0.5 every hotkey can be changed on the Hotkeys page of the
 preferences, in the icon's tooltypes or as a Shell argument, with an
 input description as Exchange writes it (HOTKEYLEFT=ctrl alt
 cursor_left); none, or an empty field, leaves an action without a key.
@@ -184,12 +195,6 @@ QUIT, on the active window or on another window matched by a TITLE
 AmigaDOS pattern, for example rx "ADDRESS EDGESNAP 'SNAP LEFT'". On
 MorphOS an ARexx interpreter must be installed, as the system's own
 rexxsyslib has none; on AROS One the command is SYS:Rexxc/RX.
-
-edgesnap.library 2.25 brings corrections from a review of 2.24, among
-them a window closed while the library waits for it, a press beside a
-seam on AROS, and two cases of the old size coming back on a drag away:
-a short pull of a maximised window (a few pixels are now enough), and a
-window that followed the pointer during the drag.
 
 A snapped window that you drag away by its title bar, and let go away
 from the edges, gets back the size it had before it was snapped,

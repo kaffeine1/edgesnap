@@ -72,14 +72,15 @@ AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 # The AROS Archives give a replaced file a NEW id: the 0.4 upload replaced
 # 3393 and became 3441, the 0.41 one replaced 3441 and became 3464, the
 # 0.42 one replaced 3464 and became 3497, the 0.43 one replaced 3497 and
-# became 3532. Before each release, read them off the entries' pages (the
-# fileid= in their links) and set them here.
-AROS_ARCHIVES_FILEID = 3532  # x86_64, 0.43, checked 2026-10-20
+# became 3532, the 0.5 one replaced 3532 and became 3549. Before each
+# release, read them off the entries' pages (the fileid= in their links)
+# and set them here.
+AROS_ARCHIVES_FILEID = 3549  # x86_64, 0.5, checked 2026-10-28
 # The aarch64 entry, new in 0.42, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_ARM = 3533  # aarch64, 0.43, checked 2026-10-20
+AROS_ARCHIVES_FILEID_ARM = 3550  # aarch64, 0.5, checked 2026-10-28
 AROS_REPLACES_ARCHIVES_ARM = "utility/workbench/edgesnap.aarch64-aros.lha"
 # The i386 entry, added to 0.42 on 2026-10-15, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_I386 = 3534  # i386, 0.43, checked 2026-10-20
+AROS_ARCHIVES_FILEID_I386 = 3551  # i386, 0.5, checked 2026-10-28
 AROS_REPLACES_ARCHIVES_I386 = "utility/workbench/edgesnap.i386-aros.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
@@ -99,34 +100,21 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-Every hotkey can now be changed on a new Hotkeys page of the
-preferences, in the icon's tooltypes or as a Shell argument, with an
-input description as Exchange writes it (HOTKEYLEFT=ctrl alt
-cursor_left); none, or an empty field, leaves an action without a key.
-The keys as they come are the ones of 0.43. The four quarters get
-actions of their own (HOTKEYTOPLEFT and so on), with no key until you
-give them one, and CX_POPKEY (also POPKEY) opens the preferences, as
-Exchange's Show button does. The preferences window now has two pages,
-Snapping and Hotkeys, with the width cycle setting beside the side
-keys; it refuses a key the system does not understand, or two actions
-on the same key, with a requester, while the commodity skips such a key
-and says so in its output instead of not starting. Keys change at once
-when the preferences are saved, without a restart.
+How far the mouse must push a window held at an edge before that
+counts as the edge is now a setting: "Push against an edge" on the
+Snapping page of the preferences (PUSHPX, 24 pixels as before). On
+AmigaOS 4 with edge resistance set in the GUI preferences, the window
+rests at the edge for a while, and the push used to snap it when you
+only meant to lay it against the edge. At 0 the push is off: a window
+snaps only once the pointer itself reaches the edge, after the window
+has gone past the resistance. This needs edgesnap.library 2.26, which
+comes with this version; with an older library the commodity says so
+and keeps 24.
 
-An ARexx port, EDGESNAP, lets a script, a dock button or a file manager
-do what the hotkeys do: SNAP (LEFT RIGHT MAXIMIZE TOPLEFT TOPRIGHT
-BOTTOMLEFT BOTTOMRIGHT CENTRE), RESTORE, QUERY (RESULT is where the
-window is snapped), SELECT, PREFS, ENABLE, DISABLE, VERSION, HELP and
-QUIT, on the active window or on another window matched by a TITLE
-AmigaDOS pattern, for example rx "ADDRESS EDGESNAP 'SNAP LEFT'". On
-MorphOS an ARexx interpreter must be installed, as the system's own
-rexxsyslib has none; on AROS One the command is SYS:Rexxc/RX.
-
-edgesnap.library 2.25 brings corrections from a review of 2.24, among
-them a window closed while the library waits for it, a press beside a
-seam on AROS, and two cases of the old size coming back on a drag away:
-a short pull of a maximised window (a few pixels are now enough), and a
-window that followed the pointer during the drag.
+Version 0.5, a few days earlier, made every hotkey changeable on a
+Hotkeys page of the preferences and added an ARexx port, EDGESNAP, so
+a script, a dock button or a file manager can do what the hotkeys do.
+Both are under USING IT below.
 """),
     ("WHAT IT IS", """
 EdgeSnap gives AmigaOS 4.x, MorphOS and AROS (x86_64, aarch64 and i386)
@@ -142,11 +130,13 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. I checked it on real hardware on MorphOS
-3.20 on a PowerMac G5 (with ARexx) and on a Raspberry Pi 400 with AROS
-aarch64, and under emulation on AmigaOS 4.1, MorphOS and AROS One 1.3
-x86_64. The i386 build comes from the same sources; library 2.25 was
-tried on AROS One x86 under emulation. On one AROS installation
+Version %s is still a beta. I checked the new setting under emulation
+on AmigaOS 4.1 with edge resistance, and in the preferences of MorphOS
+and AROS One 1.3 x86_64. Version 0.5, on which it builds, I checked on
+real hardware on MorphOS 3.20 on a PowerMac G5 (with ARexx) and on a
+Raspberry Pi 400 with AROS aarch64, and under emulation on AmigaOS 4.1,
+MorphOS and AROS One 1.3 x86_64; the i386 build comes from the same
+sources. On one AROS installation
 Wanderer's drawers can show black areas after a snap; another program
 that moves windows does the same there, and the AROS developers are
 looking into how Wanderer redraws a drawer. All of it remains worth
@@ -188,6 +178,8 @@ a new library takes over at the next boot.
     and opening the preferences can be given keys there too.
   - The ARexx port EDGESNAP lets a script, a dock button or a file
     manager do what the hotkeys do: rx "ADDRESS EDGESNAP 'SNAP LEFT'".
+  - "Push against an edge" in the preferences sets how far pushing a
+    window held at an edge counts as reaching it; 0 turns that off.
   - Settings live in SYS:Prefs/EdgeSnap, native on each system: ReAction
     on AmigaOS 4, MUI on MorphOS, Zune on AROS. EdgeSnap follows changes
     at once, without being restarted.
@@ -225,8 +217,9 @@ areas in Wanderer's drawers, the colour left along the seam and the
 traces of the preview frame on one graphics driver, each with a video
 or a log that made the cause findable. A MorphOS user asked for the old
 size back when a snapped window is dragged away, the hotkeys came from
-a conflict found on real MorphOS hardware, and the author of a tiling
-window manager asked for the seams of a group.
+a conflict found on real MorphOS hardware, the author of a tiling
+window manager asked for the seams of a group, and an AmigaOS 4
+developer reported the snap that edge resistance set off.
 """),
     ("LICENCE AND SOURCE", """
 MIT. The full text is in the LICENSE file inside the archive.
@@ -575,12 +568,11 @@ screen edge or corner and it glides into that half or quarter of the
 screen. Two windows side by side share a seam that can be dragged to
 re-balance them. It installs as a commodity that starts with the system.
 MIT licence."""
-MORPHOS_STORAGE_NEW = ("New in %s: every hotkey can be changed on a new "
-                       "Hotkeys page of the preferences, in the icon's "
-                       "tooltypes or from the Shell, with keys for the "
-                       "four quarters and for opening the preferences; "
-                       "an ARexx port, EDGESNAP, lets scripts and buttons "
-                       "snap, restore and query windows (library %s)."
+MORPHOS_STORAGE_NEW = ("New in %s: how far pushing a window held at an "
+                       "edge counts as reaching it is a setting, \"Push "
+                       "against an edge\" in the preferences, and 0 turns "
+                       "that off; 0.5 made every hotkey changeable and "
+                       "added the ARexx port EDGESNAP (library %s)."
                        % (VERSION, LIBRARY_VERSION))
 
 

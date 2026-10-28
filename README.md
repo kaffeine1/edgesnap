@@ -69,6 +69,17 @@ first gesture is the drag.
 
 *The MorphOS preferences window (MUI), version 0.2. The AmigaOS 4 window is the same sections in ReAction: both are generated from one settings table.*
 
+- **0.51 (2026-10-28):** how far the mouse must push a window held at
+  an edge before that counts as the edge is now a setting, "Push against
+  an edge" in the preferences (`PUSHPX`, 24 pixels as before), and 0
+  turns the push off. On AmigaOS 4 with edge resistance set in the GUI
+  preferences, the window rests at the edge for a while, and the push
+  used to snap it when it was only meant to lie against the edge; at 0
+  it snaps only once the pointer itself reaches the edge. This needs
+  `edgesnap.library` 2.26, in the package; with an older library the
+  commodity says so and keeps 24. Checked under emulation on AmigaOS
+  4.1 with edge resistance, and in the preferences of MorphOS and AROS
+  One 1.3 x86_64.
 - **0.5 (2026-10-25):** every hotkey can be changed on a new Hotkeys
   page of the preferences, in the icon's tooltypes or as a Shell
   argument, with an input description as Exchange writes it
