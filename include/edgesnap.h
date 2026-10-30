@@ -407,14 +407,20 @@ LONG ESnap_QueryWindow(struct Window *win, ULONG *zone_out);
  * Exclude (TRUE) or re-include (FALSE) win from every EdgeSnap
  * behavior: drag snapping, hotkeys, programmatic ESnap_SnapWindow.
  *
- * The exclusion is held BY ADDRESS. It is dropped once the library
- * notices the window has gone, but a window closed and another opened
- * at the same address before that moment would inherit it - so a
- * program that excludes its windows should re-include them before
- * closing them. Below 1.0 this is the honest description of what the
- * library can do from outside Intuition; a form that cannot be
- * inherited is on the list for the ABI freeze.
- *   ES_OK / ES_ERR_STALE / ES_ERR_NO_MEMORY.
+ * From 2.27 the exclusion belongs to the window, by the identity of
+ * ESnap_QueryWindowSerial, and is dropped with it. A window opened
+ * where an excluded one was is not excluded, provided the library saw
+ * the closed one gone first: the engine looks with every input it is
+ * fed, so any pointer movement in between is enough. What the library
+ * cannot see from outside Intuition is a window closed and another
+ * opened at once, with nothing in between: the system gives the new one
+ * the same memory, window and layer, and it inherits the exclusion. In
+ * practice only a program reopening its own window does that, and it
+ * should re-include the window before closing it if that matters. Up
+ * to 2.26 the exclusion was held by address, and a window opened where
+ * an excluded one had been could inherit it at any later time.
+ *   ES_OK / ES_ERR_STALE / ES_ERR_NO_MEMORY (no room left, or the
+ *   library already tells apart as many windows as it can).
  */
 LONG ESnap_ExcludeWindow(struct Window *win, BOOL exclude);
 
@@ -559,7 +565,11 @@ LONG ESnap_PlaceWindowsA(struct ESnapPlacement *list, ULONG count,
  * observations, and a client that polls QueryGeneration sees often.
  *
  * ESnap_QueryWindowSerial: the serial of win, assigned now if it had
- * none. ES_ERR_STALE if there is no such window.
+ * none. ES_ERR_STALE if there is no such window. A window closed and
+ * another opened at once gets the same memory back, window and layer,
+ * and keeps the closed one's serial unless the library saw the close:
+ * from 2.27 the engine looks with every input it is fed, so it is
+ * enough that the pointer moves in between.
  *
  * ESnap_FindWindow: the window behind a serial, validated against the
  * live window lists; ES_ERR_STALE once it is gone, and the serial is

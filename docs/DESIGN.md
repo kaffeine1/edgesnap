@@ -1599,6 +1599,19 @@ Four structural changes. Each one moves a public signature, which is why
    are swept whenever the list is touched. A form that cannot be
    inherited at all needs window identity the library does not have,
    and stays on this list.
+   *Library 2.27 (2026-10-30): exclusions are held by serial, the
+   identity of 2.6, and the engine retires the identity of every window
+   that is gone with each input it is fed. The first try held them by
+   serial alone and failed in the AmigaOS 4 VM exactly as 2.26 did: a
+   window closed and another opened at once gets the same memory back,
+   its address AND its layer, so the reuse the identity called rare is
+   the normal case, and it took the closed one's serial. That hit the
+   groups and the seam tokens too. With the look on every input, a
+   window opened after the pointer has moved is told apart (esnaptest:
+   B at A's very address, not excluded, snaps). What stays is a window
+   opened in place of another with nothing in between, in practice a
+   program reopening its own window; the header says so. Nothing short
+   of Intuition can do better without patching it.*
 
 ### 1.0
 

@@ -2057,6 +2057,104 @@ static void test_fixes(void)
     summary("2.25 fixes");
 }
 
+/* Does QueryWindows mark w excluded? -1 when w is not in the list. */
+static int excluded_flag(struct Window *w)
+{
+    struct ESnapWindowInfo info[32];
+    ULONG needed = 0, i;
+
+    if (ES_CALL(ESnap_QueryWindows)(w->WScreen, info, 32, &needed) != ES_OK) {
+        return -1;
+    }
+    for (i = 0; i < needed && i < 32; i++) {
+        if (info[i].window == w) {
+            return (info[i].flags & ESWI_EXCLUDED) != 0;
+        }
+    }
+    return -1;
+}
+
+/*
+ * 2.27: an exclusion belongs to the window and not to its address. A is
+ * excluded and closed, and B opened with the same size gets A's memory
+ * back, window and layer, on AmigaOS 4 at least. Once the engine has
+ * been fed an input in between, the library has seen A gone and B must
+ * not be excluded; that needs the engine role, so it is skipped while
+ * the commodity holds it. Then the documented limit: B opened at once,
+ * with nothing in between, is reported and not judged. Before 2.27 a B
+ * at A's address inherited the exclusion either way.
+ */
+static void test_exclusions(void)
+{
+    struct ESnapReport rep;
+    struct Window *a, *b;
+    ULONG engine = 0;
+    LONG rc;
+    int is_engine;
+
+    g_pass = 0;
+    g_fail = 0;
+    rc = ES_CALL(ESnap_RegisterClient)("esnaptest", ES_CL_ENGINE, &engine);
+    is_engine = rc == ES_OK;
+    if (!is_engine) {
+        printf("esnaptest: the engine role -> %s (the commodity holds it): "
+               "exclusion after an input skipped\n", rcname(rc));
+    } else if ((a = open_test_window("esnaptest exclusion A")) != NULL) {
+        rc = ES_CALL(ESnap_ExcludeWindow)(a, TRUE);
+        printf("esnaptest: ESnap_ExcludeWindow(A, TRUE) -> %s, flag %d "
+               "(expected ES_OK, 1)", rcname(rc), excluded_flag(a));
+        verdict(rc == ES_OK && excluded_flag(a) == 1);
+        rc = ES_CALL(ESnap_SnapWindow)(a, ES_ZONE_LEFT);
+        printf("esnaptest: ESnap_SnapWindow(A excluded) -> %s "
+               "(expected ES_ERR_REJECTED)", rcname(rc));
+        verdict(rc == ES_ERR_REJECTED);
+        CloseWindow(a);
+        ES_CALL(ESnap_FeedInput)(0, 1, 0, 0, &rep);  /* the pointer moved */
+        b = open_test_window("esnaptest exclusion B");
+        if (b != NULL) {
+            printf("esnaptest: B opened %s A's address\n",
+                   b == a ? "AT" : "away from");
+            printf("esnaptest: after an input, B's excluded flag -> %d "
+                   "(expected 0)", excluded_flag(b));
+            verdict(excluded_flag(b) == 0);
+            rc = ES_CALL(ESnap_SnapWindow)(b, ES_ZONE_LEFT);
+            printf("esnaptest: ESnap_SnapWindow(B) -> %s (expected ES_OK)",
+                   rcname(rc));
+            verdict(rc == ES_OK);
+            rc = ES_CALL(ESnap_ExcludeWindow)(b, TRUE);
+            printf("esnaptest: ESnap_ExcludeWindow(B, TRUE) -> %s, flag %d "
+                   "(expected ES_OK, 1)", rcname(rc), excluded_flag(b));
+            verdict(rc == ES_OK && excluded_flag(b) == 1);
+            rc = ES_CALL(ESnap_ExcludeWindow)(b, FALSE);
+            printf("esnaptest: ESnap_ExcludeWindow(B, FALSE) -> %s, flag %d "
+                   "(expected ES_OK, 0)", rcname(rc), excluded_flag(b));
+            verdict(rc == ES_OK && excluded_flag(b) == 0);
+            Delay(25L);             /* the snap must land before close */
+            CloseWindow(b);
+        }
+    }
+    if (is_engine) {
+        ES_CALL(ESnap_UnregisterClient)(engine);
+    }
+
+    /* the limit: closed and opened at once, nothing in between */
+    a = open_test_window("esnaptest exclusion C");
+    if (a != NULL) {
+        rc = ES_CALL(ESnap_ExcludeWindow)(a, TRUE);
+        CloseWindow(a);
+        b = open_test_window("esnaptest exclusion D");
+        if (b != NULL) {
+            printf("esnaptest: D opened at once %s C's address, excluded "
+                   "flag %d (not judged: with nothing in between, the "
+                   "documented limit)\n", b == a ? "AT" : "away from",
+                   excluded_flag(b));
+            ES_CALL(ESnap_ExcludeWindow)(b, FALSE);
+            CloseWindow(b);
+        }
+    }
+    summary("2.27 exclusions");
+}
+
 /* Is the pointer on w's title bar? Read with w's box, under the lock. */
 static int pointer_on_bar(struct Window *w, LONG *px, LONG *py)
 {
@@ -2616,6 +2714,12 @@ int main(int argc, char **argv)
     } else {
         printf("esnaptest: 2.25 checks need revision 25, this is %d, skipped\n",
                (int)EdgeSnapBase->lib_Revision);
+    }
+
+    /* QueryWindows came in 2.5; before 2.27 a failure here is the
+     * inherited exclusion that 2.27 fixes, so it runs on older ones. */
+    if (EdgeSnapBase->lib_Revision >= 5) {
+        test_exclusions();
     }
 
 #if defined(__amigaos4__)

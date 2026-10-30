@@ -56,7 +56,7 @@ static ESConfig g_cfg;
 static ESEngine g_engine;
 static LONG g_push_x, g_push_y;   /* raw pointer travel since the last feed */
 static ESRegistry g_registry;
-static void *g_excluded[ESB_EXCLUDE_SLOTS];
+static ULONG g_excluded[ESB_EXCLUDE_SLOTS]; /* by serial, 0: free */
 static struct Window *g_ignored[ESB_IGNORE_SLOTS];
 static int g_enabled;
 static int g_ready;
@@ -93,6 +93,9 @@ static ULONG g_gen_touch;      /* drags that reached for a locked window */
 
 /* the dividers (2.24) list their windows and move them further down too */
 static int esb_serial_known(ULONG serial);
+/* exclusions are held by serial, so they live after the identity table */
+static int esb_is_excluded(struct Window *win, struct Layer *layer);
+static void esb_ident_retire_gone(void);
 static int esb_seam_list(struct ESBGroup *group);
 static LONG esb_seam_move(ESSeam *seam, LONG position, int may_raise,
                           LONG *applied);
@@ -109,6 +112,7 @@ struct ESBSnap {
     int mouse_x, mouse_y;
     int bar_h;
     ULONG flags;
+    struct Layer *layer;       /* with win, the identity (2.6)       */
 };
 
 int esb_init(void)
@@ -348,20 +352,6 @@ LONG esb_unregister_client(ULONG client)
     return rc;
 }
 
-/* ------------------------------------------------------- exclusions */
-
-static int esb_is_excluded(struct Window *win)
-{
-    int i;
-
-    for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
-        if (g_excluded[i] == (void *)win) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
 /* ------------------------------------------------- window sampling */
 
 /* Under LockIBase only: usable area of scr, dock/panel aware. */
@@ -535,6 +525,7 @@ static void esb_fill(struct Window *win, struct Screen *scr,
         out->max_h = 0;
     }
     out->flags = win->Flags;
+    out->layer = win->WLayer;
     out->bar_h = win->BorderTop;
     out->mouse_x = scr->MouseX;
     out->mouse_y = scr->MouseY;
@@ -993,7 +984,7 @@ LONG esb_snap_rect(struct Window *win, ULONG zone, const ESRect *want)
     if (!esb_sample(win, &s)) {
         es_registry_forget(&g_registry, win);
         rc = ES_ERR_STALE;
-    } else if (esb_is_excluded(win) || !esb_snappable(&s) ||
+    } else if (esb_is_excluded(win, s.layer) || !esb_snappable(&s) ||
                esb_locked_for(win)) {
         rc = ES_ERR_REJECTED;
     } else {
@@ -1095,40 +1086,6 @@ LONG esb_query_window(struct Window *win, ULONG *zone_out)
         *zone_out = ES_ZONE_NONE;
     } else {
         *zone_out = (ULONG)es_registry_zone(&g_registry, win);
-    }
-    ReleaseSemaphore(&g_sem);
-    return rc;
-}
-
-static LONG esb_exclude_window_inner(struct Window *win, BOOL exclude)
-{
-    struct ESBSnap s;
-    LONG rc = ES_OK;
-    int i;
-
-    if (win == NULL) {
-        return ES_ERR_BAD_ARGS;
-    }
-    ObtainSemaphore(&g_sem);
-    if (!esb_sample(win, &s)) {
-        rc = ES_ERR_STALE;
-    } else if (exclude) {
-        if (!esb_is_excluded(win)) {
-            rc = ES_ERR_NO_MEMORY;
-            for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
-                if (g_excluded[i] == 0) {
-                    g_excluded[i] = (void *)win;
-                    rc = ES_OK;
-                    break;
-                }
-            }
-        }
-    } else {
-        for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
-            if (g_excluded[i] == (void *)win) {
-                g_excluded[i] = 0;
-            }
-        }
     }
     ReleaseSemaphore(&g_sem);
     return rc;
@@ -2433,7 +2390,7 @@ static void esb_drag_out(const ESEngineActions *a)
     ObtainSemaphore(&g_sem);
     if (!esb_sample(win, &s)) {
         es_registry_forget(&g_registry, win);
-    } else if (!esb_is_excluded(win) && esb_snappable(&s) &&
+    } else if (!esb_is_excluded(win, s.layer) && esb_snappable(&s) &&
                !esb_locked_for(win) && !esb_grouped(win) &&
                es_registry_drag_out(&g_registry, win, &a->drop_start,
                                     &s.box,
@@ -2473,6 +2430,7 @@ void esb_input(int press, int motion, int release, ULONG quals,
         ReleaseSemaphore(&g_sem);    /* not the engine's owner: ignored */
         return;
     }
+    esb_ident_retire_gone();
     if (!g_enabled) {
         /* disabled mid-drag: make sure no frame is left behind */
         es_engine_reset(&g_engine, &a);
@@ -2527,7 +2485,7 @@ void esb_input(int press, int motion, int release, ULONG quals,
             f.max_h = s.max_h;
             f.bar_h = s.bar_h;
             f.flags = 0;
-            if (esb_snappable(&s) && !esb_is_excluded(win)) {
+            if (esb_snappable(&s) && !esb_is_excluded(win, s.layer)) {
                 if (esb_locked_for(win)) {
                     g_gen_touch++;     /* the owner will want to know */
                 } else {
@@ -2629,43 +2587,6 @@ LONG esb_move_divider(LONG position)
     }
     ReleaseSemaphore(&g_sem);
     return rc;
-}
-
-/*
- * Exclusions are held by address (see the header for what that means
- * for a caller). What the library CAN do from outside Intuition is drop
- * an entry once its window is found gone, so that the list does not
- * fill with corpses and a corpse's address is not carried longer than
- * necessary. Done whenever the list is touched, outside the semaphore,
- * because finding a window walks the screens under LockIBase.
- */
-static void esb_exclusions_sweep(void)
-{
-    void *seen[ESB_EXCLUDE_SLOTS];
-    struct ESBSnap sn;
-    int i;
-
-    ObtainSemaphore(&g_sem);
-    for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
-        seen[i] = g_excluded[i];
-    }
-    ReleaseSemaphore(&g_sem);
-
-    for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
-        if (seen[i] != 0 && !esb_sample((struct Window *)seen[i], &sn)) {
-            ObtainSemaphore(&g_sem);
-            if (g_excluded[i] == seen[i]) {
-                g_excluded[i] = 0;
-            }
-            ReleaseSemaphore(&g_sem);
-        }
-    }
-}
-
-LONG esb_exclude_window(struct Window *win, BOOL exclude)
-{
-    esb_exclusions_sweep();
-    return esb_exclude_window_inner(win, exclude);
 }
 
 /* ------------------------------------------------ 2.6: window identity */
@@ -2815,6 +2736,149 @@ LONG esb_find_window(ULONG serial, struct Window **window)
     return hit != NULL ? ES_OK : ES_ERR_STALE;
 }
 
+/*
+ * g_sem held, not LockIBase. Retire every identity whose window is gone,
+ * without giving out new ones. Called with every input the engine's
+ * owner feeds, because the walks above come only with calls: a window
+ * closed and another opened at once gets the same memory back, its
+ * address AND its layer (seen on AmigaOS 4, 2026-10-29), and without a
+ * look in between it would carry the closed one's serial, and with it
+ * an exclusion, a group membership or a seam. After this, that can only
+ * happen to a window opened in place of another before the pointer
+ * moves again: in practice a program reopening its own window.
+ */
+static void esb_ident_retire_gone(void)
+{
+    ULONG ilock;
+    struct Screen *scr;
+    struct Window *w;
+    int i, alive;
+
+    ilock = LockIBase(0);
+    for (i = 0; i < ESB_IDENT_SLOTS; i++) {
+        struct ESBIdent *e = &g_ident[i];
+
+        if (e->win == NULL) {
+            continue;
+        }
+        alive = 0;
+        for (scr = ESB_IBASE->FirstScreen; scr != NULL && !alive;
+             scr = scr->NextScreen) {
+            for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+                if (w == e->win && w->WLayer == e->layer) {
+                    alive = 1;
+                    break;
+                }
+            }
+        }
+        if (!alive) {
+            e->win = NULL;             /* gone: the serial retires */
+        }
+    }
+    UnlockIBase(ilock);
+}
+
+/* ------------------------------------------------------- exclusions */
+
+/*
+ * Exclusions are held by serial, the identity above, and not by
+ * address, so a window opened where a closed one was does not inherit
+ * the exclusion if the library saw the closed one gone first: with the
+ * next input the engine is fed, or any call that walks the windows in
+ * between. Once the new window is there, nothing tells the two apart:
+ * that is the identity's own blind spot, a window and its layer
+ * reallocated at the same addresses with no look between the close and
+ * the open (see esb_ident_retire_gone). A serial
+ * that a full walk no longer finds is dropped whenever the list is
+ * touched, so the list does not fill with windows that are gone.
+ */
+
+/* g_sem held. win and its layer, as sampled together: excluded? A
+ * window the identity table does not hold was never excluded. */
+static int esb_is_excluded(struct Window *win, struct Layer *layer)
+{
+    ULONG serial = 0;
+    int i;
+
+    if (win == NULL) {
+        return 0;
+    }
+    for (i = 0; i < ESB_IDENT_SLOTS; i++) {
+        if (g_ident[i].win == win && g_ident[i].layer == layer) {
+            serial = g_ident[i].serial;
+            break;
+        }
+    }
+    if (serial == 0) {
+        return 0;
+    }
+    for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
+        if (g_excluded[i] == serial) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+LONG esb_exclude_window(struct Window *win, BOOL exclude)
+{
+    ULONG ilock, serial = 0;
+    struct Screen *scr;
+    struct Window *w;
+    LONG rc = ES_OK;
+    int i, found = 0;
+
+    if (win == NULL) {
+        return ES_ERR_BAD_ARGS;
+    }
+    ObtainSemaphore(&g_sem);
+    ilock = LockIBase(0);
+    esb_ident_observe_all();
+    for (scr = ESB_IBASE->FirstScreen; scr != NULL && !found;
+         scr = scr->NextScreen) {
+        for (w = scr->FirstWindow; w != NULL; w = w->NextWindow) {
+            if (w == win) {
+                serial = esb_ident_touch(w);
+                found = 1;
+                break;
+            }
+        }
+    }
+    UnlockIBase(ilock);
+    for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
+        if (g_excluded[i] != 0 && !esb_serial_known(g_excluded[i])) {
+            g_excluded[i] = 0;         /* its window is gone */
+        }
+    }
+    if (!found) {
+        rc = ES_ERR_STALE;
+    } else if (exclude) {
+        /* serial 0: the identity table is full, nothing to hold it by */
+        rc = ES_ERR_NO_MEMORY;
+        for (i = 0; serial != 0 && i < ESB_EXCLUDE_SLOTS; i++) {
+            if (g_excluded[i] == serial) {
+                rc = ES_OK;
+                break;
+            }
+        }
+        for (i = 0; serial != 0 && rc != ES_OK && i < ESB_EXCLUDE_SLOTS;
+             i++) {
+            if (g_excluded[i] == 0) {
+                g_excluded[i] = serial;
+                rc = ES_OK;
+            }
+        }
+    } else if (serial != 0) {
+        for (i = 0; i < ESB_EXCLUDE_SLOTS; i++) {
+            if (g_excluded[i] == serial) {
+                g_excluded[i] = 0;
+            }
+        }
+    }
+    ReleaseSemaphore(&g_sem);
+    return rc;
+}
+
 /* ------------------------------------------ 2.5: windows and layouts */
 
 /*
@@ -2935,7 +2999,7 @@ LONG esb_query_windows(struct Screen *scr, struct ESnapWindowInfo *buf,
             if (s.flags & WFLG_BACKDROP) {
                 o->flags |= ESWI_BACKDROP;
             }
-            if (esb_is_excluded(w)) {
+            if (esb_is_excluded(w, s.layer)) {
                 o->flags |= ESWI_EXCLUDED;
             }
             if (esb_looks_like_panel(scr, w)) {
@@ -2979,7 +3043,8 @@ static LONG esb_place_locked(struct Window *win, const ESRect *want,
         es_registry_forget(&g_registry, win);
         return ES_ERR_STALE;
     }
-    if (esb_is_excluded(win) || !esb_snappable(&s) || esb_locked_for(win)) {
+    if (esb_is_excluded(win, s.layer) || !esb_snappable(&s) ||
+        esb_locked_for(win)) {
         return ES_ERR_REJECTED;
     }
     /*
@@ -3869,7 +3934,7 @@ static int esb_seam_list(struct ESBGroup *group)
         esb_group_sweep_members(group);
         for (k = 0; k < group->members; k++) {
             w = esb_window_of_serial_locked(group->member[k]);
-            if (w != NULL && !esb_is_excluded(w) &&
+            if (w != NULL && !esb_is_excluded(w, w->WLayer) &&
                 esb_flags_snappable(w->Flags)) {
                 esb_seam_add(w, &group->placed[k], w->WScreen, group, k);
             }
@@ -3904,7 +3969,8 @@ static int esb_seam_list(struct ESBGroup *group)
         g = esb_group_of_serial(serial);
         k = esb_member_index(g, serial);
         if (k < 0) {
-            if (!esb_is_excluded(w) && esb_flags_snappable(w->Flags)) {
+            if (!esb_is_excluded(w, w->WLayer) &&
+                esb_flags_snappable(w->Flags)) {
                 esb_seam_add(w, &e->snapped, s, NULL, 0);
             }
         } else {
@@ -3939,7 +4005,7 @@ static int esb_seam_list(struct ESBGroup *group)
         /* what may not be snapped is not divided either */
         for (i = 0, k = 0; i < count; i++) {
             w = esb_window_of_serial_locked(g->member[g_sl_pick[i]]);
-            if (w != NULL && !esb_is_excluded(w) &&
+            if (w != NULL && !esb_is_excluded(w, w->WLayer) &&
                 esb_flags_snappable(w->Flags)) {
                 g_sl_pick[k++] = g_sl_pick[i];
             }
