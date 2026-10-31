@@ -88,6 +88,15 @@ AUTHOR = "Michele Dipace <michele.dipace@kaffeine.net>"
 EMAIL = "michele.dipace@kaffeine.net"
 URL = "https://github.com/kaffeine1/edgesnap"
 
+# Voluntary support, in one place: a line at the end of every readme,
+# and the donateurl: key that OS4Depot and The AROS Archives turn into a
+# Donate button (the same key, f_donateurl, in their web forms). Aminet
+# and MorphOS-Storage have no such field and get only the line. The
+# preferences editor carries the same link (prefs/support.h).
+SUPPORT_URL = "https://www.patreon.com/c/kaffeine1"
+SUPPORT_TEXT = ("Support my work on Patreon. Contributions are voluntary; "
+                "no subscription is required to use this software.")
+
 # Aminet caps Short at 40 characters, and it must not name the file, the
 # version or the platform.
 SHORT = "Tile windows by dragging them to an edge"
@@ -229,7 +238,10 @@ MIT. The full text is in the LICENSE file inside the archive.
 
 Source, issues and the design notes:
 %s
-""" % URL),
+
+%s
+%s
+""" % (URL, SUPPORT_TEXT, SUPPORT_URL)),
 ]
 
 
@@ -292,6 +304,7 @@ def os4depot_readme():
         "submitter:Michele Dipace",
         "email:%s" % EMAIL,
         "url:%s" % URL,
+        "donateurl:%s" % SUPPORT_URL,
         "category:utility/workbench",
         "requirements:AmigaOS 4.1",
         # Their enum has no MIT: Other is the honest slot, and the real
@@ -396,6 +409,7 @@ def arosarchives_readme():
         "submitter:Michele Dipace",
         "email:%s" % EMAIL,
         "url:%s" % URL,
+        "donateurl:%s" % SUPPORT_URL,
         # Present in the public submit form checked on 2026-09-06.
         "category:utility/workbench",
         "requirements:AROS x86_64 ABIv11 (AROS One x64)",
@@ -436,6 +450,7 @@ def arosarchives_arm_readme():
         "submitter:Michele Dipace",
         "email:%s" % EMAIL,
         "url:%s" % URL,
+        "donateurl:%s" % SUPPORT_URL,
         "category:utility/workbench",
         "requirements:AROS aarch64 (Raspberry Pi)",
         "license:Other",
@@ -471,6 +486,7 @@ def arosarchives_i386_readme():
         "submitter:Michele Dipace",
         "email:%s" % EMAIL,
         "url:%s" % URL,
+        "donateurl:%s" % SUPPORT_URL,
         "category:utility/workbench",
         "requirements:AROS i386 ABI v0 (AROS One x86)",
         "license:Other",
@@ -522,7 +538,7 @@ send() { # $1 = archive, $2 = URL tail
     [ -f "$lha" ] && [ -f "$readme" ] || { echo "ERRORE  manca $lha o $readme"; return; }
     if [ -n "${DRY:-}" ]; then
         echo "== $lha -> $BASE$2"
-        for k in name description version author submitter email url category replaces requirements license; do
+        for k in name description version author submitter email url donateurl category replaces requirements license; do
             printf '   f_%-13s %s\n' "$k" "$(field $k "$readme")"
         done
         echo "   f_text         $(body "$readme" | wc -l | tr -d ' ') righe, $(body "$readme" | wc -c | tr -d ' ') byte"
@@ -538,6 +554,7 @@ send() { # $1 = archive, $2 = URL tail
         --form-string "f_submitter=$(field submitter "$readme")" \
         --form-string "f_email=$(field email "$readme")" \
         --form-string "f_url=$(field url "$readme")" \
+        --form-string "f_donateurl=$(field donateurl "$readme")" \
         --form-string "f_category=$(field category "$readme")" \
         --form-string "f_replaces=$(field replaces "$readme")" \
         --form-string "f_requirements=$(field requirements "$readme")" \
