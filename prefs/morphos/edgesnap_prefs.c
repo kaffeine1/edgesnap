@@ -38,6 +38,7 @@
 
 #include <clib/alib_protos.h>   /* DoMethod                             */
 #include <libraries/iffparse.h> /* MAKE_ID, for the window's saved id   */
+#include <libraries/gadtools.h> /* struct NewMenu, for the Project menu */
 
 #include <proto/exec.h>
 #include <proto/dos.h>
@@ -47,6 +48,7 @@
 #include "config.h"
 #include "prefs_io.h"
 #include "offscreen_sys.h"
+#include "support.h"
 #include "edgesnap_version.h"
 #include "edgesnap.h"
 
@@ -79,7 +81,23 @@ enum {
     ES_ID_SAVE = 1,
     ES_ID_USE,
     ES_ID_CANCEL,
-    ES_ID_SHOW
+    ES_ID_SHOW,
+    ES_ID_ABOUT,
+    ES_ID_SUPPORT
+};
+
+/* The Project menu. MUI hands an item's user data back from
+ * MUIM_Application_NewInput as if a button had returned it. */
+static struct NewMenu es_menu[] = {
+    { NM_TITLE, (STRPTR)"Project",                 NULL, 0, 0, NULL },
+    { NM_ITEM,  (STRPTR)"About...",                (STRPTR)"?", 0, 0,
+                (APTR)ES_ID_ABOUT },
+    { NM_ITEM,  (STRPTR)"Support development...",  NULL, 0, 0,
+                (APTR)ES_ID_SUPPORT },
+    { NM_ITEM,  NM_BARLABEL,                       NULL, 0, 0, NULL },
+    { NM_ITEM,  (STRPTR)"Quit",                    (STRPTR)"Q", 0, 0,
+                (APTR)MUIV_Application_ReturnID_Quit },
+    { NM_END,   NULL,                              NULL, 0, 0, NULL }
 };
 
 struct ESPrefsGui {
@@ -570,6 +588,35 @@ static void es_key_error(struct ESPrefsGui *gui, int bad, int duplicate,
     set(gui->win, MUIA_Window_ActiveObject, (ESTagData)gui->field[bad]);
 }
 
+/* ------------------------------------------------------- the menu */
+
+static void es_about(struct ESPrefsGui *gui)
+{
+    MUI_RequestA(gui->app, gui->win, 0,
+                 ES_REQ_TEXT("About EdgeSnap Preferences"), ES_REQ_TEXT("_OK"),
+                 ES_REQ_TEXT("EdgeSnap " ES_VERSION_LABEL " ("
+                             ES_VERSION_DATE ")\n"
+                             "(c) 2026 Michele Dipace, MIT licence\n\n"
+                             ESP_REPO_URL),
+                 NULL);
+}
+
+/* The link, with a button that puts it on the clipboard. */
+static void es_support(struct ESPrefsGui *gui)
+{
+    if (MUI_RequestA(gui->app, gui->win, 0,
+                     ES_REQ_TEXT("Support development"),
+                     ES_REQ_TEXT("_Copy link|C_lose"),
+                     ES_REQ_TEXT(ESP_SUPPORT_TEXT "\n\n" ESP_SUPPORT_URL),
+                     NULL) == 1 &&
+        !esp_clip_text(ESP_SUPPORT_URL)) {
+        MUI_RequestA(gui->app, gui->win, 0,
+                     ES_REQ_TEXT("Support development"), ES_REQ_TEXT("_OK"),
+                     ES_REQ_TEXT("The link could not be put on the clipboard."),
+                     NULL);
+    }
+}
+
 /* ------------------------------------------------ back to the file */
 
 static int es_collect(struct ESPrefsGui *gui)
@@ -756,6 +803,8 @@ int main(int argc, char **argv)
         MUIA_Application_Description, "Window snapping preferences",
         MUIA_Application_Base,        "EDGESNAPPREFS",
         MUIA_Application_SingleTask,  TRUE,
+        MUIA_Application_Menustrip,
+            MUI_MakeObject(MUIO_MenustripNM, (ESTagData)es_menu, 0),
         SubWindow, gui.win = WindowObject,
             MUIA_Window_Title, "EdgeSnap Preferences",
             ES_WINDOW_ID,
@@ -824,6 +873,12 @@ int main(int argc, char **argv)
                              ES_REQ_TEXT("The preferences could not be written."),
                              NULL);
             }
+        }
+        if (id == ES_ID_ABOUT) {
+            es_about(&gui);
+        }
+        if (id == ES_ID_SUPPORT) {
+            es_support(&gui);
         }
         if (id == ES_ID_CANCEL) {
             rc = RETURN_OK;

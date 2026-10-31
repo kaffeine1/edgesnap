@@ -438,4 +438,14 @@ something odd, that is exactly the report worth having:
 The same place holds the source, the design notes and what was learned
 the hard way on each system.
 
+@{b}Supporting development@{ub}
+I develop EdgeSnap on my own. Support my work on Patreon.
+Contributions are voluntary; no subscription is required to use this
+software.
+
+  https://www.patreon.com/c/kaffeine1
+
+The preferences editor has the same link under Project, Support
+development..., with a button that puts it on the clipboard.
+
 @endnode

@@ -9,7 +9,7 @@ CFLAGS ?= -Wall -Wextra -O2 -noixemul -Icore -Iinclude -Iprefs
 TARGET ?= build/morphos/EdgeSnapPrefs
 SRC := prefs/morphos/edgesnap_prefs.c prefs/prefs_io.c core/config.c \
        core/engine.c core/zones.c core/panels.c prefs/offscreen_sys.c \
-       core/offscreen.c
+       core/offscreen.c prefs/support.c
 
 .PHONY: all clean
 

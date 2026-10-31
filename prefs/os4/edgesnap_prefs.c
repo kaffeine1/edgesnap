@@ -71,6 +71,7 @@
 
 #include "prefs_io.h"
 #include "offscreen_sys.h"
+#include "support.h"
 #include "zones.h"
 #include "edgesnap_version.h"
 
@@ -91,6 +92,23 @@ static const char es_version_cookie[] __attribute__((used)) =
 #define GID_OFFSCREEN 4          /* the system's setting, not ours    */
 #define GID_SETTING 100          /* + index of the setting            */
 #define GID_ZONE    200          /* + zone number                     */
+
+/* The Project menu, by its items' user data. */
+#define MID_ABOUT   1
+#define MID_SUPPORT 2
+#define MID_QUIT    3
+
+static struct NewMenu es_menu[] = {
+    { NM_TITLE, (STRPTR)"Project",                 NULL, 0, 0, NULL },
+    { NM_ITEM,  (STRPTR)"About...",                (STRPTR)"?", 0, 0,
+                (APTR)MID_ABOUT },
+    { NM_ITEM,  (STRPTR)"Support development...",  NULL, 0, 0,
+                (APTR)MID_SUPPORT },
+    { NM_ITEM,  NM_BARLABEL,                       NULL, 0, 0, NULL },
+    { NM_ITEM,  (STRPTR)"Quit",                    (STRPTR)"Q", 0, 0,
+                (APTR)MID_QUIT },
+    { NM_END,   NULL,                              NULL, 0, 0, NULL }
+};
 
 struct ESPrefsGui {
     Object *win;
@@ -620,7 +638,7 @@ static Object *es_build_window(struct ESPrefsGui *gui)
          */
         WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | IDCMP_GADGETDOWN |
                   IDCMP_REFRESHWINDOW | IDCMP_NEWSIZE | IDCMP_VANILLAKEY |
-                  IDCMP_IDCMPUPDATE,
+                  IDCMP_IDCMPUPDATE | IDCMP_MENUPICK,
         WA_Title, "EdgeSnap Preferences",
         WA_ScreenTitle, "EdgeSnap - by Michele Dipace",
         WA_Activate, TRUE,
@@ -629,6 +647,7 @@ static Object *es_build_window(struct ESPrefsGui *gui)
         WA_DepthGadget, TRUE,
         WA_SizeGadget, TRUE,
         WINDOW_Position, WPOS_CENTERSCREEN,
+        WINDOW_NewMenu, es_menu,
         WINDOW_Layout, VLayoutObject,
             LAYOUT_DeferLayout, TRUE,
             LAYOUT_SpaceOuter, TRUE,
@@ -776,6 +795,68 @@ static void es_store_offscreen(struct ESPrefsGui *gui, int permanent)
     }
 }
 
+/* ------------------------------------------------------- the menu */
+
+static void es_about(struct ESPrefsGui *gui)
+{
+    struct EasyStruct es;
+
+    es.es_StructSize = sizeof(es);
+    es.es_Flags = 0;
+    es.es_Title = (STRPTR)"About EdgeSnap Preferences";
+    es.es_TextFormat = (STRPTR)"EdgeSnap " ES_VERSION_LABEL " ("
+                       ES_VERSION_DATE ")\n"
+                       "(c) 2026 Michele Dipace, MIT licence\n\n"
+                       ESP_REPO_URL;
+    es.es_GadgetFormat = (STRPTR)"OK";
+    EasyRequestArgs(gui->window, &es, NULL, NULL);
+}
+
+/* The link, with a button that puts it on the clipboard. */
+static void es_support(struct ESPrefsGui *gui)
+{
+    struct EasyStruct es;
+
+    es.es_StructSize = sizeof(es);
+    es.es_Flags = 0;
+    es.es_Title = (STRPTR)"Support development";
+    es.es_TextFormat = (STRPTR)ESP_SUPPORT_TEXT "\n\n" ESP_SUPPORT_URL;
+    es.es_GadgetFormat = (STRPTR)"Copy link|Close";
+    if (EasyRequestArgs(gui->window, &es, NULL, NULL) == 1 &&
+        !esp_clip_text(ESP_SUPPORT_URL)) {
+        es.es_TextFormat = (STRPTR)"The link could not be put on the "
+                           "clipboard.";
+        es.es_GadgetFormat = (STRPTR)"OK";
+        EasyRequestArgs(gui->window, &es, NULL, NULL);
+    }
+}
+
+/* Every item picked in one go, as Intuition chains them. 0 to quit. */
+static int es_menu_pick(struct ESPrefsGui *gui, UWORD code)
+{
+    while (code != MENUNULL) {
+        struct MenuItem *item = ItemAddress(gui->window->MenuStrip, code);
+
+        if (item == NULL) {
+            break;
+        }
+        switch ((ULONG)GTMENUITEM_USERDATA(item)) {
+        case MID_ABOUT:
+            es_about(gui);
+            break;
+        case MID_SUPPORT:
+            es_support(gui);
+            break;
+        case MID_QUIT:
+            return 0;
+        default:
+            break;
+        }
+        code = item->NextSelect;
+    }
+    return 1;
+}
+
 /* A public port makes finding and signalling an existing instance one
  * indivisible operation. It is published before window construction, so
  * a second launch during startup is remembered by the port's signal. */
@@ -903,6 +984,12 @@ int main(int argc, char **argv)
             case WMHI_CLOSEWINDOW:
                 running = 0;
                 rc = RETURN_OK;
+                break;
+            case WMHI_MENUPICK:
+                if (!es_menu_pick(&gui, (UWORD)(result & WMHI_MENUMASK))) {
+                    running = 0;
+                    rc = RETURN_OK;
+                }
                 break;
             case WMHI_GADGETUP:
                 switch (result & WMHI_GADGETMASK) {
