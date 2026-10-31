@@ -15,6 +15,12 @@ design and roadmap. The long-term target is an upstream-quality
 commodity is the first client and reference implementation of that library,
 not the product boundary.
 
+<!-- patreon-support:start -->
+## Support development
+
+EdgeSnap remains free and open source. You can [support my development work on Patreon](https://www.patreon.com/c/kaffeine1) to help fund testing, documentation and time spent improving it. No subscription is required to use the software, and public code, releases and articles remain available to everyone.
+<!-- patreon-support:end -->
+
 ## Product direction
 
 EdgeSnap is being developed as shared window-management infrastructure for
