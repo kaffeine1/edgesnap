@@ -601,15 +601,20 @@ static void es_about(struct ESPrefsGui *gui)
                  NULL);
 }
 
-/* The link, with a button that puts it on the clipboard. */
+/* The two links, each with a button that puts it on the clipboard. */
 static void es_support(struct ESPrefsGui *gui)
 {
-    if (MUI_RequestA(gui->app, gui->win, 0,
-                     ES_REQ_TEXT("Support development"),
-                     ES_REQ_TEXT("_Copy link|C_lose"),
-                     ES_REQ_TEXT(ESP_SUPPORT_TEXT "\n\n" ESP_SUPPORT_URL),
-                     NULL) == 1 &&
-        !esp_clip_text(ESP_SUPPORT_URL)) {
+    const char *url = NULL;
+
+    switch (MUI_RequestA(gui->app, gui->win, 0,
+                         ES_REQ_TEXT("Support development"),
+                         ES_REQ_TEXT("Copy _Patreon link|Copy _Ko-fi link|"
+                                     "C_lose"),
+                         ES_REQ_TEXT(ESP_SUPPORT_BODY), NULL)) {
+    case 1: url = ESP_SUPPORT_URL; break;
+    case 2: url = ESP_KOFI_URL; break;
+    }
+    if (url != NULL && !esp_clip_text(url)) {
         MUI_RequestA(gui->app, gui->win, 0,
                      ES_REQ_TEXT("Support development"), ES_REQ_TEXT("_OK"),
                      ES_REQ_TEXT("The link could not be put on the clipboard."),

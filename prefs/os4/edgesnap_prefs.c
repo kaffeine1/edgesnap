@@ -812,18 +812,22 @@ static void es_about(struct ESPrefsGui *gui)
     EasyRequestArgs(gui->window, &es, NULL, NULL);
 }
 
-/* The link, with a button that puts it on the clipboard. */
+/* The two links, each with a button that puts it on the clipboard. */
 static void es_support(struct ESPrefsGui *gui)
 {
     struct EasyStruct es;
+    const char *url = NULL;
 
     es.es_StructSize = sizeof(es);
     es.es_Flags = 0;
     es.es_Title = (STRPTR)"Support development";
-    es.es_TextFormat = (STRPTR)ESP_SUPPORT_TEXT "\n\n" ESP_SUPPORT_URL;
-    es.es_GadgetFormat = (STRPTR)"Copy link|Close";
-    if (EasyRequestArgs(gui->window, &es, NULL, NULL) == 1 &&
-        !esp_clip_text(ESP_SUPPORT_URL)) {
+    es.es_TextFormat = (STRPTR)ESP_SUPPORT_BODY;
+    es.es_GadgetFormat = (STRPTR)"Copy Patreon link|Copy Ko-fi link|Close";
+    switch (EasyRequestArgs(gui->window, &es, NULL, NULL)) {
+    case 1: url = ESP_SUPPORT_URL; break;
+    case 2: url = ESP_KOFI_URL; break;
+    }
+    if (url != NULL && !esp_clip_text(url)) {
         es.es_TextFormat = (STRPTR)"The link could not be put on the "
                            "clipboard.";
         es.es_GadgetFormat = (STRPTR)"OK";

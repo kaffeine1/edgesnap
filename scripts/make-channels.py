@@ -92,10 +92,15 @@ URL = "https://github.com/kaffeine1/edgesnap"
 # and the donateurl: key that OS4Depot and The AROS Archives turn into a
 # Donate button (the same key, f_donateurl, in their web forms). Aminet
 # and MorphOS-Storage have no such field and get only the line. The
-# preferences editor carries the same link (prefs/support.h).
+# preferences editor carries the same links (prefs/support.h). Ko-fi,
+# for a one-time contribution, is only in the line: donateurl takes one
+# address, and that is Patreon.
 SUPPORT_URL = "https://www.patreon.com/c/kaffeine1"
 SUPPORT_TEXT = ("Support my work on Patreon. Contributions are voluntary; "
                 "no subscription is required to use this software.")
+KOFI_URL = "https://ko-fi.com/kaffeine1"
+KOFI_TEXT = ("If you prefer a one-time contribution, you can support my "
+             "work on Ko-fi.")
 
 # Aminet caps Short at 40 characters, and it must not name the file, the
 # version or the platform.
@@ -241,7 +246,10 @@ Source, issues and the design notes:
 
 %s
 %s
-""" % (URL, SUPPORT_TEXT, SUPPORT_URL)),
+
+%s
+%s
+""" % (URL, SUPPORT_TEXT, SUPPORT_URL, KOFI_TEXT, KOFI_URL)),
 ]
 
 
