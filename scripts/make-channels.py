@@ -92,9 +92,9 @@ URL = "https://github.com/kaffeine1/edgesnap"
 # and the donateurl: key that OS4Depot and The AROS Archives turn into a
 # Donate button (the same key, f_donateurl, in their web forms). Aminet
 # and MorphOS-Storage have no such field and get only the line. The
-# preferences editor carries the same links (prefs/support.h). Ko-fi,
-# for a one-time contribution, is only in the line: donateurl takes one
-# address, and that is Patreon.
+# preferences editor carries the same links (prefs/support.h). The
+# readme line names both; donateurl takes one address, and that is
+# Ko-fi, since a Donate button reads as a one-time contribution.
 SUPPORT_URL = "https://www.patreon.com/c/kaffeine1"
 SUPPORT_TEXT = ("Support my work on Patreon. Contributions are voluntary; "
                 "no subscription is required to use this software.")
@@ -312,7 +312,7 @@ def os4depot_readme():
         "submitter:Michele Dipace",
         "email:%s" % EMAIL,
         "url:%s" % URL,
-        "donateurl:%s" % SUPPORT_URL,
+        "donateurl:%s" % KOFI_URL,
         "category:utility/workbench",
         "requirements:AmigaOS 4.1",
         # Their enum has no MIT: Other is the honest slot, and the real
@@ -417,7 +417,7 @@ def arosarchives_readme():
         "submitter:Michele Dipace",
         "email:%s" % EMAIL,
         "url:%s" % URL,
-        "donateurl:%s" % SUPPORT_URL,
+        "donateurl:%s" % KOFI_URL,
         # Present in the public submit form checked on 2026-09-06.
         "category:utility/workbench",
         "requirements:AROS x86_64 ABIv11 (AROS One x64)",
@@ -458,7 +458,7 @@ def arosarchives_arm_readme():
         "submitter:Michele Dipace",
         "email:%s" % EMAIL,
         "url:%s" % URL,
-        "donateurl:%s" % SUPPORT_URL,
+        "donateurl:%s" % KOFI_URL,
         "category:utility/workbench",
         "requirements:AROS aarch64 (Raspberry Pi)",
         "license:Other",
@@ -494,7 +494,7 @@ def arosarchives_i386_readme():
         "submitter:Michele Dipace",
         "email:%s" % EMAIL,
         "url:%s" % URL,
-        "donateurl:%s" % SUPPORT_URL,
+        "donateurl:%s" % KOFI_URL,
         "category:utility/workbench",
         "requirements:AROS i386 ABI v0 (AROS One x86)",
         "license:Other",
