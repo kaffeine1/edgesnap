@@ -4,27 +4,33 @@
 **License:** MIT (see [LICENSE](LICENSE))
 
 Windows/macOS-style window snapping for AmigaOS 4.x, MorphOS and AROS
-(x86_64, aarch64 and i386): drag a window against a screen edge or corner to
-tile it to a half or quarter of the screen, with a divider to resize the
-tiled pair afterwards.
+(x86_64, aarch64 and i386). Drag a window by its title bar until the
+pointer touches a screen edge or corner: a frame shows where it will
+land, and letting go fills that half or quarter of the screen. Docks
+are kept clear, two windows side by side share a seam that resizes
+both, and hotkeys and an ARexx port do the same from the keyboard and
+from scripts.
 
 Written in C89. No system patches: a commodity input handler plus public
-Intuition calls only. See [docs/DESIGN.md](docs/DESIGN.md) for the full
-design and roadmap. The long-term target is an upstream-quality
-`edgesnap.library` that can be adopted by both operating systems; the
-commodity is the first client and reference implementation of that library,
-not the product boundary.
+Intuition calls only. The behaviour lives in `edgesnap.library`, and the
+commodity is its first client: any program can open the library and ask
+for the same things. I would like the library to be good enough for the
+maintainers of these systems to adopt; nobody has adopted it so far.
+
+![The preferences window on MorphOS: settings grouped into sections, the zone grid, docks and margins](docs/screenshots/prefs-morphos.jpg)
+
+*The preferences window on MorphOS (MUI), version 0.2. Since 0.5 it has
+two pages, Snapping and Hotkeys. On AmigaOS 4 it is ReAction, on AROS
+Zune, all built from one table of settings.*
 
 ## AmigaOS 3.x on the 68k
 
 The classic Amiga has its own repository,
 [EdgeSnap classic](https://github.com/kaffeine1/edgesnap-classic): the
-same engine and the same library, for AmigaOS 3.1 and later (it starts
-on 2.04) on any 68000 or later, with or without a graphics card, with
-preferences in GadTools. It follows this repository release by release,
-and its package is on Aminet as `util/cdity/edgesnap.m68k-amigaos.lha`.
-Reports about the 68k build go to
-[its issues](https://github.com/kaffeine1/edgesnap-classic/issues).
+same engine and library for AmigaOS 3.1 and later on any 68000 or
+later, with or without a graphics card, with preferences in GadTools.
+It follows this repository release by release, and its package is on
+Aminet as `util/cdity/edgesnap.m68k-amigaos.lha`.
 
 <!-- patreon-support:start -->
 ## Support development
@@ -34,448 +40,165 @@ EdgeSnap remains free and open source. You can [support my development work on P
 If you prefer a one-time contribution, you can [support my work on Ko-fi](https://ko-fi.com/kaffeine1).
 <!-- patreon-support:end -->
 
-## Product direction
+## What it does
 
-EdgeSnap is being developed as shared window-management infrastructure for
-MorphOS and AmigaOS 4.x, not as another hotkey-only window utility.
+- drag a window so the **pointer** touches an edge or a corner: the
+  frame previews the half, the quarter or the whole usable screen, and
+  letting go snaps the window there;
+- docks and panels, such as AmiDock and Ambient's panels, are detected
+  and never covered;
+- two windows side by side share their edge: press the seam and drag
+  it, and both are resized;
+- a snapped window dragged away from the edges gets its old size back,
+  under the pointer;
+- where windows may not leave the screen, pushing the mouse on against
+  the edge brings the frame up ("Push against an edge", `PUSHPX`, 0
+  turns it off);
+- hotkeys, each of which can be changed on the Hotkeys page of the
+  preferences: `ctrl alt` with the cursor keys for left, right,
+  maximize and restore, `ctrl alt c` for the window's own size in the
+  middle of the screen, `ctrl alt z` for a selector under the pointer,
+  nine cells that are the map of the screen;
+- an ARexx port, `EDGESNAP`: `SNAP`, `RESTORE`, `QUERY`, `SELECT`,
+  `PREFS`, `ENABLE`, `DISABLE`, `VERSION`, `HELP` and `QUIT`, on the
+  active window or on one named by a `TITLE` pattern;
+- it is a commodity: it starts with the system, and Exchange enables,
+  disables or removes it like any other;
+- a preferences window in `SYS:Prefs`, native on each system; the same
+  settings work as icon tooltypes, in `ENVARC:EdgeSnap.prefs` and on
+  the command line (`EdgeSnap ZONES=halves EDGEPX=24`).
 
-The product target is:
+## Installing
 
-- a small, documented public library with a conservative, versioned API;
-- one portable C89 engine for geometry, state, policies, and snap decisions;
-- native MorphOS and AmigaOS 4 backends that respect each system's ABI and
-  library conventions;
-- a commodity/UI client providing drag-to-edge interaction, live preview,
-  hotkeys, preferences, and Exchange integration;
-- third-party clients able to request snapping, query state, exclude windows,
-  and integrate the engine without copying its internals.
+The packages are on Aminet (`util/cdity`), OS4Depot, MorphOS-Storage,
+the AROS Archives and the
+[Releases](https://github.com/kaffeine1/edgesnap/releases) page:
+`EdgeSnap-<version>.lha` for AmigaOS 4 and MorphOS, and one archive for
+each AROS processor.
 
-Every implementation choice should move the project toward a library that
-could plausibly be reviewed and adopted by the maintainers of both systems.
-The project must not claim official adoption before that review happens; it
-must earn it through API quality, compatibility, documentation, and reliable
-target-system behavior.
+Unpack it and double-click Install. The installer recognises the
+system and asks before doing anything. It puts the library in `LIBS:`
+and the preferences in `SYS:Prefs`. On AmigaOS 4 and MorphOS the
+commodity goes to `C:` with one line in `S:User-Startup`; on AROS it
+goes to `SYS:WBStartup` with its icon. On AROS for the Raspberry Pi
+and on 32-bit AROS, whose Installer copies nothing, Install does the
+work itself.
 
-## Prior art
-
-Window snapping is not new on the Amiga, and the closest piece of
-prior art is **GoSnap**, a commodity for AmigaOS 3.1.4 and later that
-snaps a window dragged to an edge or a corner of the screen.
-
-**EdgeSnap is written for AmigaOS 4.x and MorphOS.** That is not a
-detail of packaging: these systems bring compositing, ReAction and MUI,
-docks and panels that must not be covered, screens of a size where
-tiling actually pays off, and a commodity and library model EdgeSnap
-leans on throughout. Aiming at them from the first line is what makes
-the dock awareness, the live preview and the two native preferences
-windows possible.
-
-**And the goal is not only interactive snapping.** The product boundary
-is `edgesnap.library`: a documented, versioned service that any program
-can call to have windows placed, to ask where a zone is, or to find and
-move the seam between two tiled windows. The commodity that ships with
-it is a client of that library like any other would be. A window
-utility ends at its own user interface; a shared service does not, and
-that is the bet EdgeSnap is making.
-
-Also worth naming for completeness: **ZapperNG** and **WinAction**,
-which arrange windows from hotkeys. EdgeSnap keeps hotkeys too, but its
-first gesture is the drag.
+Updating is installing again: the running copy is stopped and the new
+library takes over without a reboot. `EdgeSnap.guide` in the package
+explains the rest.
 
 ## Status
 
-![The preferences window on MorphOS: settings grouped into sections, the zone grid, docks and margins](docs/screenshots/prefs-morphos.jpg)
+**0.51 (2026-10-28)** is the current release, with `edgesnap.library`
+2.26. It is a beta, complete in what it does. I tested it on real
+MorphOS hardware (Power Mac G5, MorphOS 3.20), on a Raspberry Pi 400
+with AROS, and under emulation on AmigaOS 4.1 and AROS One 1.3 x86_64;
+the i386 build comes from the same sources. What each release changed is on the
+[Releases](https://github.com/kaffeine1/edgesnap/releases) page.
 
-*The MorphOS preferences window (MUI), version 0.2. The AmigaOS 4 window is the same sections in ReAction: both are generated from one settings table.*
+In this repository and not released yet:
 
-- **0.51 (2026-10-28):** how far the mouse must push a window held at
-  an edge before that counts as the edge is now a setting, "Push against
-  an edge" in the preferences (`PUSHPX`, 24 pixels as before), and 0
-  turns the push off. On AmigaOS 4 with edge resistance set in the GUI
-  preferences, the window rests at the edge for a while, and the push
-  used to snap it when it was only meant to lie against the edge; at 0
-  it snaps only once the pointer itself reaches the edge. This needs
-  `edgesnap.library` 2.26, in the package; with an older library the
-  commodity says so and keeps 24. On AROS, where a window is dragged
-  as an outline, the push never counted with off-screen moving turned
-  off in IControl, so a window taken from the middle of the screen did
-  not snap by drag; now it does. Checked on AmigaOS 4.1 under
-  emulation with edge resistance, on MorphOS on a Power Mac G5 and on
-  AROS on a Raspberry Pi 400, and in the preferences of AROS One 1.3
-  x86_64.
-- **0.5 (2026-10-25):** every hotkey can be changed on a new Hotkeys
-  page of the preferences, in the icon's tooltypes or as a Shell
-  argument, with an input description as Exchange writes it
-  (`HOTKEYLEFT=ctrl alt cursor_left`, or `none` or an empty field to
-  leave an action without a key); the keys as they come are the ones of
-  0.43, the four quarters get actions of their own (`HOTKEYTOPLEFT` and
-  so on) with no key until given one, and `CX_POPKEY` (also `POPKEY`)
-  and Exchange's Show button open the preferences. The preferences
-  window has two pages, Snapping and Hotkeys, with the width cycle
-  setting beside the side keys; it refuses a key the system does not
-  understand, or two actions on the same key, with a requester, while
-  the commodity skips such a key and says so in its output instead of
-  not starting, and saved keys take effect at once without a restart.
-  An ARexx port, `EDGESNAP`, takes `SNAP`, `RESTORE`, `QUERY` (`RESULT`:
-  where the window is snapped), `SELECT`, `PREFS`, `ENABLE`, `DISABLE`,
-  `VERSION`, `HELP` and `QUIT` on the active window or on another window
-  named by a `TITLE` AmigaDOS pattern (`rx "ADDRESS EDGESNAP 'SNAP
-  LEFT'"`), so a script, a dock button or a file manager can do what
-  the hotkeys do. `edgesnap.library` 2.25 brings corrections from a
-  review of 2.24, among them a window closed while the library waits
-  for it, a press beside a seam on AROS, and two cases of the old size
-  coming back on a drag away: a short pull of a maximised window (a few
-  pixels are now enough), and a window that followed the pointer during
-  the drag. Checked on real hardware on MorphOS 3.20 on a PowerMac G5
-  (with ARexx) and on a Raspberry Pi 400 with AROS aarch64, and under
-  emulation on AmigaOS 4.1, MorphOS and AROS One 1.3 x86_64; the i386
-  build comes from the same sources, and library 2.25 was tried on
-  AROS One x86 under emulation.
-- **0.43 (2026-10-20):** a snapped window dragged away by its title bar
-  and let go away from the edges gets back the size it had before the
-  snap, under the pointer, as on Windows; a box in the preferences,
-  "Old size when dragged away", turns it off. For tiling window
-  managers, `edgesnap.library` 2.24 lists the seams between the windows
-  of a layout group, each with a token that moves it, and a seam
-  between windows kept apart by a gap keeps the gap when dragged, with
-  all of the gap to grab it by. The four archives, AROS i386 included,
-  come out together. Checked on real MorphOS hardware, on a Raspberry
-  Pi 400 and under emulation on AmigaOS 4.1, MorphOS, AROS One 1.3 and
-  AROS One x86; on the Pi and under emulation by installing the package
-  over an earlier version.
-- **0.42 (2026-10-10):** an AROS build for the Raspberry Pi (aarch64),
-  in an archive of its own, tried on a Raspberry Pi 400; docks are
-  recognised in two more shapes, a short one standing along a side of
-  the screen and a panel kept behind the windows, as Ambient allows
-  (`edgesnap.library` 2.22 and 2.23); Install tells the two AROS
-  processors apart, and on the Raspberry Pi, or on any AROS whose own
-  Installer cannot copy files, installs EdgeSnap by itself. Checked on
-  real MorphOS hardware, on the Pi 400 and under emulation on AmigaOS
-  4.1 and AROS One 1.3, each time by installing the package over an
-  earlier installation.
-- **0.41 (2026-10-06):** a corner is now the corner itself and the top
-  edge the screen's own bar; the system's setting that lets a dragged
-  window go past the edge of the screen is in the preferences on all
-  three systems, and the first installation on MorphOS turns it on;
-  where it stays off, pushing on against the edge brings the frame up
-  under a real hand; the preferences program writes a setting left at
-  its default as a comment. `edgesnap.library` 2.21 adds gaps and
-  margins per layout group for tiling clients. Checked on real MorphOS
-  hardware and under emulation on AmigaOS 4.1 and AROS One 1.3, each
-  time by installing the package over an earlier version.
-- **0.4 (2026-09-26):** the middle of the screen and a selector under
-  the pointer (`ctrl alt c`, `ctrl alt z`), windows that glide into
-  place, the width cycle on a repeated side hotkey, a seam handle that
-  never shows through a window laid over the pair, and Carlo Spadoni's
-  icons on all three systems. `edgesnap.library` 2.17 adds client
-  roles, work areas and layout groups for tiling clients. Checked on
-  real MorphOS hardware and under emulation on AmigaOS 4.1 and AROS One
-  1.3, each time by installing the package over an earlier version.
-- **Phase 0 (spike): validated on BOTH targets**: AmigaOS 4 (QEMU,
-  2026-08-11) and real MorphOS hardware (2026-08-26): drag detection,
-  snapping and the outline preview all work, including the
-  MorphOS-specific CxCustom gate.
-- **AROS x86_64 (0.3):** `edgesnap.library` (generated
-  from `library/aros/edgesnap.conf` with AROS's genmodule), the
-  commodity as its client and the preferences on Zune run on AROS One
-  under emulation: drag and hotkey snapping, the preview frame and the
-  seams. A fresh AROS One 1.3 ABIv11 installation passed 40 snaps with
-  DualPNG icons, overlapping drawers and off-screen starting positions
-  (2026-09-06), with no persistent black area of at least 40 by 40 pixels.
-  The real-hardware report of black drawer areas remains open; this
-  result does not establish whether its cause is hardware or an old
-  preview still running. The client headers are in `include/aros/`.
-- **AROS aarch64 (0.42):** the same sources built with the aarch64-aros
-  toolchain for the native AROS on the Raspberry Pi. On a Raspberry Pi
-  400 the library, the commodity started from WBStartup, the
-  preferences and `esnaptest` all ran at the first build (2026-10-10).
-  The two compiler flags the platform asks for are explained in
-  `Makefile.aros-aarch64`. The Installer of that Pi image, AROS's own
-  43.3, copies nothing (`copyfiles`, `copylib` and `protect` are
-  unimplemented in it), so on aarch64 `Install`, a Shell script, does
-  the installation itself; it does the same on an AROS x86_64 that has
-  only that Installer, and on the Pi 400 it installed every file byte
-  for byte.
-- **AROS i386 (0.42, added 2026-10-15):** the 32-bit AROS with ABI v0,
-  as on AROS One x86, built on the Mac with the alt-abiv0 cross
-  toolchain and AROS One x86's SDK (`Makefile.aros-i386`). Built whole
-  at the first try; on AROS One x86 under emulation `esnaptest` ran to
-  the end, `Install` installed it by itself (the system's
-  `SYS:Utilities/Installer` is the one that copies nothing), and after a
-  reboot EdgeSnap was there and snapping. Its own archive,
-  `EdgeSnap-0.42-AROS-i386.lha`, joined 0.42 on its own; from 0.43 the
-  four archives go out together.
-- **Library 2.7:** the input handler reports the mouse's own travel
-  through `ESnap_FeedMotion`, so a pointer pinned by a window that may
-  not leave the screen (MorphOS as delivered) still reaches the zones
-  once it keeps pushing against the edge (2026-09-08).
-- **Library 2.5 and 2.6:** the calls a tiling client asked for first
-  (the windows as the library sees them, placement in an arbitrary
-  rectangle, a whole layout in one call) and a window identity that
-  survives address reuse, appended on all three systems and exercised
-  by `tools/esnaptest.c`, including the full native client on both PPC
-  systems (2026-09-06). See "2.5" in the design document.
-- **0.3 PPC regression pass:** installation over 0.2, drag previews,
-  hotkeys, maximize/restore, seam dragging, pair fill, live preferences
-  and startup passed on AmigaOS 4.1 and MorphOS 3.20 under emulation.
-  The narrow seam handle used to keep the pixels of a window that had
-  covered it, on AmigaOS 4 and MorphOS alike and back to 0.2. Fixed for
-  0.4: the handle now hears the damage and hands the strip back to the
-  windows underneath, which repaint it. Verified in both VMs and on
-  real MorphOS hardware (2026-09-09).
-  On AROS drivers where the screen cannot be read back reliably the
-  preview frame is drawn as a plain inversion. A tester on the NVIDIA
-  Nouveau driver saw thin traces of it left on the desktop after drags
-  (2026-09-07): the fallback wrote back what it had read from a driver
-  whose reads return garbage. Since this build the reads are probed with
-  a reversible double inversion before anything is written; confirmation
-  on that driver is still awaited.
-- **Phase 1 (portable core): done.** The validated spike behavior lives
-  as a portable, host-tested core: `core/engine.c` (drag/snap state
-  machine), `core/registry.c` (stale-resistant snap registry + restore),
-  `include/edgesnap_types.h` (zones, errors, capabilities). The draft
-  public contract is `include/edgesnap.h`.
-- **Phase 2 (reference commodity): ported.** `commodity/edgesnap_cx.c`
-  now runs entirely on the core: the frontend feeds window facts and
-  executes emitted actions, with zero snap logic of its own (one snap
-  path shared by drag and hotkeys, the road ESnap_SnapWindow() will
-  pave). Verified in-VM on OS4; the MorphOS binary builds from the same
-  source. **Preferences** are in: `ENV(ARC):EdgeSnap.prefs` plus Shell
-  arguments, parsed by the portable `core/config.c` (zones, edge/corner
-  sensitivity, preview, dock detection and margin, own margins, bypass
-  qualifier), and the native preferences windows (ReAction and MUI)
-  are built from the same table.
-- **Phase 4 (native integration): in progress.** The API surface now
-  lives in `library/edgesnap_body.c` behind a semaphore: snap, unsnap,
-  query, exclude, options, capabilities, plus the interactive path that
-  samples windows, runs the engine and performs the snap. The commodity
-  contributes only raw input facts and the drawing of the preview
-  frame, and gets a report back to log (a library never prints).
-  **The AmigaOS 4 library is real**: `library/os4/` builds
-  `edgesnap.library` (ELF, manager + "main" interfaces, no C runtime),
-  and `tools/esnaptest.c`, a client that knows nothing of EdgeSnap's
-  internals, opens it from LIBS: and drives the whole API, including
-  the error contract (a stale window answers ES_ERR_STALE, it does not
-  crash). The **MorphOS skeleton** (`library/morphos/`) is written and
-  builds (classic jump table, EmulLibEntry gates, `.fd` and
-  `ppcinline/` stubs) and is **runtime-validated on the MorphOS QEMU
-  VM**: the same third-party client opens it, runs the full sequence
-  and gets the documented errors for misuse. Both skeletons are proven
-  on their own system. **The commodity is now a client**: it opens
-  edgesnap.library rather than linking it, through a documented
-  frontend-integration group in the API (FeedInput / ResetInput /
-  IgnoreWindows / QueryScreenArea). Frontend and library are two
-  binaries, as in the finished product.
+- library 2.27: an exclusion, a layout group or a seam token no longer
+  passes to a window opened at the address of a closed one;
+- a Project menu in the preferences, with About... and Support
+  development....
 
-## The reference commodity
+## Prior art
 
-`commodity/edgesnap_cx.c` is the single-source commodity for both OSes,
-born as the phase 0 spike that validated the two load-bearing
-assumptions on real systems:
+On the Amiga the closest piece of prior art is **GoSnap**, a commodity
+for AmigaOS 3.1.4 and later that snaps a window dragged to an edge or
+a corner of the screen. **ZapperNG** and **WinAction** arrange windows
+from hotkeys. EdgeSnap has hotkeys too, but starts from the drag, and
+puts the behaviour in a library other programs can call.
 
-1. drag detection by correlating pointer movement with the active window's
-   position under `LockIBase()` (no IDCMP access to foreign windows, no
-   `SetFunction()` patches);
-2. `ChangeWindowBox()` on a foreign window right after drag release.
+## For programmers
 
-What the spike does today:
+`edgesnap.library` places windows, says where a zone is, and finds and
+moves the seam between two tiled windows. Since 2.10 it also serves
+tiling window managers: client roles, work areas, layout groups with
+gaps and margins, and the seams of a group named by tokens. The public
+header is [include/edgesnap.h](include/edgesnap.h); every call says
+from which revision it exists. Until 1.0 the interface is not frozen:
+calls are only appended, but names and arguments may still change.
 
-- drag a window's title bar so the **pointer** touches a screen edge or
-  corner: an outline frame previews where the window will land (four thin
-  borderless windows, no compositing needed); release: the window snaps
-  to half / quarter / usable-maximum;
-- the divider: when two windows end up side by side, a thin handle
-  appears on the seam: drag it and both resize, so half/half becomes
-  60/40 without touching either window's size gadget (library side
-  host-tested and proven in-VM; the drag itself awaits a hand on the
-  mouse);
-- dock awareness, macOS-style: AmiDock / Ambient panel strips are
-  detected and reserved, so snapped windows never cover the dock;
-- a **preferences window on each system**, installed in `SYS:Prefs/`
-  where the rest of the system's preferences live: ReAction on
-  AmigaOS 4, MUI on MorphOS, both built by walking the one table that
-  describes the settings, so neither can offer a value the file parser
-  would refuse. Save, Use and Cancel behave as they do everywhere else,
-  and EdgeSnap picks the change up while running;
-- the same settings from `ENV(ARC):EdgeSnap.prefs` or the command line,
-  same vocabulary either way
-  (`EdgeSnap ZONES=halves EDGEPX=24 BYPASSQUAL=alt`);
-  the startup banner echoes the settings in force;
-- hotkeys (no drag heuristics involved), with these defaults:
-  `ctrl alt cursor left/right/up` = snap left / right / maximize,
-  `ctrl alt cursor down` = restore pre-snap geometry,
-  `ctrl alt c` = the window's own size in the middle of the screen area,
-  `ctrl alt z` = a selector under the pointer, nine cells that are
-  the map of the screen, by mouse or cursor keys,
-  `ctrl alt d` = window dump, `ctrl alt f` = preview frame test.
-  I let each key be changed on the Hotkeys page of the preferences,
-  with a `HOTKEY...` setting or an icon tooltype, using input
-  descriptions as Exchange writes them. `none` or `off` disables a
-  key; an empty field does too. The four quarters (`HOTKEYTOPLEFT`,
-  `HOTKEYTOPRIGHT`, `HOTKEYBOTTOMLEFT`, `HOTKEYBOTTOMRIGHT`) have no
-  key until one is assigned. `CX_POPKEY` (also `POPKEY`) opens the
-  preferences, as Exchange's Show does, and has no key by default.
-  Asking again brings the open preferences window to the front;
-- an ARexx port, `EDGESNAP`: `SNAP`, `RESTORE`, `QUERY`, `SELECT`,
-  `PREFS`, `ENABLE`, `DISABLE`, `VERSION`, `HELP` and `QUIT`, on the
-  active window or on one named by a `TITLE` pattern, so a script, a
-  dock button or a file manager can do what the hotkeys do;
-- `EdgeSnap QUIT` stops a running instance from a Shell or a script,
-  which is how an update replaces itself without a reboot; launching it
-  twice by accident is simply refused, and the running one carries on;
-- prints every decision to stdout: run it from a Shell, watch it think.
+`esnaptest` ([tools/esnaptest.c](tools/esnaptest.c)), in each system's
+drawer of the package, is a small client that drives the whole API.
+[docs/DESIGN.md](docs/DESIGN.md) is the design: why a commodity and a
+library, the input-handler rule, what each system taught me, and the
+road to 1.0.
 
-## Reading guide
+## Building
 
-Suggested order for studying the code:
+- Host tests, with any C compiler: `make -f Makefile.host test`.
+- AmigaOS 4 and MorphOS: `scripts/build-os4.sh` and
+  `scripts/build-morphos.sh`, in the cross-compiler containers
+  (`colima start` first); the library, the preferences and the test
+  client have their own `build-os4lib.sh`, `build-os4prefs.sh` and so
+  on.
+- AROS: `scripts/build-aros.sh` (x86_64, on a hosted AROS build
+  machine, because a binary linked on the Mac does not start),
+  `build-aros-aarch64.sh` and `build-aros-i386.sh`.
+- `scripts/build-all.sh` rebuilds every lane from clean, and
+  `scripts/make-release.sh` checks the versions and packs the archives.
 
-1. [docs/DESIGN.md](docs/DESIGN.md): the whole architecture, why a
-   commodity + library, the input-handler rule, the roadmap, and the
-   spike findings so far.
-2. [core/zones.h](core/zones.h) / [core/zones.c](core/zones.c): the pure
-   C89 zone geometry, with [core/zones_test.c](core/zones_test.c) as its
-   executable specification.
-3. [commodity/edgesnap_cx.c](commodity/edgesnap_cx.c) top to bottom:
-   the sections mirror the architecture: library bases and the
-   OS4/MorphOS type differences; the shared handler/task state and the
-   CxCustom action (with the MorphOS 68k-ABI gate); the non-blocking
-   log; window snapshotting under LockIBase (dock-aware usable area);
-   the one shared snap path over the core registry; the preview
-   backends (MorphOS windows / OS4 strips over saved pixels / AROS
-   XOR toward the accent); the
-   core glue that feeds
-   ESEngine and executes its actions; the commodity plumbing in main().
-
-Key invariants to keep in mind while reading: the CxCustom action runs in
-input.device context and only bumps counters + Signal()s; every Intuition
-call lives in the main task; under LockIBase we only read, and a stored
-struct Window * is never used without re-validation via the screen lists.
+For a quick test in the AmigaOS 4 VM, `scripts/make-test-iso.sh` builds
+an ISO and `scripts/os4-cd.sh insert` puts it in the running VM's CD
+drive. The ISO has no protection bits, so a program copied from it
+needs `Protect +e`.
 
 ## Layout
 
 - `core/`: pure C89, zero Amiga dependencies, unit-tested on the host:
-  zone geometry, the drag/snap engine, the snap registry
-- `include/`: public headers: portable constants (edgesnap_types.h) and
-  the draft platform API contract (edgesnap.h)
-- `library/`: edgesnap.library's body: the one implementation behind
-  the public API (state, validation, snapping, the interactive path),
-  wrapped by the platform skeletons and linked by the commodity
-- `commodity/`: the reference commodity (OS4 + MorphOS from one
-  source): raw input facts in, preview frame drawn, nothing decided
-- `tools/`: `esnaptest`, a third-party client used to exercise the ABI
-- `Makefile.host` / `Makefile.os4` / `Makefile.morphos`: commodity and
-  host lanes; `Makefile.os4lib` builds edgesnap.library and
-  `Makefile.os4tool` the test client
-- `scripts/`: container build wrappers
+  zone geometry, the drag and snap engine, the snap registry, docks,
+  seams, configuration
+- `include/`: the public headers, with `aros/`, `interfaces/` and
+  `ppcinline/` for each system's callers
+- `library/edgesnap_body.c`: the one implementation behind the public
+  API; `library/os4`, `library/morphos` and `library/aros` wrap it as
+  each system's library
+- `commodity/edgesnap_cx.c`: the commodity, one source for every
+  system: input in, preview frame and seam drawn, nothing decided
+- `prefs/`: the preferences windows (`os4/` in ReAction, `morphos/` in
+  MUI and Zune) and what they share
+- `installer/`: `Install`, the Installer script for every system, and
+  `Install-aros`, the Shell script for the AROS systems without a
+  working Installer
+- `tools/`: `esnaptest`, and `settings_guide`, which writes the guide's
+  page of settings from the table in `core/config.c`
+- `packaging/EdgeSnap.guide.in`: the manual
+- `scripts/`: build, package, icons, channel readmes, test VMs
 
-## Installing it so it is simply always there
+## Platform notes
 
-EdgeSnap is a commodity: a program that stays resident. The user never
-starts it by hand: it is installed once and comes up with the system,
-like every other commodity. From the release volume:
-
-```text
-Execute Install-EdgeSnap
-```
-
-That puts `edgesnap.library` in `LIBS:`, the commodity in `C:`, and one
-line in `S:User-Startup`. From the next boot it is simply there:
-dragging a window to a screen edge snaps it, and Exchange is where it
-is enabled, disabled or removed.
-
-`S:User-Startup` rather than `SYS:WBStartup` is a deliberate choice:
-it needs no icon and works on installations that have no WBStartup
-drawer at all, which the OS4 test machine turned out to be. Users who
-prefer the Workbench route can drop `EdgeSnap` and `EdgeSnap.info`
-into `SYS:WBStartup` instead; the icon carries the settings as
-tooltypes, and the commodity reads them (and stays silent, since a
-Workbench start has no console).
-
-On AROS the installer takes the Workbench route itself: a `Run` from
-`S:User-Startup` opens a console window for the new process there and
-keeps it open, so the commodity and its icon go into `SYS:WBStartup`
-and Wanderer starts it at every boot.
-
-Verified on AmigaOS 4 in the VM: install, reboot, and the first drag
-snapped with nothing started by hand.
-
-## Build
-
-Host tests (any C compiler):
-
-```sh
-make -f Makefile.host test
-```
-
-AmigaOS 4 and MorphOS (need `colima start`; toolchains live in
-`../os4-cross` and `../morphos-cross`):
-
-```sh
-scripts/build-os4.sh
-scripts/build-morphos.sh
-```
-
-Outputs: `build/os4/EdgeSnap`, `build/morphos/EdgeSnap`.
-
-## Testing on the target systems
-
-QEMU AmigaOS 4 VM: build an ISO and hot-swap it into the running VM's
-CD drive, no network needed. The scripts default to the author's VM
-directory; point them elsewhere with `ES_OS4_VMDIR` (and
-`ES_MOS_VMDIR` for MorphOS):
-
-```sh
-scripts/make-test-iso.sh     # unique 16-char volume label each time
-scripts/os4-cd.sh insert     # newest ISO into the running VM
-scripts/os4-cd.sh eject
-```
-
-Then in an OS4 Shell (the ISO carries no Amiga protection bits, so the
-`Protect +e` is required):
-
-```text
-Copy ES_#?:EdgeSnap RAM:
-Protect RAM:EdgeSnap +e
-RAM:EdgeSnap
-```
-
-Real hardware: http.server + wget as usual, same `Protect +e` after.
-
-Try: drag windows to edges/corners, the hotkeys, Exchange (disable /
-enable / remove), Ctrl-C to quit. Things to observe and report back into
-the design doc:
-
-- does drag detection fire reliably? false positives with apps that move
-  their own windows?
-- after an edge-drop, does the snapped geometry stick, or does Intuition's
-  own drop handling overwrite it? (If it loses the race, the library phase
-  needs a deferred commit via timer.device.)
-- behavior with non-resizable windows, MUI windows, shells with size
-  increments.
+- The CxCustom input handler runs in the input.device context: it only
+  bumps counters and `Signal()`s the main task. All Intuition calls
+  happen in the main task. Under `LockIBase()` we only read; the lock is
+  dropped before any Intuition call, and a stored window pointer is
+  never used without checking it against the screen's window list.
+- MorphOS: commodities call a custom action through the 68k ABI, so the
+  handler sits behind an `EmulLibEntry` gate; `-noixemul` is mandatory;
+  the PPC stack is sized with `__stack`.
+- AmigaOS 4: built with `__USE_INLINE__` and explicit `GetInterface()`
+  for intuition and commodities.
+- AROS: the library is generated from `library/aros/edgesnap.conf` with
+  genmodule. On aarch64 it needs `-ffixed-x18 -fno-common`
+  (`Makefile.aros-aarch64` says why).
 
 ## Thanks
 
 - **Carlo Spadoni** drew the commodity and preferences icons, one set
-  for each system. His pictures are shipped as he drew them: the
-  scripts only add what a Workbench icon carries besides the picture,
-  the type, the stack and the tooltypes. `scripts/make-aros-icons.py`
-  does it for AROS (sources in `assets/aros/src`) and
-  `scripts/make-system-icons.py` for AmigaOS 4 and MorphOS (sources in
-  `assets/os4/src` and `assets/mos/src`).
+  for each system. His pictures are shipped as he drew them:
+  `scripts/make-aros-icons.py` and `scripts/make-system-icons.py` only
+  add the type, the stack and the tooltypes.
 - The testers on the AROSWorld forum found the black areas in Wanderer's
   drawers, the colour left along the seam and the traces of the preview
   frame on the NVIDIA Nouveau driver, each with a video or a log that
   made the cause findable.
 
-## Platform notes
+## Reports
 
-- The CxCustom input handler runs in the input.device context: it only
-  bumps counters and `Signal()`s the main task. All Intuition calls happen
-  in the main task. Under `LockIBase()` we only read; the lock is dropped
-  before any Intuition call.
-- MorphOS: commodities custom actions are called through the 68k ABI, so
-  the handler is wrapped in an `EmulLibEntry` gate; `-noixemul` is
-  mandatory; the PPC stack is sized via `__stack` (the shell `Stack`
-  command only sizes the 68k stack).
-- AmigaOS 4: built with `__USE_INLINE__` and explicit `GetInterface()` for
-  intuition and commodities.
+Problems go to
+[this repository's issues](https://github.com/kaffeine1/edgesnap/issues):
+please say the system, its version and what you did. For the 68k build,
+use [EdgeSnap classic's issues](https://github.com/kaffeine1/edgesnap-classic/issues).
