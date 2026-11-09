@@ -162,6 +162,7 @@ static void spike_pf_drop_now(void);    /* from the input handler */
  * RastPort in the middle, the format last.
  */
 #ifdef ES_PREVIEW_PIXELS
+#include <prefs/icontrol.h>    /* ICB_OPAQUEMOVE: is the frame carried off */
 #define ES_PF_FORMAT PIXF_A8R8G8B8
 #define ES_PF_READ(rp, x, y, buf, mod, w, h) \
     ReadPixelArray((rp), (ULONG)(x), (ULONG)(y), (buf), 0, 0, (ULONG)(mod), \
@@ -2786,6 +2787,80 @@ static ULONG g_seen_grabs;
  */
 static int g_drag_active;
 
+#ifdef ES_PREVIEW_PIXELS
+/*
+ * Would the frame be carried off by the window being dragged? It is
+ * painted into the screen's own pixels, and with "Drag window with
+ * contents" (IControl's opaque move) and no compositing, AmigaOS 4
+ * moves a window by copying its pixels on the screen, ours included:
+ * the strips that lay on the window travel with it and stay there as
+ * blue lines once the frame is gone (a Sam460 with a Radeon RX, and the
+ * VM with compositing turned off, 2026-11-09). A frame of real windows
+ * is no way out: windows opened during a drag only appear on release,
+ * with or without compositing. So in that one combination the frame is
+ * left out for the drag, and the snap works as ever. A composited
+ * screen keeps each window's pixels apart, and a drag by outline moves
+ * nothing until the release; both keep the frame.
+ */
+static int g_pf_carried;
+
+static int spike_pf_opaque_move(void)
+{
+    static UBYTE buf[16384];
+    static const char *const files[2] = {
+        "ENV:Sys/gui.prefs", "ENV:Sys/icontrol.prefs"
+    };
+    int f;
+
+    for (f = 0; f < 2; f++) {
+        BPTR fh = Open((STRPTR)files[f], MODE_OLDFILE);
+        LONG len, pos = 12;
+
+        if (fh == 0) {
+            continue;
+        }
+        len = Read(fh, buf, (LONG)sizeof(buf));
+        Close(fh);
+        while (pos + 8 <= len) {
+            ULONG size = ((ULONG)buf[pos + 4] << 24) |
+                         ((ULONG)buf[pos + 5] << 16) |
+                         ((ULONG)buf[pos + 6] << 8) | buf[pos + 7];
+
+            /* struct IControlPrefs: ic_Flags after four LONGs and two
+             * WORDs */
+            if (memcmp(buf + pos, "ICTL", 4) == 0 && size >= 24 &&
+                pos + 8 + 24 <= len) {
+                const UBYTE *p = buf + pos + 8 + 20;
+                ULONG flags = ((ULONG)p[0] << 24) | ((ULONG)p[1] << 16) |
+                              ((ULONG)p[2] << 8) | p[3];
+
+                return (flags & (1UL << ICB_OPAQUEMOVE)) != 0;
+            }
+            pos += 8 + (LONG)size + (LONG)(size & 1);
+        }
+    }
+    return 0;
+}
+
+static int spike_pf_carried_now(void)
+{
+    struct Screen *scr = LockPubScreen(NULL);
+    ULONG comp = 0;
+
+    if (scr == NULL) {
+        return 0;
+    }
+    /* V53: before it, no compositing to keep the pixels apart */
+    if (GetScreenAttr(scr, SA_Compositing, &comp, sizeof(comp)) == 0) {
+        comp = 0;
+    }
+    UnlockPubScreen(NULL, scr);
+    return comp == 0 && spike_pf_opaque_move();
+}
+#else
+#define g_pf_carried 0
+#endif
+
 static void spike_apply_report(const struct ESnapReport *r)
 {
     if (r->previewHide) {
@@ -2793,11 +2868,20 @@ static void spike_apply_report(const struct ESnapReport *r)
     }
     if (r->dragStarted) {
         spike_log("edgesnap: drag detected\n");
+#ifdef ES_PREVIEW_PIXELS
+        g_pf_carried = g_cfg.preview && spike_pf_carried_now();
+        if (g_pf_carried) {
+            spike_log("edgesnap: no frame for this drag: windows move "
+                      "with their contents and the screen is not "
+                      "composited\n");
+        }
+#endif
     }
     if (r->zoneChanged) {
         spike_log("edgesnap: zone -> %s\n", es_zone_name((int)r->zone));
     }
-    if (r->previewShow && g_cfg.preview && r->previewScreen != NULL) {
+    if (r->previewShow && g_cfg.preview && !g_pf_carried &&
+        r->previewScreen != NULL) {
         ESRect rect;
 
         rect.x = (int)r->previewRect.x;
