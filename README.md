@@ -90,19 +90,14 @@ explains the rest.
 
 ## Status
 
-**0.51 (2026-10-28)** is the current release, with `edgesnap.library`
-2.26. It is a beta, complete in what it does. I tested it on real
-MorphOS hardware (Power Mac G5, MorphOS 3.20), on a Raspberry Pi 400
-with AROS, and under emulation on AmigaOS 4.1 and AROS One 1.3 x86_64;
-the i386 build comes from the same sources. What each release changed is on the
+**0.52 (2026-11-09)** is the current release, with `edgesnap.library`
+2.27. It is a beta, complete in what it does. It fixes a freeze on
+AmigaOS 4 when one of two windows side by side was closed with its
+close gadget. I tested it on real MorphOS hardware (Power Mac G5,
+MorphOS 3.20) and under emulation on AmigaOS 4.1, MorphOS and AROS One
+1.3 x86_64; the aarch64 and i386 builds come from the same sources.
+What each release changed is on the
 [Releases](https://github.com/kaffeine1/edgesnap/releases) page.
-
-In this repository and not released yet:
-
-- library 2.27: an exclusion, a layout group or a seam token no longer
-  passes to a window opened at the address of a closed one;
-- a Project menu in the preferences, with About... and Support
-  development....
 
 ## Prior art
 

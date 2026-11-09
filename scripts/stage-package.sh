@@ -125,7 +125,7 @@ Short:        Tile windows by dragging them to an edge
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/cdity
-Version:      0.51 (beta)
+Version:      0.52 (beta)
 Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros; aarch64-aros; i386-aros
 License:      MIT
 
@@ -162,8 +162,17 @@ Installer cannot copy files, Install does the work itself after one
 question. Updating is installing again: no reboot needed, except that
 on the Raspberry Pi a new library takes over at the next boot.
 
-How far the mouse must push a window held at an edge before that
-counts as the edge is now a setting: "Push against an edge" on the
+On AmigaOS 4, closing one of two windows side by side with its close
+gadget, which sits beside the seam, could freeze the whole system:
+EdgeSnap asked Intuition to move the seam's handle in front of that
+window just as it was going. It no longer does. edgesnap.library 2.27
+also tells apart a window opened where one was just closed, so an
+exclusion, a layout group or a seam no longer passes to the new
+window. The preferences have a Project menu with About... and Support
+development....
+
+Since 0.51, how far the mouse must push a window held at an edge before
+that counts as the edge is a setting: "Push against an edge" on the
 Snapping page of the preferences (PUSHPX, 24 pixels as before). On
 AmigaOS 4 with edge resistance set in the GUI preferences, the window
 rests at the edge for a while, and the push used to snap it when you

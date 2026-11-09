@@ -72,15 +72,16 @@ AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 # The AROS Archives give a replaced file a NEW id: the 0.4 upload replaced
 # 3393 and became 3441, the 0.41 one replaced 3441 and became 3464, the
 # 0.42 one replaced 3464 and became 3497, the 0.43 one replaced 3497 and
-# became 3532, the 0.5 one replaced 3532 and became 3549. Before each
+# became 3532, the 0.5 one replaced 3532 and became 3549, the 0.51 one
+# replaced 3549 and became 3564. Before each
 # release, read them off the entries' pages (the fileid= in their links)
 # and set them here.
-AROS_ARCHIVES_FILEID = 3549  # x86_64, 0.5, checked 2026-10-28
+AROS_ARCHIVES_FILEID = 3564  # x86_64, 0.51, checked 2026-11-09
 # The aarch64 entry, new in 0.42, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_ARM = 3550  # aarch64, 0.5, checked 2026-10-28
+AROS_ARCHIVES_FILEID_ARM = 3565  # aarch64, 0.51, checked 2026-11-09
 AROS_REPLACES_ARCHIVES_ARM = "utility/workbench/edgesnap.aarch64-aros.lha"
 # The i386 entry, added to 0.42 on 2026-10-15, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_I386 = 3551  # i386, 0.5, checked 2026-10-28
+AROS_ARCHIVES_FILEID_I386 = 3566  # i386, 0.51, checked 2026-11-09
 AROS_REPLACES_ARCHIVES_I386 = "utility/workbench/edgesnap.i386-aros.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
@@ -114,8 +115,17 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-How far the mouse must push a window held at an edge before that
-counts as the edge is now a setting: "Push against an edge" on the
+On AmigaOS 4, closing one of two windows side by side with its close
+gadget, which sits beside the seam, could freeze the whole system:
+EdgeSnap asked Intuition to move the seam's handle in front of that
+window just as it was going. It no longer does. edgesnap.library 2.27
+also tells apart a window opened where one was just closed, so an
+exclusion, a layout group or a seam no longer passes to the new
+window. The preferences have a Project menu with About... and Support
+development....
+
+Since 0.51, how far the mouse must push a window held at an edge before
+that counts as the edge is a setting: "Push against an edge" on the
 Snapping page of the preferences (PUSHPX, 24 pixels as before). On
 AmigaOS 4 with edge resistance set in the GUI preferences, the window
 rests at the edge for a while, and the push used to snap it when you
@@ -128,7 +138,7 @@ push never counted with off-screen moving turned off in IControl, so a
 window taken from the middle of the screen did not snap by drag; now
 it does.
 
-Version 0.5, a few days earlier, made every hotkey changeable on a
+Version 0.5 made every hotkey changeable on a
 Hotkeys page of the preferences and added an ARexx port, EDGESNAP, so
 a script, a dock button or a file manager can do what the hotkeys do.
 Both are under USING IT below.
@@ -147,17 +157,10 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. I checked the new setting under emulation
-on AmigaOS 4.1 with edge resistance, and in the preferences of MorphOS
-and AROS One 1.3 x86_64. Version 0.5, on which it builds, I checked on
-real hardware on MorphOS 3.20 on a PowerMac G5 (with ARexx) and on a
-Raspberry Pi 400 with AROS aarch64, and under emulation on AmigaOS 4.1,
-MorphOS and AROS One 1.3 x86_64; the i386 build comes from the same
-sources. On one AROS installation
-Wanderer's drawers can show black areas after a snap; another program
-that moves windows does the same there, and the AROS developers are
-looking into how Wanderer redraws a drawer. All of it remains worth
-reporting.
+Version %s is still a beta. I checked the fix for the freeze on real
+hardware on MorphOS 3.20 on a PowerMac G5, and under emulation on
+AmigaOS 4.1, MorphOS and AROS One 1.3 x86_64; the aarch64 and i386
+builds come from the same sources.
 
 The interface below 1.0 is not frozen. If EdgeSnap covers your dock,
 misses your seam or draws something odd, please include the system,
@@ -596,12 +599,11 @@ screen edge or corner and it glides into that half or quarter of the
 screen. Two windows side by side share a seam that can be dragged to
 re-balance them. It installs as a commodity that starts with the system.
 MIT licence."""
-MORPHOS_STORAGE_NEW = ("New in %s: how far pushing a window held at an "
-                       "edge counts as reaching it is a setting, \"Push "
-                       "against an edge\" in the preferences, and 0 turns "
-                       "that off; 0.5 made every hotkey changeable and "
-                       "added the ARexx port EDGESNAP (library %s)."
-                       % (VERSION, LIBRARY_VERSION))
+MORPHOS_STORAGE_NEW = ("New in %s: closing one of two windows side by "
+                       "side with its close gadget no longer risks "
+                       "freezing the system, and the preferences have a "
+                       "Project menu with About and Support development "
+                       "(library %s)." % (VERSION, LIBRARY_VERSION))
 
 
 def arosarchives_script():
