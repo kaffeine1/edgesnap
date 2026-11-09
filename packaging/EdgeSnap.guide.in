@@ -4,8 +4,8 @@
 @(c) "Copyright (c) 2026 Michele Dipace, MIT licence"
 @wordwrap
 
-@node MAIN "EdgeSnap 0.52 beta"
-@{b}EdgeSnap 0.52 beta@{ub}
+@node MAIN "EdgeSnap 0.53 beta"
+@{b}EdgeSnap 0.53 beta@{ub}
 Window snapping for AmigaOS 4.x, MorphOS and AROS (x86_64, aarch64, i386)
 by Michele Dipace <michele.dipace@kaffeine.net>
 
@@ -159,6 +159,15 @@ in EdgeSnap's preferences, in the section named after the system, or
 the system's own editor: IControl, or GUI on AmigaOS 4. On MorphOS,
 IControl's key, Control as delivered, turns the setting round while it
 is held.
+
+@{b}No frame on AmigaOS 4 without compositing@{ub}
+On AmigaOS 4, when the GUI preferences move windows with their
+contents rather than as an outline, and compositing is off, a
+moving window carries along whatever is painted on the screen under
+it, the frame included, and leaves it on the window as lines. In that
+one combination EdgeSnap shows no frame: the window still snaps where
+you let it go. Turn compositing on, or drag windows as an outline, and
+the frame comes back.
 
 @{b}The seam@{ub}
 Where two snapped windows meet there is nothing to see until the
@@ -331,7 +340,7 @@ everywhere.
 @{b}For programmers@{ub}
 
 @{b}Two version numbers, and why@{ub}
-EdgeSnap is 0.52: a beta, complete in what it does and tested on real
+EdgeSnap is 0.53: a beta, complete in what it does and tested on real
 MorphOS hardware, on a Raspberry Pi 400 with AROS, and on AmigaOS 4,
 MorphOS, AROS x86_64 and AROS i386 under emulation.
 @{b}edgesnap.library@{ub} says %%LIBVER%%, and that is not a mistake: a

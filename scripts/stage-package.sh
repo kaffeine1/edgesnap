@@ -125,7 +125,7 @@ Short:        Tile windows by dragging them to an edge
 Author:       michele.dipace@kaffeine.net (Michele Dipace)
 Uploader:     michele.dipace@kaffeine.net (Michele Dipace)
 Type:         util/cdity
-Version:      0.52 (beta)
+Version:      0.53 (beta)
 Architecture: ppc-amigaos >= 4.0.0; ppc-morphos; x86_64-aros; aarch64-aros; i386-aros
 License:      MIT
 
@@ -162,7 +162,14 @@ Installer cannot copy files, Install does the work itself after one
 question. Updating is installing again: no reboot needed, except that
 on the Raspberry Pi a new library takes over at the next boot.
 
-On AmigaOS 4, closing one of two windows side by side with its close
+On AmigaOS 4 without compositing and with windows dragged with their
+contents, the preview frame left horizontal lines on the windows,
+until a window was unreadable: the window carried the frame's pixels
+along as it moved. In that combination EdgeSnap now shows no frame,
+and the window still snaps. With compositing on, or windows dragged
+as an outline, the frame is there as before.
+
+Since 0.52, on AmigaOS 4, closing one of two windows side by side with its close
 gadget, which sits beside the seam, could freeze the whole system:
 EdgeSnap asked Intuition to move the seam's handle in front of that
 window just as it was going. It no longer does. edgesnap.library 2.27
