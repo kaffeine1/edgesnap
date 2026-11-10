@@ -73,15 +73,16 @@ AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 # 3393 and became 3441, the 0.41 one replaced 3441 and became 3464, the
 # 0.42 one replaced 3464 and became 3497, the 0.43 one replaced 3497 and
 # became 3532, the 0.5 one replaced 3532 and became 3549, the 0.51 one
-# replaced 3549 and became 3564. Before each
+# replaced 3549 and became 3564, the 0.52 one replaced 3564 and became
+# 3602. Before each
 # release, read them off the entries' pages (the fileid= in their links)
 # and set them here.
-AROS_ARCHIVES_FILEID = 3564  # x86_64, 0.51, checked 2026-11-09
+AROS_ARCHIVES_FILEID = 3602  # x86_64, 0.52, checked 2026-11-10
 # The aarch64 entry, new in 0.42, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_ARM = 3565  # aarch64, 0.51, checked 2026-11-09
+AROS_ARCHIVES_FILEID_ARM = 3603  # aarch64, 0.52, checked 2026-11-10
 AROS_REPLACES_ARCHIVES_ARM = "utility/workbench/edgesnap.aarch64-aros.lha"
 # The i386 entry, added to 0.42 on 2026-10-15, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_I386 = 3566  # i386, 0.51, checked 2026-11-09
+AROS_ARCHIVES_FILEID_I386 = 3604  # i386, 0.52, checked 2026-11-10
 AROS_REPLACES_ARCHIVES_I386 = "utility/workbench/edgesnap.i386-aros.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
@@ -115,13 +116,22 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-On AmigaOS 4, closing one of two windows side by side with its close
-gadget, which sits beside the seam, could freeze the whole system:
-EdgeSnap asked Intuition to move the seam's handle in front of that
-window just as it was going. It no longer does. edgesnap.library 2.27
-also tells apart a window opened where one was just closed, so an
-exclusion, a layout group or a seam no longer passes to the new
-window. The preferences have a Project menu with About... and Support
+On AmigaOS 4 without compositing and with windows dragged with their
+contents, the preview frame left horizontal lines on the windows, more
+with every drag, until a window could not be read: the moving window
+carried the frame's pixels along. In that combination EdgeSnap now
+shows no frame, and the window still snaps; the preferences window
+says so under "Show the preview frame". With compositing on, or
+windows dragged as an outline, the frame is there as before. Nothing
+else changes, and nothing at all on MorphOS and AROS.
+
+Since 0.52, on AmigaOS 4, closing one of two windows side by side with
+its close gadget, which sits beside the seam, no longer freezes the
+system: EdgeSnap asked Intuition to move the seam's handle in front of
+that window just as it was going. edgesnap.library 2.27 also tells
+apart a window opened where one was just closed, so an exclusion, a
+layout group or a seam no longer passes to the new window. The
+preferences have a Project menu with About... and Support
 development....
 
 Since 0.51, how far the mouse must push a window held at an edge before
@@ -157,10 +167,13 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. I checked the fix for the freeze on real
-hardware on MorphOS 3.20 on a PowerMac G5, and under emulation on
-AmigaOS 4.1, MorphOS and AROS One 1.3 x86_64; the aarch64 and i386
-builds come from the same sources.
+Version %s is still a beta. The fix for the lines was checked on the
+machine that showed them, a Sam460ex with a Radeon RX, and under
+emulation on AmigaOS 4.1 Final Edition Update 3, where I also installed
+this package on a clean system. The MorphOS and AROS programs differ
+from the 0.52 ones only in their version number; I tested those on a
+PowerMac G5 with MorphOS 3.20 and on AROS One 1.3, and did not test
+them again.
 
 The interface below 1.0 is not frozen. If EdgeSnap covers your dock,
 misses your seam or draws something odd, please include the system,
@@ -599,11 +612,10 @@ screen edge or corner and it glides into that half or quarter of the
 screen. Two windows side by side share a seam that can be dragged to
 re-balance them. It installs as a commodity that starts with the system.
 MIT licence."""
-MORPHOS_STORAGE_NEW = ("New in %s: closing one of two windows side by "
-                       "side with its close gadget no longer risks "
-                       "freezing the system, and the preferences have a "
-                       "Project menu with About and Support development "
-                       "(library %s)." % (VERSION, LIBRARY_VERSION))
+MORPHOS_STORAGE_NEW = ("New in %s: a fix for AmigaOS 4 only, where "
+                       "the preview frame left lines on the windows "
+                       "without compositing. Nothing changes on MorphOS "
+                       "since 0.52 (library %s)." % (VERSION, LIBRARY_VERSION))
 
 
 def arosarchives_script():
