@@ -45,6 +45,16 @@ int eso_query(int archived);
 int eso_set(int on, int live, int archived);
 
 /*
+ * AmigaOS 4 only: are windows dragged with their contents, as the GUI
+ * preferences in effect say? 1 yes, 0 no or not known. The commodity
+ * reads the same files the same way (spike_pf_opaque_move): with this
+ * and a screen that is not composited it draws no preview frame, and
+ * the preferences window says so. 0 on MorphOS and AROS, whose frames
+ * are not painted into the screen's pixels.
+ */
+int eso_opaque_move(void);
+
+/*
  * The Shell form, for both preferences programs and the installer:
  *   EdgeSnapPrefs OFFSCREEN QUERY|ON|OFF
  * eso_is_command() says whether the arguments are that; eso_command()

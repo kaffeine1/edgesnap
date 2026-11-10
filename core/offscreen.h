@@ -105,4 +105,16 @@ int es_os4_offscreen(const unsigned char *buf, int len);
  */
 int es_os4_set_offscreen(unsigned char *buf, int len, int on);
 
+/*
+ * 1 when windows are dragged with their contents, 0 when as an
+ * outline, as the file's ICTL chunk says (ICB_OPAQUEMOVE, bit 7 of
+ * ic_Flags); -1 when the buffer has no such chunk. With that and no
+ * compositing a moving window carries the preview frame's pixels
+ * along, so the commodity leaves the frame out, and the preferences
+ * window says so beside the setting.
+ */
+#define ES_OS4_OPAQUE_MOVE 0x80UL
+
+int es_os4_opaque_move(const unsigned char *buf, int len);
+
 #endif /* EDGESNAP_OFFSCREEN_H */

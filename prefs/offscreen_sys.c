@@ -202,6 +202,24 @@ int eso_set(int on, int live, int archived)
     return ok;
 }
 
+int eso_opaque_move(void)
+{
+#if defined(__amigaos4__)
+    /* the GUI editor's file, then the one IControl left on an older
+     * system, as the commodity does */
+    int len = eso_read(ESO_ENV, eso_buf);
+    int on = len < 0 ? -1 : es_os4_opaque_move(eso_buf, len);
+
+    if (on < 0) {
+        len = eso_read("ENV:Sys/icontrol.prefs", eso_buf);
+        on = len < 0 ? -1 : es_os4_opaque_move(eso_buf, len);
+    }
+    return on == 1;
+#else
+    return 0;
+#endif
+}
+
 /* ------------------------------------------------------ from a Shell */
 
 /* Case-blind comparison for the Shell words. */

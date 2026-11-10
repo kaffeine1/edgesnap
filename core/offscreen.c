@@ -397,3 +397,13 @@ int es_os4_set_offscreen(unsigned char *buf, int len, int on)
     }
     return changed;
 }
+
+int es_os4_opaque_move(const unsigned char *buf, int len)
+{
+    int at = es_ictl_flags_at(buf, len);
+
+    if (at < 0) {
+        return -1;
+    }
+    return (es_be32(buf + at) & ES_OS4_OPAQUE_MOVE) != 0;
+}

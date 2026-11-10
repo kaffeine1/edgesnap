@@ -161,13 +161,14 @@ IControl's key, Control as delivered, turns the setting round while it
 is held.
 
 @{b}No frame on AmigaOS 4 without compositing@{ub}
-On AmigaOS 4, when the GUI preferences move windows with their
-contents rather than as an outline, and compositing is off, a
+On AmigaOS 4, when the GUI preferences have "Drag window with
+contents" ticked (Controls) and compositing is off (Effects), a
 moving window carries along whatever is painted on the screen under
 it, the frame included, and leaves it on the window as lines. In that
 one combination EdgeSnap shows no frame: the window still snaps where
 you let it go. Turn compositing on, or drag windows as an outline, and
-the frame comes back.
+the frame comes back. While it is so, the preferences window says it
+under "Show the preview frame".
 
 @{b}The seam@{ub}
 Where two snapped windows meet there is nothing to see until the

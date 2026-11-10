@@ -472,6 +472,27 @@ static void test_os4(void)
     CHECK(es_os4_offscreen(os4_file, 4000) == -1);  /* GUI chunk cut short */
 }
 
+/* Dragged with their contents or as an outline: bit 7 of ic_Flags, in
+ * the ICTL chunk after the GUI one. The two values are the ones a
+ * Sam460 with AmigaOS 4.1 Final Edition Update 3 had, with the box
+ * ticked and not (2026-11-10). */
+static void test_os4_opaque(void)
+{
+    int len = os4_build(1);
+    int flags = 26 + 8 + 7484 + 8 + 20;
+
+    CHECK(len == 7568);
+    os4_file[flags] = 0x00; os4_file[flags + 1] = 0x00;
+    os4_file[flags + 2] = 0x01; os4_file[flags + 3] = 0x9E;
+    CHECK(es_os4_opaque_move(os4_file, len) == 1);
+    os4_file[flags + 3] = 0x1E;
+    CHECK(es_os4_opaque_move(os4_file, len) == 0);
+    CHECK(es_os4_opaque_move(os4_file, len - 30) == -1);  /* ICTL cut short */
+    os4_file[0] = 'X';
+    CHECK(es_os4_opaque_move(os4_file, len) == -1);
+    CHECK(es_os4_opaque_move(0, 0) == -1);
+}
+
 int main(void)
 {
     test_mos_factory();
@@ -482,6 +503,7 @@ int main(void)
     test_aros_one();
     test_aros_shapes();
     test_os4();
+    test_os4_opaque();
 
     if (g_failures == 0) {
         printf("offscreen_test: all tests passed\n");

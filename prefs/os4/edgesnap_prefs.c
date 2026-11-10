@@ -436,6 +436,50 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
     }
 }
 
+/*
+ * The preview frame is painted into the screen's pixels. When windows
+ * are dragged with their contents and the screen is not composited, a
+ * moving window carries those pixels along, so the commodity draws no
+ * frame for the drag (spike_pf_carried_now in edgesnap_cx.c). Someone
+ * who ticked the box and sees no frame would take that for a fault:
+ * in that one combination a line under the box says why. It is read
+ * once, as the window opens.
+ */
+static int es_frame_carried(void)
+{
+    struct Screen *scr = LockPubScreen(NULL);
+    ULONG comp = 0;
+
+    if (scr == NULL) {
+        return 0;
+    }
+    if (GetScreenAttr(scr, SA_Compositing, &comp, sizeof(comp)) == 0) {
+        comp = 0;
+    }
+    UnlockPubScreen(NULL, scr);
+    return comp == 0 && eso_opaque_move();
+}
+
+static Object *es_frame_note(void)
+{
+    return HLayoutObject,
+        LAYOUT_SpaceOuter, FALSE,
+        LAYOUT_AddImage, LabelObject,
+            LABEL_Text, "Not shown now: windows are dragged with\n"
+                        "their contents and compositing is off.",
+        LabelEnd,
+    End;
+}
+
+static int es_key_is(const char *a, const char *b)
+{
+    while (*a != '\0' && *a == *b) {
+        a++;
+        b++;
+    }
+    return *a == *b;
+}
+
 /* A page contains its contiguous run of groups from the table. */
 static Object *es_settings_page(struct ESPrefsGui *gui, const ESSetting *t,
                                  int first, int last)
@@ -471,6 +515,10 @@ static Object *es_settings_page(struct ESPrefsGui *gui, const ESSetting *t,
         }
         es_add_child(sect, gui->field[i], es_label(gui, i, t[i].label),
                      t[i].kind == ES_SET_BOOL ? 2 : 0);
+        if (es_key_is(t[i].key, "PREVIEW") && es_frame_carried()) {
+            /* without it the window is only missing a line of help */
+            es_add_child(sect, es_frame_note(), NULL, 0);
+        }
     }
     /* The system's setting follows the first page's last group. */
     if (first == 0) {

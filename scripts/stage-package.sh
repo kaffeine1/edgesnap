@@ -166,8 +166,9 @@ On AmigaOS 4 without compositing and with windows dragged with their
 contents, the preview frame left horizontal lines on the windows,
 until a window was unreadable: the window carried the frame's pixels
 along as it moved. In that combination EdgeSnap now shows no frame,
-and the window still snaps. With compositing on, or windows dragged
-as an outline, the frame is there as before.
+and the window still snaps; the preferences window says so under
+"Show the preview frame". With compositing on, or windows dragged as
+an outline, the frame is there as before.
 
 Since 0.52, on AmigaOS 4, closing one of two windows side by side with its close
 gadget, which sits beside the seam, could freeze the whole system:
