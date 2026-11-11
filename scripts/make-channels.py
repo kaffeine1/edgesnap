@@ -74,15 +74,15 @@ AROS_REPLACES_ARCHIVES = "utility/workbench/edgesnap.x86_64-aros-v11.lha"
 # 0.42 one replaced 3464 and became 3497, the 0.43 one replaced 3497 and
 # became 3532, the 0.5 one replaced 3532 and became 3549, the 0.51 one
 # replaced 3549 and became 3564, the 0.52 one replaced 3564 and became
-# 3602. Before each
+# 3602, the 0.53 one replaced 3602 and became 3610. Before each
 # release, read them off the entries' pages (the fileid= in their links)
 # and set them here.
-AROS_ARCHIVES_FILEID = 3602  # x86_64, 0.52, checked 2026-11-10
+AROS_ARCHIVES_FILEID = 3610  # x86_64, 0.53, checked 2026-11-11
 # The aarch64 entry, new in 0.42, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_ARM = 3603  # aarch64, 0.52, checked 2026-11-10
+AROS_ARCHIVES_FILEID_ARM = 3611  # aarch64, 0.53, checked 2026-11-11
 AROS_REPLACES_ARCHIVES_ARM = "utility/workbench/edgesnap.aarch64-aros.lha"
 # The i386 entry, added to 0.42 on 2026-10-15, replaced from 0.43 on.
-AROS_ARCHIVES_FILEID_I386 = 3604  # i386, 0.52, checked 2026-11-10
+AROS_ARCHIVES_FILEID_I386 = 3612  # i386, 0.53, checked 2026-11-11
 AROS_REPLACES_ARCHIVES_I386 = "utility/workbench/edgesnap.i386-aros.lha"
 OUT = os.path.join(ROOT, "build", "channels")
 
