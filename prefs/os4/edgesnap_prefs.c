@@ -520,8 +520,8 @@ static Object *es_settings_page(struct ESPrefsGui *gui, const ESSetting *t,
             es_add_child(sect, es_frame_note(), NULL, 0);
         }
     }
-    /* The system's setting follows the first page's last group. */
-    if (first == 0) {
+    /* The system's setting follows the Screen page's last group. */
+    if (es_same_group(t[first].page, "Screen")) {
         sect = VLayoutObject,
             LAYOUT_SpaceOuter, TRUE,
             LAYOUT_BevelStyle, BVS_GROUP,

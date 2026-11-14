@@ -496,7 +496,11 @@ static Object *es_offscreen_group(struct ESPrefsGui *gui)
 }
 
 /* Both page titles and their sections come from the settings table.
- * The system's off-screen setting follows the first page's last group. */
+ * The system's off-screen setting follows the Screen page's last group.
+ * Docks and margins have that page to themselves since 0.54: with them
+ * on the Snapping page the window was taller than a 768-line screen
+ * with a larger font, and Save, Use and Cancel fell off the bottom
+ * (a Pi-Top at 1366x768, 2026-11-13). */
 static Object *es_settings_pages(struct ESPrefsGui *gui)
 {
     struct TagItem tags[ES_MAX_SETTINGS + 2];
@@ -511,23 +515,25 @@ static Object *es_settings_pages(struct ESPrefsGui *gui)
     tags[n++].ti_Data = (ESTagData)gui->page_name;
     for (i = 1; i <= count; i++) {
         Object *body;
+        int screen;
 
         if (i < count && es_same_group(t[i].page, t[first].page)) {
             continue;
         }
+        screen = es_same_group(t[first].page, "Screen");
         body = es_settings_group(gui, t, first, i - 1);
         /*
          * Every page ends in empty space that takes what is left over:
          * the pages share the height of the tallest, and a shorter one
          * without it was centred, with a gap above its first section
-         * (seen on MorphOS, 2026-10-20). The first page also carries the
-         * system's own setting, after its last group.
+         * (seen on MorphOS, 2026-10-20). The Screen page also carries
+         * the system's own setting, after its last group.
          */
         if (body != NULL) {
             body = MUI_NewObject(MUIC_Group,
                                  MUIA_Group_Child, (ESTagData)body,
-                                 first == 0 ? MUIA_Group_Child : TAG_IGNORE,
-                                     first == 0 ?
+                                 screen ? MUIA_Group_Child : TAG_IGNORE,
+                                     screen ?
                                      (ESTagData)es_offscreen_group(gui) : 0,
                                  MUIA_Group_Child,
                                      (ESTagData)MUI_NewObject(MUIC_Rectangle,

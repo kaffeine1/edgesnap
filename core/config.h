@@ -111,7 +111,7 @@ typedef enum ESSettingKind {
 
 typedef struct ESSetting {
     const char *key;              /* EDGEPX - as written in the file  */
-    const char *page;             /* Snapping or Hotkeys              */
+    const char *page;             /* Snapping, Screen or Hotkeys      */
     /*
      * The section this setting belongs to. Entries sharing a group sit
      * next to each other in the table, so a window builds its frames by

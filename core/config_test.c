@@ -569,6 +569,10 @@ static void test_prefs_table_and_round_trip(void)
         if (strcmp(t[i].key, "CYCLESIZES") == 0) {
             CHECK(strcmp(t[i].page, "Hotkeys") == 0);
             CHECK(strcmp(t[i].group, "Snap the active window") == 0);
+        } else if (strcmp(t[i].group, "Docks") == 0 ||
+                   strcmp(t[i].group, "Margins") == 0) {
+            /* their own page, so the window fits a 768-line screen */
+            CHECK(strcmp(t[i].page, "Screen") == 0);
         } else if (t[i].kind != ES_SET_KEY) {
             CHECK(strcmp(t[i].page, "Snapping") == 0);
         }

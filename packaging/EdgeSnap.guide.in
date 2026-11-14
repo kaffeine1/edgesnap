@@ -155,10 +155,10 @@ AmigaOS 4 let a window go past the edge as delivered, unless someone
 turned it off.
 
 To change it either way, use the box @{b}Windows can move off-screen@{ub}
-in EdgeSnap's preferences, in the section named after the system, or
-the system's own editor: IControl, or GUI on AmigaOS 4. On MorphOS,
-IControl's key, Control as delivered, turns the setting round while it
-is held.
+on the Screen page of EdgeSnap's preferences, in the section named
+after the system, or the system's own editor: IControl, or GUI on
+AmigaOS 4. On MorphOS, IControl's key, Control as delivered, turns the
+setting round while it is held.
 
 @{b}No frame on AmigaOS 4 without compositing@{ub}
 On AmigaOS 4, when the GUI preferences have "Drag window with
@@ -231,11 +231,12 @@ Save; EdgeSnap follows immediately, without being restarted. Use
 applies the change for this session only, Cancel changes nothing.
 
 The window offers every setting listed under
-@{" Settings " link SETTINGS}, on the Snapping and Hotkeys pages.
-A refused hotkey leaves the window open for correction. It also has the
-system's own "Windows can move off-screen", in a section named after
-the system (see above): it is kept in the system's preferences, not in
-EdgeSnap's, and the system follows it at once.
+@{" Settings " link SETTINGS}, on the Snapping, Screen and Hotkeys
+pages. A refused hotkey leaves the window open for correction. The
+Screen page also has the system's own "Windows can move off-screen",
+in a section named after the system (see above): it is kept in the
+system's preferences, not in EdgeSnap's, and the system follows it at
+once.
 
 @{b}Getting past the zones@{ub}
 If you want to drag a window right up to the edge without it
