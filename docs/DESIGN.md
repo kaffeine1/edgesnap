@@ -1350,6 +1350,19 @@ size; pushed on past the resistance it went over the edge, the pointer
 reached it and it snapped. The preferences window shows the setting
 and writes it.
 
+**0.54, a third page (2026-11-14).** On a Pi-Top with piAROS at
+1366x768 the Snapping page ran past the bottom of the screen, and Save,
+Use and Cancel with it; in QEMU at 1024x768 the 0.53 window was 768
+pixels tall and cut off. Docks, Margins and the system's off-screen
+switch move to a page of their own, Screen, which every frontend builds
+from the same table: a row's page decides where it goes, and the
+system section follows the page named Screen. The window is between a
+quarter and a third shorter: on AROS One at 1024x768 it went from 735
+to 547 pixels, in QEMU with piAROS from 768 to 619, on AmigaOS 4 from
+786 to 569 and on MorphOS from 838 to 630, with Hotkeys now the tallest
+page. MUI remembers a window's size by its id, so a MorphOS window
+opened before at the old size keeps it until it is made smaller.
+
 ### 2.5 - what a tiling client asked for first
 
 The first client beyond the commodity announced itself on 2026-09-04: a

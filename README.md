@@ -19,9 +19,9 @@ maintainers of these systems to adopt; nobody has adopted it so far.
 
 ![The preferences window on MorphOS: settings grouped into sections, the zone grid, docks and margins](docs/screenshots/prefs-morphos.jpg)
 
-*The preferences window on MorphOS (MUI), version 0.2. Since 0.5 it has
-two pages, Snapping and Hotkeys. On AmigaOS 4 it is ReAction, on AROS
-Zune, all built from one table of settings.*
+*The preferences window on MorphOS (MUI), version 0.2. Since 0.54 it has
+three pages, Snapping, Screen and Hotkeys. On AmigaOS 4 it is ReAction,
+on AROS Zune, all built from one table of settings.*
 
 ## AmigaOS 3.x on the 68k
 
@@ -90,15 +90,14 @@ explains the rest.
 
 ## Status
 
-**0.53 (2026-11-10)** is the current release, with `edgesnap.library`
-2.27. It is a beta, complete in what it does. It fixes the lines the
-preview frame left on windows on AmigaOS 4 without compositing: with
-windows dragged with their contents the frame is now left out, and the
-preferences say so. The fix was checked on the Sam460ex that showed
-the lines and under emulation on AmigaOS 4.1; the MorphOS and AROS
-programs are the 0.52 ones with a new version number, tested then on
-real MorphOS hardware (Power Mac G5, MorphOS 3.20) and on AROS One 1.3
-x86_64.
+**0.54 (2026-11-17)** is the current release, with `edgesnap.library`
+2.27. It is a beta, complete in what it does. The preferences window
+gets a third page, Screen, for docks, margins and the system's
+off-screen setting, so it fits a screen 768 pixels high: before, Save,
+Use and Cancel could end up below the edge. I tested the new window on
+a Raspberry Pi 400 with AROS and under emulation on piAROS 0.4.2,
+AmigaOS 4.1, MorphOS 3.21, AROS One 1.3 x86_64 and AROS One x86.
+Snapping works as in 0.53.
 What each release changed is on the
 [Releases](https://github.com/kaffeine1/edgesnap/releases) page.
 

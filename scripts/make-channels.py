@@ -116,14 +116,21 @@ SHORT = "Tile windows by dragging them to an edge"
 
 BODY = [
     ("WHAT IS NEW IN %s" % VERSION, """
-On AmigaOS 4 without compositing and with windows dragged with their
-contents, the preview frame left horizontal lines on the windows, more
-with every drag, until a window could not be read: the moving window
-carried the frame's pixels along. In that combination EdgeSnap now
-shows no frame, and the window still snaps; the preferences window
-says so under "Show the preview frame". With compositing on, or
-windows dragged as an outline, the frame is there as before. Nothing
-else changes, and nothing at all on MorphOS and AROS.
+On a screen 768 pixels high, the preferences window could run past the
+bottom edge, with Save, Use and Cancel out of reach: a user saw it on
+a Pi-Top with piAROS at 1366x768. Docks, Margins and the system's
+"Windows can move off-screen" now have a page of their own, Screen,
+beside Snapping and Hotkeys, and the window is between a quarter and a
+third shorter on every system. Nothing else changes: snapping works as
+in 0.53, and edgesnap.library stays 2.27.
+
+Since 0.53, on AmigaOS 4 without compositing and with windows dragged
+with their contents, EdgeSnap shows no preview frame, and the window
+still snaps: the moving window carried the frame's pixels along, and
+the frame left horizontal lines on the windows until a window could
+not be read. The preferences window says so under "Show the preview
+frame". With compositing on, or windows dragged as an outline, the
+frame is there as before.
 
 Since 0.52, on AmigaOS 4, closing one of two windows side by side with
 its close gadget, which sits beside the seam, no longer freezes the
@@ -167,13 +174,12 @@ It installs as a commodity that starts with the system, so the behaviour
 is simply there. Nobody has to launch anything.
 """),
     ("THIS IS A BETA", """
-Version %s is still a beta. The fix for the lines was checked on the
-machine that showed them, a Sam460ex with a Radeon RX, and under
-emulation on AmigaOS 4.1 Final Edition Update 3, where I also installed
-this package on a clean system. The MorphOS and AROS programs differ
-from the 0.52 ones only in their version number; I tested those on a
-PowerMac G5 with MorphOS 3.20 and on AROS One 1.3, and did not test
-them again.
+Version %s is still a beta. I tested the new preferences window on a
+Raspberry Pi 400 with AROS, and under emulation on piAROS 0.4.2, where
+the old window was cut off at 1024x768, on AmigaOS 4.1 Final Edition
+Update 3, MorphOS 3.21, AROS One 1.3 x86_64 and AROS One x86. The
+snapping itself is the 0.53 code, tested then on a Sam460ex, a
+PowerMac G5 with MorphOS 3.20 and AROS One 1.3.
 
 The interface below 1.0 is not frozen. If EdgeSnap covers your dock,
 misses your seam or draws something odd, please include the system,
@@ -276,8 +282,10 @@ def wrap(text, width=76):
         if lines[0].lstrip().startswith("-"):
             out.extend(lines)          # a hand-laid list: leave it alone
         else:
+            # No breaks at hyphens: "Pi-Top" must not become "Pi-" and "Top".
             out.extend(textwrap.wrap(" ".join(l.strip() for l in lines),
-                                     width=width) or [""])
+                                     width=width,
+                                     break_on_hyphens=False) or [""])
         out.append("")
     return out
 
@@ -612,10 +620,13 @@ screen edge or corner and it glides into that half or quarter of the
 screen. Two windows side by side share a seam that can be dragged to
 re-balance them. It installs as a commodity that starts with the system.
 MIT licence."""
-MORPHOS_STORAGE_NEW = ("New in %s: a fix for AmigaOS 4 only, where "
-                       "the preview frame left lines on the windows "
-                       "without compositing. Nothing changes on MorphOS "
-                       "since 0.52 (library %s)." % (VERSION, LIBRARY_VERSION))
+MORPHOS_STORAGE_NEW = ("New in %s: the preferences window has a third "
+                       "page, Screen, for docks, margins and MorphOS's own "
+                       "\"Windows can move off-screen\", so it is about a "
+                       "quarter shorter (838 to 630 pixels at 1920x1080 "
+                       "under emulation) and fits smaller screens. "
+                       "Snapping works as in 0.52 (library %s)."
+                       % (VERSION, LIBRARY_VERSION))
 
 
 def arosarchives_script():
