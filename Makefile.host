@@ -12,7 +12,11 @@ TESTS := $(BUILD)/zones_test $(BUILD)/engine_test $(BUILD)/registry_test \
          $(BUILD)/panels_test $(BUILD)/config_test $(BUILD)/gutter_test \
          $(BUILD)/offscreen_test $(BUILD)/divtokens_test
 
-.PHONY: all test clean
+.PHONY: all test clean autodoc
+
+# docs/autodocs/edgesnap.doc, from the autodoc blocks of include/edgesnap.h
+autodoc:
+	python3 scripts/make-autodoc.py
 
 all: $(TESTS)
 
@@ -57,6 +61,7 @@ test: $(TESTS)
 	./$(BUILD)/gutter_test
 	./$(BUILD)/offscreen_test
 	./$(BUILD)/divtokens_test
+	python3 scripts/make-autodoc.py --check
 
 clean:
 	rm -f $(TESTS)

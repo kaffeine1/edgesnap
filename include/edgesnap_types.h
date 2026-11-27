@@ -168,17 +168,9 @@
 
 /*
  * Every public entry point returns ES_OK or one negative ES_ERR_* code.
- * The distinctions matter and are part of the contract:
- *
- *   UNSUPPORTED - the capability does not exist here (system/screen);
- *                 asking again will not help until the environment changes.
- *   REJECTED    - the capability exists but policy refuses this window
- *                 (excluded, unsnappable, backdrop/borderless...).
- *   STALE       - the referenced window no longer exists. Never fatal:
- *                 callers must expect windows to vanish at any moment.
- *   NOT_SNAPPED - no snap state is recorded for this window.
- *   CHANGED     - recorded state was dropped because the window's geometry
- *                 was changed independently (by the app or the user).
+ * The distinctions matter and are part of the contract; what each code
+ * means is in the --background-- autodoc of edgesnap.library, which
+ * include/edgesnap.h holds (docs/autodocs/edgesnap.doc).
  */
 #define ES_OK                0
 #define ES_ERR_UNSUPPORTED  (-1)

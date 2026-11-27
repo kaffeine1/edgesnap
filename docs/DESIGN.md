@@ -1560,6 +1560,18 @@ port of 0.5 belongs to the commodity, and `esnaptest` is a test tool.
 The tiling window manager announced in issue #2 would be the first
 program outside this repository to use the library.
 
+*The autodocs are in (2026-11-27). Every function has an autodoc
+block in `include/edgesnap.h`, the one place its contract was already
+written, and four topics hold what is common to several: the rules
+for every call (`--background--`), frontends, dividers and divider
+tokens. `scripts/make-autodoc.py` lays them out as
+`docs/autodocs/edgesnap.doc`, with each SYNOPSIS built from the `.fd`
+and the prototype, so the registers in the document are the ones in
+the jump table. `make -f Makefile.host test` fails when a function has
+no block, when the AROS and MorphOS `.fd` disagree, or when the `.doc`
+is behind the header. Still to come: the worked example and the
+archive itself.*
+
 Only then the maintainers, with three options open rather than one:
 ship the package as an official commodity, take the portable core into
 Intuition behind a system frontend, or adopt the library and its API.
