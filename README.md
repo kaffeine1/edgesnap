@@ -17,11 +17,12 @@ commodity is its first client: any program can open the library and ask
 for the same things. I would like the library to be good enough for the
 maintainers of these systems to adopt; nobody has adopted it so far.
 
-![The preferences window on MorphOS: settings grouped into sections, the zone grid, docks and margins](docs/screenshots/prefs-morphos.jpg)
+![The preferences window on MorphOS: the Snapping page with zones, sensitivity and the preview frame, beside the Screen and Hotkeys tabs](docs/screenshots/prefs-morphos.png)
 
-*The preferences window on MorphOS (MUI), version 0.2. Since 0.54 it has
-three pages, Snapping, Screen and Hotkeys. On AmigaOS 4 it is ReAction,
-on AROS Zune, all built from one table of settings.*
+*The preferences window of 0.54 on MorphOS (MUI), on a Power Mac G5.
+Docks, margins and the system's off-screen setting are on the Screen
+page, the keys on Hotkeys. On AmigaOS 4 it is ReAction, on AROS Zune,
+all built from one table of settings.*
 
 ## AmigaOS 3.x on the 68k
 
