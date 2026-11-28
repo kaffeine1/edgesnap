@@ -127,15 +127,35 @@
  *       issue 2). A seam between two windows of a group keeps the
  *       group's gap, as the header has said since 2.20, and where the
  *       gap is wider than the thickness asked for, its strip is the
- *       gap. The divider
- *       calls of 2.2 and 2.3 look at the front screen only, take in a
- *       group's windows placed without a registry slot, never report or
- *       move a seam of a group locked for the caller, and MoveDividerAt
- *       follows the seam QueryDividerAt last reported to the same task,
- *       or the one it last moved. A snapped window dragged by its title
- *       bar and let go outside every zone gets its size from before the
- *       snap back, under the pointer; ES_OPT_DragRestore (default TRUE)
- *       turns it off. No vector.
+ *       gap. The divider calls of 2.2 and 2.3 look at the front screen
+ *       only, take in a group's windows placed without a registry slot,
+ *       never report or move a seam of a group locked for the caller,
+ *       and MoveDividerAt follows the seam QueryDividerAt last reported
+ *       to the same task, or the one it last moved. A snapped window
+ *       dragged by its title bar and let go outside every zone gets its
+ *       size from before the snap back, under the pointer;
+ *       ES_OPT_DragRestore (default TRUE) turns it off. No vector.
+ *   2.25 - the fixes from the review of 2.24. Coordinates outside the
+ *       signed 16 bits Intuition keeps are refused or clamped:
+ *       QueryDividerAt reports no seam, MoveDivider and MoveDividerAt
+ *       clamp the position, PlaceWindow answers BAD_ARGS and
+ *       PlaceWindowsA does so per entry. A STALE answer to
+ *       MoveDividerAt keeps the task's record, marked gone, so the
+ *       calls that follow it answer STALE too. A drag that restores the
+ *       old size is judged by the pointer's travel, and is recognised
+ *       from the window following the pointer as well as from a press
+ *       on the bar. A window that joins a group before its placement
+ *       has landed gets the transit interval. No vector changes.
+ *   2.26 - the push against an edge is a setting: ES_OPT_PushPx, 0 to
+ *       200, 24 as before; 0 turns it off, and a window then snaps only
+ *       when the pointer reaches the edge (GitHub issue 3). An older
+ *       library ignores the tag and keeps 24. No vector changes.
+ *   2.27 - exclusions belong to the window, by the identity of 2.6, and
+ *       the engine retires the identity of every window that is gone
+ *       with each input it is fed, so a window opened at a closed
+ *       one's address no longer inherits its exclusion, group or seam
+ *       token. A window opened in its place with nothing in between
+ *       still can. No vector changes.
  */
 #define ES_API_VERSION       2
 /* A client that uses a vector appended after 2.2 must check that the
