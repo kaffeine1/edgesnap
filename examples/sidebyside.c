@@ -37,13 +37,17 @@
 
 #include <stdio.h>
 
+#include <string.h>
+
 #include <exec/types.h>
 #include <exec/libraries.h>
 #include <intuition/intuition.h>
+#include <intuition/screens.h>
 #include <utility/tagitem.h>
 
 #include <proto/exec.h>
 #include <proto/intuition.h>
+#include <proto/graphics.h>
 
 #include "edgesnap.h"
 
@@ -60,17 +64,21 @@ static struct EdgeSnapIFace *IEdgeSnap;
 #define ES(fn) IEdgeSnap->fn
 struct Library *IntuitionBase;
 struct IntuitionIFace *IIntuition;
+struct Library *GfxBase;
+struct GraphicsIFace *IGraphics;
 #elif defined(__AROS__)
 #define EDGESNAP_NOLIBINLINE 1
 #include <proto/edgesnap.h>
 struct Library *EdgeSnapBase;
 #define ES(fn) fn
 struct IntuitionBase *IntuitionBase;
+struct GfxBase *GfxBase;
 #else
 #include <ppcinline/edgesnap.h>
 struct Library *EdgeSnapBase;
 #define ES(fn) fn
 struct IntuitionBase *IntuitionBase;
+struct GfxBase *GfxBase;
 #endif
 
 /*
@@ -110,10 +118,16 @@ static int opened_libraries(void)
     if (IntuitionBase == NULL) {
         return 0;
     }
+    GfxBase = (void *)OpenLibrary((STRPTR)"graphics.library", 39);
+    if (GfxBase == NULL) {
+        return 0;
+    }
 #if defined(__amigaos4__)
     IIntuition = (struct IntuitionIFace *)
         GetInterface(IntuitionBase, "main", 1, NULL);
-    if (IIntuition == NULL) {
+    IGraphics = (struct GraphicsIFace *)
+        GetInterface(GfxBase, "main", 1, NULL);
+    if (IIntuition == NULL || IGraphics == NULL) {
         return 0;
     }
 #endif
@@ -146,12 +160,18 @@ static void close_libraries(void)
     if (IEdgeSnap != NULL) {
         DropInterface((struct Interface *)IEdgeSnap);
     }
+    if (IGraphics != NULL) {
+        DropInterface((struct Interface *)IGraphics);
+    }
     if (IIntuition != NULL) {
         DropInterface((struct Interface *)IIntuition);
     }
 #endif
     if (EdgeSnapBase != NULL) {
         CloseLibrary(EdgeSnapBase);
+    }
+    if (GfxBase != NULL) {
+        CloseLibrary((struct Library *)GfxBase);
     }
     if (IntuitionBase != NULL) {
         CloseLibrary((struct Library *)IntuitionBase);
@@ -179,10 +199,56 @@ static struct Window *open_window(struct Screen *scr, const char *title,
                           WA_Flags, WFLG_DRAGBAR | WFLG_DEPTHGADGET |
                                     WFLG_CLOSEGADGET | WFLG_SIZEGADGET |
                                     WFLG_SMART_REFRESH |
-                                    WFLG_NOCAREREFRESH |
                                     (activate ? WFLG_ACTIVATE : 0),
-                          WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_RAWKEY,
+                          WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_RAWKEY |
+                                    IDCMP_NEWSIZE | IDCMP_REFRESHWINDOW,
                           TAG_DONE);
+}
+
+/*
+ * A window the library resizes is the program's to repaint, like any
+ * other: the part a window gains is not painted by the system on every
+ * one of them (on AROS it stayed black). So the inside is cleared in
+ * the screen's background colour and the keys are written in it, on
+ * every new size and every refresh.
+ */
+static void draw(struct Window *w)
+{
+    static const char text[] =
+        "Cursor left/right: move the seam.  Esc: quit.";
+    struct RastPort *rp = w->RPort;
+    struct DrawInfo *dri = GetScreenDrawInfo(w->WScreen);
+    LONG x0 = w->BorderLeft;
+    LONG y0 = w->BorderTop;
+    LONG x1 = w->Width - w->BorderRight - 1;
+    LONG y1 = w->Height - w->BorderBottom - 1;
+    ULONG bg = 0;
+    ULONG fg = 1;
+    ULONG fit;
+    struct TextExtent te;
+
+    if (dri != NULL) {
+        bg = dri->dri_Pens[BACKGROUNDPEN];
+        fg = dri->dri_Pens[TEXTPEN];
+        FreeScreenDrawInfo(w->WScreen, dri);
+    }
+    if (x1 < x0 || y1 < y0) {
+        return;
+    }
+    SetAPen(rp, bg);
+    RectFill(rp, x0, y0, x1, y1);
+    if (x1 - x0 < 32) {
+        return;
+    }
+    /* as much of the line as fits */
+    fit = TextFit(rp, (STRPTR)text, strlen(text), &te, NULL, 1,
+                  x1 - x0 - 15, y1 - y0 + 1);
+    if (fit > 0 && y0 + 8 + rp->TxHeight <= y1) {
+        SetAPen(rp, fg);
+        SetDrMd(rp, JAM1);
+        Move(rp, x0 + 8, y0 + 8 + rp->TxBaseline);
+        Text(rp, (STRPTR)text, fit);
+    }
 }
 
 /*
@@ -321,6 +387,8 @@ int main(void)
         printf("sidebyside: the windows would not open\n");
         goto out;
     }
+    draw(left);
+    draw(right);
 
     /*
      * 3. A group: these two windows, in this work area, owned by this
@@ -373,7 +441,13 @@ int main(void)
                 UWORD code = msg->Code;
 
                 ReplyMsg((struct Message *)msg);
-                if (cls == IDCMP_CLOSEWINDOW ||
+                if (cls == IDCMP_NEWSIZE) {
+                    draw(w);
+                } else if (cls == IDCMP_REFRESHWINDOW) {
+                    BeginRefresh(w);
+                    draw(w);
+                    EndRefresh(w, TRUE);
+                } else if (cls == IDCMP_CLOSEWINDOW ||
                     (cls == IDCMP_RAWKEY && code == RAW_ESC)) {
                     done = 1;
                 } else if (cls == IDCMP_RAWKEY && code == RAW_LEFT) {
