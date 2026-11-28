@@ -44,7 +44,8 @@ MODULE_LIBS ?= -Wl,--start-group -llibinit -lautoinit -lamiga -laros -lgcc -Wl,-
 
 .PHONY: all clean
 
-all: $(OUT)/edgesnap.library $(OUT)/EdgeSnap $(OUT)/EdgeSnapPrefs $(OUT)/esnaptest
+all: $(OUT)/edgesnap.library $(OUT)/EdgeSnap $(OUT)/EdgeSnapPrefs $(OUT)/esnaptest \
+     $(OUT)/sidebyside
 
 define aros-link
 	mkdir -p "$(dir $@)"
@@ -75,6 +76,10 @@ $(OUT)/EdgeSnap: $(CX_SRC) $(GEN)/edgesnap_start.c
 
 $(OUT)/esnaptest: tools/esnaptest.c $(GEN)/edgesnap_start.c
 	$(call aros-link,-I"$(GEN)/include",tools/esnaptest.c)
+
+# The worked example of the SDK, a small layout client.
+$(OUT)/sidebyside: examples/sidebyside.c $(GEN)/edgesnap_start.c
+	$(call aros-link,-I"$(GEN)/include",examples/sidebyside.c)
 
 # MUI_NewObject/MUI_MakeObject are link-time wrappers in libmui.a.
 $(OUT)/EdgeSnapPrefs: LDLIBS := -lmui $(LDLIBS)

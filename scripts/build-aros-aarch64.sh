@@ -5,7 +5,7 @@
 # Build the AROS aarch64 lane (native Raspberry Pi) on the hosted bench
 # and bring the binaries back, as scripts/build-aros.sh does for x86_64.
 #   scripts/build-aros-aarch64.sh   -> build/aros-aarch64/{edgesnap.library,
-#                                      EdgeSnap,EdgeSnapPrefs,esnaptest}
+#                                      EdgeSnap,EdgeSnapPrefs,esnaptest,sidebyside}
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -25,7 +25,7 @@ $SSH "$HOST" "cd '$WS' && make -f Makefile.aros-aarch64 \
     AROS_TOOLCHAIN='$TC' GENMODULE='$GENMODULE' clean all"
 
 mkdir -p "$ROOT/build/aros-aarch64"
-for b in edgesnap.library EdgeSnap EdgeSnapPrefs esnaptest; do
+for b in edgesnap.library EdgeSnap EdgeSnapPrefs esnaptest sidebyside; do
     scp -q -i "$KEY" "$HOST:$WS/build/aros-aarch64/$b" "$ROOT/build/aros-aarch64/$b"
     file "$ROOT/build/aros-aarch64/$b" | grep -q "ARM aarch64.*AROS Research Operating System" \
         || { echo "ERROR: $b is not an AROS aarch64 binary" >&2; exit 1; }
