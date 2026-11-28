@@ -31,6 +31,8 @@
  * system's file is not one this program understands.
  */
 
+#include <string.h>
+
 #include <exec/types.h>
 #include <libraries/mui.h>
 #include <libraries/commodities.h>
@@ -40,10 +42,13 @@
 #include <libraries/iffparse.h> /* MAKE_ID, for the window's saved id   */
 #include <libraries/gadtools.h> /* struct NewMenu, for the Project menu */
 
+#include <workbench/workbench.h>   /* struct DiskObject, the window's icon */
+
 #include <proto/exec.h>
 #include <proto/dos.h>
 #include <proto/intuition.h>
 #include <proto/muimaster.h>
+#include <proto/icon.h>
 
 #include "config.h"
 #include "prefs_io.h"
@@ -119,6 +124,7 @@ struct ESPrefsGui {
      * where "Edge distance: - Distance from..." would read badly. The
      * style guide wants one here, so the window adds it. */
     char label[ES_MAX_SETTINGS][40];
+    int scroll;             /* a short screen: the pages scroll      */
 };
 
 struct Library *MUIMasterBase;
@@ -501,6 +507,50 @@ static Object *es_offscreen_group(struct ESPrefsGui *gui)
  * on the Snapping page the window was taller than a 768-line screen
  * with a larger font, and Save, Use and Cancel fell off the bottom
  * (a Pi-Top at 1366x768, 2026-11-13). */
+/*
+ * A screen too short for the window as it is. The tallest page makes
+ * the window 547 to 630 pixels tall, by system and theme, and a screen
+ * of 640x480, 800x600 or a PAL 576 lines cannot hold that: Save, Use
+ * and Cancel went off the bottom. On such a screen every page scrolls
+ * instead, and the window can be as short as the screen; anywhere else
+ * the window stays as it was, with no scroll bar in sight.
+ */
+#ifndef ES_SHORT_SCREEN
+#define ES_SHORT_SCREEN 720
+#endif
+
+static int es_short_screen(void)
+{
+    struct Screen *scr = LockPubScreen(NULL);
+    int h;
+
+    if (scr == NULL) {
+        return 0;
+    }
+    h = scr->Height;
+    UnlockPubScreen(NULL, scr);
+    return h < ES_SHORT_SCREEN;
+}
+
+/* The page in a group that scrolls up and down, or NULL. A group that
+ * cannot be made disposes of the children it was given, so on NULL the
+ * page is gone either way. */
+static Object *es_scrolling(Object *page)
+{
+    Object *virt;
+
+    virt = MUI_NewObject(MUIC_Virtgroup,
+                         MUIA_Group_Child, (ESTagData)page,
+                         TAG_DONE);
+    if (virt == NULL) {
+        return NULL;
+    }
+    return MUI_NewObject(MUIC_Scrollgroup,
+                         MUIA_Scrollgroup_FreeHoriz, FALSE,
+                         MUIA_Scrollgroup_Contents, (ESTagData)virt,
+                         TAG_DONE);
+}
+
 static Object *es_settings_pages(struct ESPrefsGui *gui)
 {
     struct TagItem tags[ES_MAX_SETTINGS + 2];
@@ -539,6 +589,9 @@ static Object *es_settings_pages(struct ESPrefsGui *gui)
                                      (ESTagData)MUI_NewObject(MUIC_Rectangle,
                                                               TAG_DONE),
                                  TAG_DONE);
+        }
+        if (body != NULL && gui->scroll) {
+            body = es_scrolling(body);
         }
         if (body == NULL) {
             /* the pages built so far belong to no Register yet */
@@ -748,11 +801,47 @@ static void es_store_offscreen(struct ESPrefsGui *gui, int permanent)
     }
 }
 
+/* ------------------------------------------------------------ icon */
+
+struct Library *IconBase;
+
+/*
+ * The program's own icon, for MUI to show when the window is iconified
+ * (without one MUI shows its own default). It is the icon beside the
+ * program's file, under the name the program was started by: the
+ * installers rename EdgeSnapPrefs to SYS:Prefs/EdgeSnap, so the name
+ * is asked, not assumed. From a Shell the name is the command's; from
+ * Workbench there is no Shell, and the task carries the file's name.
+ */
+static struct DiskObject *es_own_icon(void)
+{
+    char name[256];
+    char path[264];
+    const char *base = NULL;
+    struct Task *me = FindTask(NULL);
+
+    if (IconBase == NULL) {
+        return NULL;
+    }
+    if (GetProgramName((STRPTR)name, sizeof(name)) && name[0] != '\0') {
+        base = (const char *)FilePart((STRPTR)name);
+    } else if (me->tc_Node.ln_Name != NULL) {
+        base = (const char *)FilePart((STRPTR)me->tc_Node.ln_Name);
+    }
+    if (base == NULL || base[0] == '\0' || strlen(base) > 200) {
+        return NULL;
+    }
+    strcpy(path, "PROGDIR:");
+    strcat(path, base);
+    return GetDiskObject((STRPTR)path);
+}
+
 /* ------------------------------------------------------------ main */
 
 int main(int argc, char **argv)
 {
     struct ESPrefsGui gui;
+    struct DiskObject *icon = NULL;
     Object *save;
     Object *use;
     Object *cancel;
@@ -802,6 +891,14 @@ int main(int argc, char **argv)
         return RETURN_FAIL;
     }
 
+    /* Optional: without it the window works and iconifies with MUI's
+     * own icon. */
+    IconBase = OpenLibrary("icon.library", 36);
+    icon = es_own_icon();
+    /* Decided before the window is built: its height depends on it,
+     * and the pages are built in the same call as the window. */
+    gui.scroll = es_short_screen();
+
     save = SimpleButton("_Save");
     use = SimpleButton("_Use");
     cancel = SimpleButton("_Cancel");
@@ -814,11 +911,16 @@ int main(int argc, char **argv)
         MUIA_Application_Description, "Window snapping preferences",
         MUIA_Application_Base,        "EDGESNAPPREFS",
         MUIA_Application_SingleTask,  TRUE,
+        MUIA_Application_DiskObject,  (ESTagData)icon,
         MUIA_Application_Menustrip,
             MUI_MakeObject(MUIO_MenustripNM, (ESTagData)es_menu, 0),
         SubWindow, gui.win = WindowObject,
             MUIA_Window_Title, "EdgeSnap Preferences",
             ES_WINDOW_ID,
+            /* scrolling pages ask for nothing: the window is made to
+             * fit the screen instead */
+            gui.scroll ? MUIA_Window_Height : TAG_IGNORE,
+                (ESTagData)MUIV_Window_Height_Screen(90),
             WindowContents, VGroup,
                 Child, es_settings_pages(&gui),
                 Child, HGroup,
@@ -833,6 +935,12 @@ int main(int argc, char **argv)
 
     if (gui.app == NULL) {
         Printf((CONST_STRPTR)"EdgeSnapPrefs: the window would not build\n");
+        if (icon != NULL) {
+            FreeDiskObject(icon);
+        }
+        if (IconBase != NULL) {
+            CloseLibrary(IconBase);
+        }
         CloseLibrary(MUIMasterBase);
         CloseLibrary(CxBase);
 #ifdef __AROS__
@@ -909,6 +1017,13 @@ int main(int argc, char **argv)
 
     set(gui.win, MUIA_Window_Open, FALSE);
     MUI_DisposeObject(gui.app);
+    /* MUI does not free an icon it was given: the program does, after. */
+    if (icon != NULL) {
+        FreeDiskObject(icon);
+    }
+    if (IconBase != NULL) {
+        CloseLibrary(IconBase);
+    }
     CloseLibrary(MUIMasterBase);
     CloseLibrary(CxBase);
 #ifdef __AROS__
