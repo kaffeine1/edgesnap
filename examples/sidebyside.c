@@ -21,13 +21,14 @@
  * that is the first block below. Error handling is complete, because
  * the example is also what people copy.
  *
- * Built from the top of the source tree:
+ * Built from the top of the SDK, or of the source tree:
  *   MorphOS      ppc-morphos-gcc -noixemul -Iinclude -o sidebyside \
  *                    examples/sidebyside.c
  *   AmigaOS 4    ppc-amigaos-gcc -Iinclude -o sidebyside \
  *                    examples/sidebyside.c
- *   AROS         against the headers genmodule made from
- *                library/aros/edgesnap.conf, as esnaptest is
+ *   AROS         gcc -Iinclude/aros -Iinclude -o sidebyside \
+ *                    examples/sidebyside.c
+ * (on AROS with the system's own gcc, or the cross one of its SDK).
  */
 
 #ifndef __USE_INLINE__

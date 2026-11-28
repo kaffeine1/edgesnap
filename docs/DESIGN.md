@@ -1569,8 +1569,20 @@ tokens. `scripts/make-autodoc.py` lays them out as
 and the prototype, so the registers in the document are the ones in
 the jump table. `make -f Makefile.host test` fails when a function has
 no block, when the AROS and MorphOS `.fd` disagree, or when the `.doc`
-is behind the header. Still to come: the worked example and the
-archive itself.*
+is behind the header.*
+
+*The worked example and the archive followed (2026-11-28).
+`examples/sidebyside.c` is a small layout client, one source for the
+three systems: two windows of its own side by side as a group with a
+gap, the seam moved by its token with the cursor keys, the layout done
+again when a window was moved by hand. On MorphOS 3.21 it did all of
+that and exited clean. `scripts/make-sdk.sh` packs
+`EdgeSnap-SDK-<library version>.lha`: the headers, the per-system
+interface, inline and proto headers, the `.fd`, the autodoc, and the
+example with a build for each system. Before packing it builds the
+example against the archive's own headers for MorphOS and AmigaOS 4,
+so a header left out stops it. What 1.0 still needs is the second
+real client outside this repository.*
 
 Only then the maintainers, with three options open rather than one:
 ship the package as an official commodity, take the portable core into
