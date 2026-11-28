@@ -775,6 +775,12 @@ static int es_collect(struct ESPrefsGui *gui)
 #else
 #define ES_WINDOW_ID MUIA_Window_ID, MAKE_ID('E', 'S', 'P', 'R')
 #endif
+/* On a short screen no id at all: a size remembered from a taller
+ * screen won over the height asked for (MorphOS 3.21, 2026-11-28), and
+ * the window has to fit the screen it opens on. */
+#define ES_WINDOW_ID_IF(short_screen) \
+    (short_screen) ? TAG_IGNORE : MUIA_Window_ID, \
+    (short_screen) ? 0 : (ESTagData)MAKE_ID('E', 'S', 'P', 'R')
 
 /*
  * The system's setting as the box shows it: Use for this session, Save
@@ -916,7 +922,11 @@ int main(int argc, char **argv)
             MUI_MakeObject(MUIO_MenustripNM, (ESTagData)es_menu, 0),
         SubWindow, gui.win = WindowObject,
             MUIA_Window_Title, "EdgeSnap Preferences",
+#ifdef __AROS__
             ES_WINDOW_ID,
+#else
+            ES_WINDOW_ID_IF(gui.scroll),
+#endif
             /* scrolling pages ask for nothing: the window is made to
              * fit the screen instead */
             gui.scroll ? MUIA_Window_Height : TAG_IGNORE,
