@@ -129,6 +129,8 @@ struct ESPrefsGui {
      * The table's labels carry no colon: they also feed the AmigaGuide
      * manual, where one would read badly. The window adds it. */
     char label[ES_MAX_SETTINGS][40];
+    Object *note_box;                    /* under "Show the preview   */
+    Object *note;                        /* frame": the note, or NULL */
 };
 
 /*
@@ -443,7 +445,8 @@ static Object *es_widget(struct ESPrefsGui *gui, const ESSetting *s,
  * frame for the drag (spike_pf_carried_now in edgesnap_cx.c). Someone
  * who ticked the box and sees no frame would take that for a fault:
  * in that one combination a line under the box says why. It is read
- * once, as the window opens.
+ * as the window opens and again each time the window is activated, so
+ * a change made in the GUI preferences meanwhile shows on coming back.
  */
 static int es_frame_carried(void)
 {
@@ -469,6 +472,36 @@ static Object *es_frame_note(void)
                         "their contents and compositing is off.",
         LabelEnd,
     End;
+}
+
+/*
+ * The window is active again: the GUI preferences may have changed
+ * while it was not. When the answer is not the one on show, the note
+ * goes in or out of its box and the window lays itself out again.
+ */
+static void es_note_refresh(struct ESPrefsGui *gui)
+{
+    int carried;
+
+    if (gui->note_box == NULL || gui->window == NULL) {
+        return;
+    }
+    carried = es_frame_carried();
+    if (carried == (gui->note != NULL)) {
+        return;
+    }
+    if (carried) {
+        gui->note = es_frame_note();
+        if (gui->note == NULL) {
+            return;
+        }
+        IDoMethod(gui->note_box, LM_ADDCHILD, gui->window, gui->note, NULL);
+    } else {
+        /* removing a child disposes of it */
+        IDoMethod(gui->note_box, LM_REMOVECHILD, gui->window, gui->note);
+        gui->note = NULL;
+    }
+    IDoMethod(gui->win, WM_RETHINK);
 }
 
 static int es_key_is(const char *a, const char *b)
@@ -515,9 +548,23 @@ static Object *es_settings_page(struct ESPrefsGui *gui, const ESSetting *t,
         }
         es_add_child(sect, gui->field[i], es_label(gui, i, t[i].label),
                      t[i].kind == ES_SET_BOOL ? 2 : 0);
-        if (es_key_is(t[i].key, "PREVIEW") && es_frame_carried()) {
-            /* without it the window is only missing a line of help */
-            es_add_child(sect, es_frame_note(), NULL, 0);
+        if (es_key_is(t[i].key, "PREVIEW")) {
+            /* A box of its own right under the row, so that the note
+             * can come and go there while the window is open. Without
+             * it the window is only missing a line of help. */
+            gui->note_box = VLayoutObject,
+                LAYOUT_SpaceOuter, FALSE,
+            End;
+            if (gui->note_box != NULL) {
+                es_add_child(sect, gui->note_box, NULL, 0);
+                if (es_frame_carried()) {
+                    gui->note = es_frame_note();
+                    if (gui->note != NULL) {
+                        IDoMethod(gui->note_box, LM_ADDCHILD, NULL,
+                                  gui->note, NULL);
+                    }
+                }
+            }
         }
     }
     /* The system's setting follows the Screen page's last group. */
@@ -557,6 +604,8 @@ static Object *es_settings_page(struct ESPrefsGui *gui, const ESSetting *t,
     }
     return rows;
 }
+
+
 
 static Object *es_settings_pages(struct ESPrefsGui *gui)
 {
@@ -686,7 +735,7 @@ static Object *es_build_window(struct ESPrefsGui *gui)
          */
         WA_IDCMP, IDCMP_CLOSEWINDOW | IDCMP_GADGETUP | IDCMP_GADGETDOWN |
                   IDCMP_REFRESHWINDOW | IDCMP_NEWSIZE | IDCMP_VANILLAKEY |
-                  IDCMP_IDCMPUPDATE | IDCMP_MENUPICK,
+                  IDCMP_IDCMPUPDATE | IDCMP_MENUPICK | IDCMP_ACTIVEWINDOW,
         WA_Title, "EdgeSnap Preferences",
         WA_ScreenTitle, "EdgeSnap - by Michele Dipace",
         WA_Activate, TRUE,
@@ -981,6 +1030,8 @@ int main(int argc, char **argv)
     instance_mask = 1UL << instance->mp_SigBit;
     NewList(&gui.tab_labels);
     gui.offscreen = NULL;
+    gui.note_box = NULL;
+    gui.note = NULL;
     gui.off_was = eso_query(0);
     if (gui.off_was >= 0 && eso_query(1) < 0) {
         gui.off_was = -1;      /* one of the two files is not ours to read */
@@ -1036,6 +1087,9 @@ int main(int argc, char **argv)
             case WMHI_CLOSEWINDOW:
                 running = 0;
                 rc = RETURN_OK;
+                break;
+            case WMHI_ACTIVE:
+                es_note_refresh(&gui);
                 break;
             case WMHI_MENUPICK:
                 if (!es_menu_pick(&gui, (UWORD)(result & WMHI_MENUMASK))) {
