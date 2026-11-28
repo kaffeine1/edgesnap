@@ -239,11 +239,19 @@
   (confirm))
 
 (protect #cmd-path "+rwed")
-; On AROS the icon beside it, as a plain file (see the preferences for
-; why not (infos)): it is what makes Wanderer start it from WBStartup.
-(if (= #aros 1)
+; The icon beside it, as a plain file (see the preferences for why not
+; (infos)). On AROS it is what makes Wanderer start it from WBStartup.
+; On MorphOS it is for Expose: its Amiga-Tab row shows every running
+; program with the icon of the program's own file, and with none in C:
+; EdgeSnap stood there as the default tool icon (MorphOS 3.21, Expose
+; 1.13, 2026-11-28). Started from the Shell, EdgeSnap reads no
+; tooltypes, so the icon changes nothing else. AmigaOS 4 has no such
+; row, and C: gets no icon there.
+(if (or (= #aros 1) (= #system 1))
     (if (exists (cat #cmdsrc ".info"))
         (
+          (if (exists (cat #cmd-path ".info"))
+              (protect (cat #cmd-path ".info") "+rwed"))
           (copyfiles
             (source (cat #cmdsrc ".info"))
             (dest #cmd-dest))

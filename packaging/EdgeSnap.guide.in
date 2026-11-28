@@ -68,6 +68,10 @@ icon instead, and Wanderer starts it at every boot: a Run line in
 S:User-Startup would open a console window for it there and keep it
 open. S:User-Startup is not touched.
 
+On MorphOS @{b}C:EdgeSnap.info@{ub} goes beside the commodity: Expose,
+the Amiga-Tab row of running programs, shows each one with the icon
+of its file, and without it EdgeSnap would get the default tool icon.
+
 On AROS for the Raspberry Pi and on 32-bit AROS there is no Installer
 to go through: Install does the work itself, as it does on any AROS
 whose own Installer cannot copy files. One requester says what goes where and
